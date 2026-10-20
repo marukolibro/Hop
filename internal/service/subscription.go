@@ -113,8 +113,8 @@ func (s *SubscriptionService) List(ctx context.Context) (model.SubscriptionsView
 	return model.SubscriptionsView{Items: items, ActiveID: activeID}, nil
 }
 
-// Source returns what the edit dialog starts from: the row's name and
-// link. The link is a credential, so it goes only to the dialog that
+// Source returns what the edit dialog starts from: the row's name, link and
+// rule source. The link is a credential, so it goes only to the dialog that
 // edits it.
 func (s *SubscriptionService) Source(ctx context.Context, id string) (model.SubscriptionInput, error) {
 	s.mu.Lock()
@@ -127,7 +127,7 @@ func (s *SubscriptionService) Source(ctx context.Context, id string) (model.Subs
 	if index < 0 {
 		return model.SubscriptionInput{}, unknownSubscription(id)
 	}
-	return model.SubscriptionInput{Name: entries[index].Name, URL: entries[index].URL}, nil
+	return model.SubscriptionInput{Name: entries[index].Name, URL: entries[index].URL, Rules: entries[index].Rules}, nil
 }
 
 // Add stores a new subscription downloaded from input's link. The first one also
@@ -160,15 +160,19 @@ func (s *SubscriptionService) Add(ctx context.Context, input model.SubscriptionI
 	if err != nil {
 		return err
 	}
+	rules, err := RulesFor(download.Body, normalized.Rules)
+	if err != nil {
+		return err
+	}
 	entry := model.Subscription{
 		ID: id, Name: normalized.Name, URL: normalized.URL,
-		Raw: download.Body, UserInfo: download.UserInfo, UpdatedAt: time.Now(),
+		Raw: download.Body, UserInfo: download.UserInfo, UpdatedAt: time.Now(), Rules: rules,
 	}
 	settings, err := s.liveSettings(ctx)
 	if err != nil {
 		return err
 	}
-	config, err := RuntimeConfig(entry.Raw, settings)
+	config, err := RuntimeConfig(entry.Raw, entry.Rules, settings)
 	if err != nil {
 		return err
 	}
@@ -209,13 +213,7 @@ func (s *SubscriptionService) Edit(ctx context.Context, id string, input model.S
 	entry := entries[index]
 
 	if entry.URL == normalized.URL {
-		// The link did not change: a rename only, no download, no reload.
-		if entry.Name == normalized.Name {
-			return nil
-		}
-		entry.Name = normalized.Name
-		entries[index] = entry
-		return s.store.Commit(entries, activeID)
+		return s.editStored(ctx, entries, index, activeID, normalized)
 	}
 	for other := range entries {
 		if other != index && entries[other].URL == normalized.URL {
@@ -230,11 +228,15 @@ func (s *SubscriptionService) Edit(ctx context.Context, id string, input model.S
 	if err := checkUsage(download.UserInfo); err != nil {
 		return s.recordFailure(id, normalized.URL, err)
 	}
+	rules, err := RulesFor(download.Body, normalized.Rules)
+	if err != nil {
+		return s.recordFailure(id, normalized.URL, err)
+	}
 	settings, err := s.liveSettings(ctx)
 	if err != nil {
 		return s.recordFailure(id, normalized.URL, err)
 	}
-	config, err := RuntimeConfig(download.Body, settings)
+	config, err := RuntimeConfig(download.Body, rules, settings)
 	if err != nil {
 		return s.recordFailure(id, normalized.URL, err)
 	}
@@ -243,7 +245,7 @@ func (s *SubscriptionService) Edit(ctx context.Context, id string, input model.S
 	}
 	fresh := model.Subscription{
 		ID: entry.ID, Name: normalized.Name, URL: normalized.URL,
-		Raw: download.Body, UserInfo: download.UserInfo, UpdatedAt: time.Now(),
+		Raw: download.Body, UserInfo: download.UserInfo, UpdatedAt: time.Now(), Rules: rules,
 	}
 	if fresh.ID != activeID {
 		entries[index] = fresh
@@ -256,7 +258,7 @@ func (s *SubscriptionService) Edit(ctx context.Context, id string, input model.S
 	if !found {
 		return unknownSubscription(id)
 	}
-	previous, err := RuntimeConfig(running.Raw, settings)
+	previous, err := RuntimeConfig(running.Raw, running.Rules, settings)
 	if err != nil {
 		return s.recordFailure(id, normalized.URL, err)
 	}
@@ -265,6 +267,49 @@ func (s *SubscriptionService) Edit(ctx context.Context, id string, input model.S
 		return s.recordFailure(id, normalized.URL, err)
 	}
 	return nil
+}
+
+// editStored applies an edit that keeps the link: a new name, a new rule
+// source, or both. Nothing is downloaded; a rule change of the subscription
+// the core runs reloads it on the body that was kept.
+func (s *SubscriptionService) editStored(ctx context.Context, entries []model.Subscription, index int, activeID string, input model.SubscriptionInput) error {
+	entry := entries[index]
+	stored, found, err := s.store.Get(entry.ID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return unknownSubscription(entry.ID)
+	}
+	rules, err := RulesFor(stored.Raw, input.Rules)
+	if err != nil {
+		return err
+	}
+	if entry.Name == input.Name && entry.Rules == rules {
+		return nil
+	}
+	previousRules := entry.Rules
+	entry.Name, entry.Rules = input.Name, rules
+	entries[index] = entry
+	if entry.ID != activeID || previousRules == rules {
+		return s.store.Commit(entries, activeID)
+	}
+	settings, err := s.liveSettings(ctx)
+	if err != nil {
+		return err
+	}
+	config, err := RuntimeConfig(stored.Raw, rules, settings)
+	if err != nil {
+		return err
+	}
+	if err := s.validate(ctx, config); err != nil {
+		return err
+	}
+	previous, err := RuntimeConfig(stored.Raw, previousRules, settings)
+	if err != nil {
+		return err
+	}
+	return s.switchCore(ctx, config, previous, entries, activeID, "", nil)
 }
 
 // Use makes the core run the stored subscription id. Switching is offline: it
@@ -294,7 +339,7 @@ func (s *SubscriptionService) Use(ctx context.Context, id string) error {
 	if !found {
 		return unknownSubscription(id)
 	}
-	config, err := RuntimeConfig(target.Raw, settings)
+	config, err := RuntimeConfig(target.Raw, target.Rules, settings)
 	if err != nil {
 		return err
 	}
@@ -311,7 +356,7 @@ func (s *SubscriptionService) Use(ctx context.Context, id string) error {
 		if !found {
 			return unknownSubscription(activeID)
 		}
-		if previous, err = RuntimeConfig(running.Raw, settings); err != nil {
+		if previous, err = RuntimeConfig(running.Raw, running.Rules, settings); err != nil {
 			return err
 		}
 	}
@@ -379,7 +424,7 @@ func (s *SubscriptionService) Delete(ctx context.Context, id string, replacement
 	if !found {
 		return unknownSubscription(id)
 	}
-	previous, err := RuntimeConfig(running.Raw, settings)
+	previous, err := RuntimeConfig(running.Raw, running.Rules, settings)
 	if err != nil {
 		return err
 	}
@@ -410,7 +455,7 @@ func (s *SubscriptionService) Delete(ctx context.Context, id string, replacement
 	if !found {
 		return fmt.Errorf("replacement subscription %q is not stored", replacementID)
 	}
-	config, err := RuntimeConfig(target.Raw, settings)
+	config, err := RuntimeConfig(target.Raw, target.Rules, settings)
 	if err != nil {
 		return err
 	}
@@ -470,7 +515,7 @@ func (s *SubscriptionService) startupConfigWith(settings RuntimeSettings) ([]byt
 	if !found {
 		return nil, unknownSubscription(activeID)
 	}
-	return RuntimeConfig(active.Raw, settings)
+	return RuntimeConfig(active.Raw, active.Rules, settings)
 }
 
 // refresh downloads the subscription id's link again and records the outcome: a
@@ -505,7 +550,13 @@ func (s *SubscriptionService) refresh(ctx context.Context, id string) error {
 	if err != nil {
 		return s.recordFailure(id, entry.URL, err)
 	}
-	config, err := RuntimeConfig(download.Body, settings)
+	// A provider can change formats: a link list that comes back still
+	// needs Hop's rules.
+	rules, err := RulesFor(download.Body, entry.Rules)
+	if err != nil {
+		return s.recordFailure(id, entry.URL, err)
+	}
+	config, err := RuntimeConfig(download.Body, rules, settings)
 	if err != nil {
 		return s.recordFailure(id, entry.URL, err)
 	}
@@ -514,7 +565,7 @@ func (s *SubscriptionService) refresh(ctx context.Context, id string) error {
 	}
 	fresh := entry
 	fresh.Raw, fresh.UserInfo = download.Body, download.UserInfo
-	fresh.UpdatedAt, fresh.LastError = time.Now(), ""
+	fresh.UpdatedAt, fresh.LastError, fresh.Rules = time.Now(), "", rules
 	entries[index] = fresh
 	if id != activeID {
 		// Not the one running: the refresh writes the store only.
@@ -523,7 +574,7 @@ func (s *SubscriptionService) refresh(ctx context.Context, id string) error {
 		}
 		return s.store.Commit(entries, activeID)
 	}
-	previous, err := RuntimeConfig(entry.Raw, settings)
+	previous, err := RuntimeConfig(entry.Raw, entry.Rules, settings)
 	if err != nil {
 		return s.recordFailure(id, entry.URL, err)
 	}
@@ -626,7 +677,7 @@ func summarize(entry model.Subscription) (model.SubscriptionSummary, error) {
 	}
 	summary := model.SubscriptionSummary{
 		ID: entry.ID, Name: entry.Name, Host: u.Host,
-		UpdatedAt: entry.UpdatedAt, LastError: entry.LastError,
+		UpdatedAt: entry.UpdatedAt, LastError: entry.LastError, Rules: entry.Rules,
 	}
 	if entry.UserInfo != "" {
 		usage, err := ParseUsage(entry.UserInfo)
@@ -652,7 +703,10 @@ func normalizeInput(input model.SubscriptionInput) (model.SubscriptionInput, err
 	if err != nil {
 		return model.SubscriptionInput{}, fmt.Errorf("subscription link is not a valid URL: %w", errors.Unwrap(err))
 	}
-	return model.SubscriptionInput{Name: cmp.Or(strings.TrimSpace(input.Name), u.Host), URL: rawURL}, nil
+	if !slices.Contains(RuleSources, input.Rules) {
+		return model.SubscriptionInput{}, fmt.Errorf("unknown rule source %q", input.Rules)
+	}
+	return model.SubscriptionInput{Name: cmp.Or(strings.TrimSpace(input.Name), u.Host), URL: rawURL, Rules: input.Rules}, nil
 }
 
 // checkUsage validates the provider's usage header: a non-empty one must parse,

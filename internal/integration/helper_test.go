@@ -261,7 +261,7 @@ rules:
 		BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop",
 		Mode: "rule", Tun: true,
 	}
-	config, err := service.RuntimeConfig(subscription, settings)
+	config, err := service.RuntimeConfig(subscription, model.RulesProvider, settings)
 	if err != nil {
 		t.Fatal(err)
 	}

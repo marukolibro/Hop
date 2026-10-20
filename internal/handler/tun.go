@@ -15,10 +15,9 @@ type tunState struct {
 	on     bool
 	busy   bool
 	loaded bool
-	// helper says the helper daemon answers, helperVersion what it reports,
-	// helperOutdated that it must be replaced before TUN can use it.
+	// helper says the helper daemon answers, helperOutdated that it must be
+	// replaced before TUN can use it.
 	helper         bool
-	helperVersion  string
 	helperOutdated bool
 	// taken names the interface another client's TUN holds the routes with.
 	taken   bool
@@ -46,7 +45,7 @@ func (d *Dashboard) startTun(ctx context.Context, win Updater) {
 func (d *Dashboard) applyTunStatus(status model.TunStatus) {
 	s := &d.tun
 	s.loaded = true
-	s.helper, s.helperVersion = status.HelperInstalled, status.HelperVersion
+	s.helper = status.HelperInstalled
 	s.helperOutdated = status.HelperOutdated
 	s.on = status.CoreRunning
 	s.taken, s.takenBy = status.Taken, status.TakenBy
@@ -167,10 +166,10 @@ func (d *Dashboard) tunHint() string {
 // updated instead, and the copy says so.
 func (d *Dashboard) tunDialog(c *ui.Context, t *ui.Theme) {
 	s := &d.tun
-	description := "增强模式会接管全部流量,需要先安装 Hop 的特权助手。系统会请求一次管理员密码,之后可随时在设置里卸载。"
+	description := "增强模式会接管全部流量,需要先安装 Hop 的增强组件。系统会请求一次管理员密码,之后可随时在设置里卸载。"
 	submit := "安装并开启"
 	if s.helperOutdated {
-		description = "增强模式会接管全部流量,需要更新 Hop 的特权助手。系统会请求一次管理员密码,之后可随时在设置里卸载。"
+		description = "增强模式会接管全部流量,需要更新 Hop 的增强组件。系统会请求一次管理员密码,之后可随时在设置里卸载。"
 		submit = "更新并开启"
 	}
 	ui.DialogBase(c, &s.installOpen, func(backdrop, panel ui.Element) {
@@ -197,14 +196,19 @@ func (d *Dashboard) tunDialog(c *ui.Context, t *ui.Theme) {
 }
 
 // helperRows are the settings row of the privileged helper: what it is for,
-// its version when it answers, and 卸载 when one is installed.
+// whether it needs updating, and 卸载 when one is installed.
 func (d *Dashboard) helperRows(c *ui.Context, t *ui.Theme) []func() {
 	s := &d.tun
 	if !s.loaded {
 		return nil
 	}
+	// The protocol version means nothing to the user; only whether the
+	// installed component is this app's is worth saying.
 	note := "未安装。开启增强模式时会请求安装。"
-	if s.helper {
+	switch {
+	case s.helper && s.helperOutdated:
+		note = "需要更新。下次开启增强模式时会请求更新。"
+	case s.helper:
 		note = "已安装,增强模式下的内核由它以管理员运行"
 	}
 	return []func(){func() {
@@ -214,12 +218,7 @@ func (d *Dashboard) helperRows(c *ui.Context, t *ui.Theme) []func() {
 				ui.Icon(c, iconShieldCheck).Width(cardIconGlyph).Height(cardIconGlyph).TextColor(t.Accent)
 			})
 			ui.Column(c).Grow(1).Basis(0).Gap(gapLine).Children(func() {
-				ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, "特权助手").FontSize(fontBody).FontWeight(weightSemibold)
-					if s.helper {
-						ui.Text(c, s.helperVersion).FontSize(fontBody).FontWeight(weightMedium).FontFeatures("tnum").TextColor(t.TextMuted)
-					}
-				})
+				ui.Text(c, "增强组件").FontSize(fontBody).FontWeight(weightSemibold)
 				mutedText(c, t, note)
 			})
 			if s.helper {

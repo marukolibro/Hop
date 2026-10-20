@@ -107,8 +107,13 @@ func run() error {
 	// The core would download geodata through the network on first use,
 	// which is slow and can fail where GitHub cannot be reached; what ships
 	// with the app is seeded in first, and only when missing.
-	if err := mihomo.SeedGeodata(filepath.Join(resourcesDir, "geodata"), cfg.HomeDir); err != nil {
-		return err
+	// The config checks run the core in a directory of their own, and a
+	// config with GEOSITE or GEOIP rules (Hop's rule template has both) makes
+	// even -t load the databases: seed that directory too.
+	for _, dir := range []string{cfg.HomeDir, filepath.Join(cfg.AppDir, "validate")} {
+		if err := mihomo.SeedGeodata(filepath.Join(resourcesDir, "geodata"), dir); err != nil {
+			return err
+		}
 	}
 	runner := mihomo.NewRunner(ctx, cfg, client)
 

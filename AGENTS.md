@@ -52,7 +52,15 @@ on this machine while developing Hop. Hop must never interfere with it.
 - Subscriptions are filtered by a whitelist (`service/runtime_config.go`):
   only `proxies`, `proxy-groups`, `proxy-providers`, `rules`, `rule-providers`,
   `sub-rules` pass through. Hop owns every other key. Never widen this list
-  without a dry run of the generated config first.
+  without a dry run of the generated config first. A subscription may instead
+  run with Hop's own template (`service/hop_rules.go`, rule source
+  `hop`): then only its nodes (`proxies`, `proxy-providers`)
+  are taken. A body that is not a Clash profile is read as node links with
+  the pinned core's own converter (`github.com/metacubex/mihomo/common/convert`,
+  kept at the bundled core's version) and always runs with the template;
+  links never go to a third-party conversion service. The template's rules
+  use only the shipped geodata, which main seeds into the core's home and
+  into the config checks' directory.
 - The subscription link is a credential. Never log it, print it, put it in
   errors (use `subscription.Redact` / host only), or paste it into chat.
 - Hop's data lives in `~/Library/Application Support/hop/` (files mode 0600).

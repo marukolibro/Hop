@@ -100,7 +100,7 @@ func (d *Dashboard) nodeGrid(c *ui.Context, t *ui.Theme) {
 				d.nodeSection(c, t, group, "线路", group.Others, columns)
 			}
 			for _, region := range group.Regions {
-				title := strings.TrimSpace(region.Flag + " " + region.Name)
+				title := strings.TrimSpace(shownFlag(region.Flag) + " " + region.Name)
 				d.nodeSection(c, t, group, title, region.Nodes, columns)
 			}
 		})
@@ -262,7 +262,7 @@ func tileTitle(node model.NodeView) string {
 
 // nodeDisplay names a node as the route does: flag, region, title.
 func nodeDisplay(node model.NodeView) string {
-	return strings.TrimSpace(node.Flag + " " + node.Region + " " + node.Title)
+	return strings.TrimSpace(shownFlag(node.Flag) + " " + node.Region + " " + node.Title)
 }
 
 // delayLabel shows a latency in a colour for how usable it is: green fast,

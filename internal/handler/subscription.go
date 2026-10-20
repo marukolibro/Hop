@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	neturl "net/url"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/internal/service"
 )
 
 const (
@@ -153,7 +155,12 @@ func (d *Dashboard) loadSource(ctx context.Context, win Updater, id string, seq 
 			return
 		}
 		e := &s.editor
-		e.original, e.sourceLoaded = input, true
+		index := slices.Index(service.RuleSources, input.Rules)
+		if index < 0 {
+			e.err = fmt.Sprintf("这个订阅保存的分流规则（%s）无法识别。", input.Rules)
+			return
+		}
+		e.original, e.sourceLoaded, e.rulesIndex = input, true, index
 		// Keep whatever the user typed while the reply was on its way.
 		if e.name == "" {
 			e.name = input.Name
@@ -203,7 +210,12 @@ func (d *Dashboard) beginEditorSubmit() {
 		e.err = problem
 		return
 	}
-	input := model.SubscriptionInput{Name: strings.TrimSpace(e.name), URL: strings.TrimSpace(e.url)}
+	rules := service.RuleSources[e.rulesIndex]
+	if e.intent == editorRename {
+		// Renaming shows no rule choice: the stored one stays.
+		rules = e.original.Rules
+	}
+	input := model.SubscriptionInput{Name: strings.TrimSpace(e.name), URL: strings.TrimSpace(e.url), Rules: rules}
 	e.err, e.busy = "", true
 	if e.editingID == "" {
 		// The first subscription added becomes the one in use; any later one
@@ -217,9 +229,9 @@ func (d *Dashboard) beginEditorSubmit() {
 		return
 	}
 	id := e.editingID
-	// A new address on the entry in use revalidates and reapplies before it
-	// commits; a rename alone downloads and reloads nothing.
-	touchesRuntime := id == s.view.ActiveID && input.URL != e.original.URL
+	// A new address or new rules on the entry in use revalidate and reapply
+	// before they commit; a rename alone downloads and reloads nothing.
+	touchesRuntime := id == s.view.ActiveID && (input.URL != e.original.URL || input.Rules != e.original.Rules)
 	d.beginSubOp(subOp{
 		a: actionEditSubscription, id: id,
 		reloadAfter:   touchesRuntime,
@@ -328,6 +340,7 @@ func (d *Dashboard) subscriptionBar(c *ui.Context, t *ui.Theme) {
 			ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 				mutedText(c, t, "当前订阅").NoWrap()
 				d.activeSelect(c, t)
+				ruleChip(c, t, active.Rules)
 				ui.Box(c).Grow(1)
 				mutedText(c, t, updatedText(active.UpdatedAt, now)).NoWrap()
 				label := "刷新订阅"
@@ -518,6 +531,7 @@ func (d *Dashboard) subscriptionCard(c *ui.Context, t *ui.Theme, item model.Subs
 					if isActive {
 						activeBadge(c, t)
 					}
+					ruleChip(c, t, item.Rules)
 				})
 				ui.Text(c, item.Host).FontSize(fontCaption).TextColor(t.TextMuted).MaxLines(1)
 			})
@@ -572,7 +586,7 @@ func (d *Dashboard) cardMenu(c *ui.Context, t *ui.Theme, item model.Subscription
 		if m.Item("重命名").Disabled(disabled).Chosen() {
 			d.openEditor(editorRename, id)
 		}
-		if m.Item("修改地址").Disabled(disabled).Chosen() {
+		if m.Item("编辑订阅").Disabled(disabled).Chosen() {
 			d.openEditor(editorEditURL, id)
 		}
 		m.Separator()
@@ -701,7 +715,7 @@ func (d *Dashboard) editorForm(c *ui.Context, t *ui.Theme) {
 	case editorRename:
 		title, description, submit = "重命名", "名称可以自由修改。地址保持不变。", "保存修改"
 	case editorEditURL:
-		title, description, submit = "编辑订阅", "名称可以自由修改。新地址校验成功后才替换旧内容。", "保存修改"
+		title, description, submit = "编辑订阅", "可以修改名称、地址和分流规则。新地址校验成功后才替换旧内容。", "保存修改"
 	}
 	hint := "名称留空时使用来源域名。"
 	urlPlaceholder := "https://provider.example.com/subscribe"
@@ -723,6 +737,13 @@ func (d *Dashboard) editorForm(c *ui.Context, t *ui.Theme) {
 			fieldLabel(c, t, "订阅地址", "")
 			ui.TextInput(c, &e.url).Label("订阅地址").Placeholder(urlPlaceholder).Disabled(e.busy || !e.sourceLoaded).OnSubmit(d.submitEditor)
 			ui.Text(c, hint).FontSize(fontCaption).TextColor(t.TextMuted)
+			if e.intent != editorRename {
+				fieldLabel(c, t, "分流规则", "")
+				ui.Box(c).Disabled(e.busy || !e.sourceLoaded).Children(func() {
+					slidingSwitch(c, "rules", &e.rulesIndex, ruleLabels, pageSwitchStyle(t, ruleSegmentWidth), func(int) {})
+				})
+				ui.Text(c, ruleHints[e.rulesIndex]).FontSize(fontCaption).TextColor(t.TextMuted)
+			}
 			if e.err != "" {
 				ui.Text(c, e.err).FontSize(fontSecondary).TextColor(t.Danger)
 			}
@@ -795,6 +816,30 @@ func (d *Dashboard) deleteForm(c *ui.Context, t *ui.Theme) {
 		})
 	})
 }
+
+// ruleLabels name service.RuleSources, index for index; ruleHints say what
+// each does, in the same order.
+var (
+	ruleLabels = []string{"机场规则", "Hop 智能规则"}
+	ruleHints  = []string{
+		"沿用订阅自带的策略组和规则。节点列表类订阅没有规则，会改用「Hop 智能规则」。",
+		"只用订阅的节点：被墙和境外网站走代理，国内网站直连，名单里没有的按 IP 所在地判断；AI、流媒体、Telegram 等自动分组。",
+	}
+)
+
+// ruleChip says whose rules a subscription runs with: the provider's in the
+// muted colour, Hop's template in the accent.
+func ruleChip(c *ui.Context, t *ui.Theme, rules model.RuleSource) {
+	switch rules {
+	case model.RulesHop:
+		chip(c, "Hop 智能规则", t.Accent)
+	default:
+		chip(c, "机场规则", t.TextMuted)
+	}
+}
+
+// ruleSegmentWidth fits the longest rule label.
+const ruleSegmentWidth float32 = 104
 
 // fieldLabel names a form field, its optional note in the muted colour.
 func fieldLabel(c *ui.Context, t *ui.Theme, text string, note string) {

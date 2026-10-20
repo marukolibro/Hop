@@ -62,6 +62,9 @@ type entryFile struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 	LastError string    `json:"lastError"`
 	Body      string    `json:"body"`
+	// Rules is "" in an index written before subscriptions had a choice of
+	// rules: every one of those was a Clash profile run with its own.
+	Rules string `json:"rules,omitempty"`
 }
 
 // legacyMeta is what the old store kept about a download besides its body and
@@ -215,6 +218,7 @@ func (s *Store) Entries() ([]model.Subscription, string, error) {
 		entries = append(entries, model.Subscription{
 			ID: file.ID, Name: file.Name, URL: file.URL,
 			UserInfo: file.UserInfo, UpdatedAt: file.UpdatedAt, LastError: file.LastError,
+			Rules: ruleSource(file.Rules),
 		})
 	}
 	return entries, index.ActiveID, nil
@@ -238,6 +242,7 @@ func (s *Store) Get(id string) (model.Subscription, bool, error) {
 		return model.Subscription{
 			ID: file.ID, Name: file.Name, URL: file.URL, Raw: raw,
 			UserInfo: file.UserInfo, UpdatedAt: file.UpdatedAt, LastError: file.LastError,
+			Rules: ruleSource(file.Rules),
 		}, true, nil
 	}
 	return model.Subscription{}, false, nil
@@ -302,6 +307,7 @@ func (s *Store) Commit(entries []model.Subscription, activeID string) error {
 		index.Entries = append(index.Entries, entryFile{
 			ID: entry.ID, Name: entry.Name, URL: entry.URL,
 			UserInfo: entry.UserInfo, UpdatedAt: entry.UpdatedAt, LastError: entry.LastError, Body: body,
+			Rules: string(entry.Rules),
 		})
 	}
 	if err := s.writeIndex(index); err != nil {
@@ -455,6 +461,16 @@ func hasID(entries []model.Subscription, id string) bool {
 		}
 	}
 	return false
+}
+
+// ruleSource reads an entry's stored rule source. An index written before
+// the choice existed has none, and every subscription in it ran its
+// provider's own rules.
+func ruleSource(stored string) model.RuleSource {
+	if stored == "" {
+		return model.RulesProvider
+	}
+	return model.RuleSource(stored)
 }
 
 // writeAtomic writes through a temporary file, so a crash never leaves half

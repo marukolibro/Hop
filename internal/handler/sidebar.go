@@ -178,7 +178,7 @@ func groupIcon(c *ui.Context, t *ui.Theme, group model.GroupView, size float32) 
 		glyph := size * 0.55
 		switch {
 		case isRegional:
-			ui.Text(c, flag).FontSize(glyph)
+			ui.Text(c, shownFlag(flag)).FontSize(glyph)
 		case group.Kind == model.GroupKindMain:
 			hopMark(c, glyph, solidInk(t.Accent))
 		case group.Kind == model.GroupKindAuto:
@@ -211,14 +211,14 @@ func groupTitle(group model.GroupView) string {
 	if !isRegional {
 		return group.Label
 	}
-	return strings.TrimSpace(strings.TrimPrefix(group.Label, flag))
+	return shownName(strings.TrimSpace(strings.TrimPrefix(group.Label, flag)))
 }
 
 // groupDestination says where a group sends traffic: a service's group the
 // route it takes, any other group the node it leaves by.
 func groupDestination(group model.GroupView) string {
 	if group.Kind == model.GroupKindRouting || group.Exit.Name == "" {
-		return "→ " + group.Pick
+		return "→ " + shownName(group.Pick)
 	}
 	if group.Exit.PlanNote {
 		return "→ 机场信息节点"

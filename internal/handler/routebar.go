@@ -84,7 +84,7 @@ func exitNode(c *ui.Context, t *ui.Theme, hop model.RouteHop) {
 		mutedText(c, t, node.Via)
 		return
 	}
-	headline(c, t, strings.TrimSpace(node.Flag+" "+node.Region+" "+node.Title), node.Delay)
+	headline(c, t, strings.TrimSpace(shownFlag(node.Flag)+" "+node.Region+" "+node.Title), node.Delay)
 	labels := nodeLabels(node)
 	if len(labels) > 0 || node.Multiplier != "" {
 		ui.Row(c).Gap(gapTight).Children(func() {

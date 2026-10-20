@@ -65,9 +65,24 @@ type Download struct {
 // SubscriptionInput is what the user typed about a subscription: the name to
 // show for it and the link it is downloaded from.
 type SubscriptionInput struct {
-	Name string
-	URL  string
+	Name  string
+	URL   string
+	Rules RuleSource
 }
+
+// RuleSource is where a subscription's policy groups and rules come from:
+// the provider's own, or Hop's template in one of its two modes. Either way
+// the nodes are the provider's.
+type RuleSource string
+
+const (
+	// RulesProvider keeps the groups and rules the provider wrote.
+	RulesProvider RuleSource = "provider"
+	// RulesHop is Hop's template: blocked and known foreign sites through a
+	// node, known Chinese sites direct, and the rest by where their address
+	// is.
+	RulesHop RuleSource = "hop"
+)
 
 // Subscription is a profile downloaded from a provider: its stable identity and
 // name, where it came from, the Clash YAML it returned as received, its usage
@@ -82,6 +97,8 @@ type Subscription struct {
 	UpdatedAt time.Time
 	// LastError is why the last refresh failed, cleared by a success.
 	LastError string
+	// Rules says whose groups and rules the core runs this subscription with.
+	Rules RuleSource
 }
 
 // Usage is the traffic and term of the account, as the provider reports
@@ -105,6 +122,7 @@ type SubscriptionSummary struct {
 	HasUsage bool
 	// LastError is why the last refresh failed, cleared by a success.
 	LastError string
+	Rules     RuleSource
 }
 
 // SubscriptionsView is all the subscriptions page shows: one summary per stored

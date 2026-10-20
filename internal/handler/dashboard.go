@@ -154,9 +154,11 @@ type subscriptionEditor struct {
 	// or at once when adding.
 	original     model.SubscriptionInput
 	sourceLoaded bool
-	// name and url are the fields being edited.
-	name string
-	url  string
+	// name and url are the fields being edited; rulesIndex is the rule
+	// source chosen, an index of service.RuleSources.
+	name       string
+	url        string
+	rulesIndex int
 	// busy is set while Add or Edit runs; err is the form's last error.
 	busy bool
 	err  string
@@ -665,7 +667,7 @@ const (
 	actionReadTun             action = "读取增强模式状态失败"
 	actionTunOn               action = "开启增强模式失败"
 	actionTunOff              action = "关闭增强模式失败"
-	actionUninstallHelper     action = "卸载特权助手失败"
+	actionUninstallHelper     action = "卸载增强组件失败"
 )
 
 // fail shows what went wrong without touching the connection status.

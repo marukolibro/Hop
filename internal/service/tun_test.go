@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"go.yaml.in/yaml/v3"
+
+	"hop/internal/model"
 )
 
 // netstatWithVerge is this machine's real `netstat -rn -f inet` output while
@@ -117,7 +119,7 @@ func tunTestSettings(tun bool) RuntimeSettings {
 // writes when TUN is on, and that a config without TUN carries no tun key at
 // all, exactly as before.
 func TestRuntimeConfigTun(t *testing.T) {
-	plain, err := RuntimeConfig([]byte(tunTestSubscription), tunTestSettings(false))
+	plain, err := RuntimeConfig([]byte(tunTestSubscription), model.RulesProvider, tunTestSettings(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +138,7 @@ func TestRuntimeConfigTun(t *testing.T) {
 		t.Errorf("config with TUN off sets a DNS enhanced-mode:\n%s", plain)
 	}
 
-	withTun, err := RuntimeConfig([]byte(tunTestSubscription), tunTestSettings(true))
+	withTun, err := RuntimeConfig([]byte(tunTestSubscription), model.RulesProvider, tunTestSettings(true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +160,7 @@ func TestRuntimeConfigTun(t *testing.T) {
 		t.Errorf("tun.dns-hijack = %v", tun["dns-hijack"])
 	}
 	excludes := tun["route-exclude-address"].([]any)
-	for _, want := range []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "100.64.0.0/10"} {
+	for _, want := range []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "100.64.0.0/10", "224.0.0.0/4", "255.255.255.255/32"} {
 		if !slices.ContainsFunc(excludes, func(got any) bool { return got.(string) == want }) {
 			t.Errorf("tun.route-exclude-address misses %s: %v", want, excludes)
 		}

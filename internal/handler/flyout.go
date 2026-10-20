@@ -169,7 +169,7 @@ func (d *Dashboard) quickRow(c *ui.Context, t *ui.Theme, group model.GroupView, 
 		}
 	})
 	row.Children(func() {
-		label := ui.Text(c, strings.TrimSpace(node.Flag+" "+node.Region+" "+node.Title)).FontSize(fontBody).MaxLines(1).Grow(1)
+		label := ui.Text(c, strings.TrimSpace(shownFlag(node.Flag)+" "+node.Region+" "+node.Title)).FontSize(fontBody).MaxLines(1).Grow(1)
 		if isActive {
 			label.FontWeight(weightSemibold)
 		}

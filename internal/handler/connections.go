@@ -113,7 +113,7 @@ func routeLabel(chain []string) string {
 	if node.Flag == "" {
 		return exit
 	}
-	return strings.TrimSpace(node.Flag + " " + node.Region + " " + node.Title)
+	return strings.TrimSpace(shownFlag(node.Flag) + " " + node.Region + " " + node.Title)
 }
 
 // formatAge renders how long a connection has been open, in its largest

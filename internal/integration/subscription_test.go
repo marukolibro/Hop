@@ -92,6 +92,7 @@ var profileByPath = map[string]string{
 	"/a":      profileA,
 	"/b":      profileB,
 	"/broken": profileBroken,
+	"/links":  linkListBody,
 }
 
 type controllerConfig struct {
@@ -239,7 +240,7 @@ func TestSubscriptionsEndToEnd(t *testing.T) {
 	assertGroups(ctx, t, h.client, map[string]int{"Hop": 2})
 
 	// The first subscription: adding it also runs it.
-	if err := h.service.Add(ctx, model.SubscriptionInput{URL: p.link("/a")}); err != nil {
+	if err := h.service.Add(ctx, model.SubscriptionInput{Rules: model.RulesProvider, URL: p.link("/a")}); err != nil {
 		t.Fatalf("add first: %v", err)
 	}
 	assertGroups(ctx, t, h.client, map[string]int{"Proxy": 5, "Streaming": 2})
@@ -256,7 +257,7 @@ func TestSubscriptionsEndToEnd(t *testing.T) {
 	aID := view.Items[0].ID
 
 	// A second subscription: stored only, the running line never switches.
-	if err := h.service.Add(ctx, model.SubscriptionInput{URL: p.link("/b")}); err != nil {
+	if err := h.service.Add(ctx, model.SubscriptionInput{Rules: model.RulesProvider, URL: p.link("/b")}); err != nil {
 		t.Fatalf("add second: %v", err)
 	}
 	assertGroups(ctx, t, h.client, map[string]int{"Proxy": 5, "Streaming": 2})
@@ -268,14 +269,14 @@ func TestSubscriptionsEndToEnd(t *testing.T) {
 
 	// The very same link cannot be added twice; different links on the same host
 	// can (A and B share one).
-	dupErr := h.service.Add(ctx, model.SubscriptionInput{URL: p.link("/a")})
+	dupErr := h.service.Add(ctx, model.SubscriptionInput{Rules: model.RulesProvider, URL: p.link("/a")})
 	if dupErr == nil {
 		t.Fatal("adding the same link twice succeeded")
 	}
 	if strings.Contains(dupErr.Error(), linkToken) {
 		t.Fatalf("duplicate error leaks the token: %v", dupErr)
 	}
-	badErr := h.service.Add(ctx, model.SubscriptionInput{URL: p.server.URL + "/missing?token=" + linkToken})
+	badErr := h.service.Add(ctx, model.SubscriptionInput{Rules: model.RulesProvider, URL: p.server.URL + "/missing?token=" + linkToken})
 	if badErr == nil {
 		t.Fatal("adding an unknown subscription succeeded")
 	}
@@ -418,7 +419,7 @@ func TestSubscriptionsEndToEnd(t *testing.T) {
 
 	// A subscription the core's own test rejects is refused at add time, and the
 	// core stays as it is.
-	if err := h.service.Add(ctx, model.SubscriptionInput{URL: p.link("/broken")}); err == nil {
+	if err := h.service.Add(ctx, model.SubscriptionInput{Rules: model.RulesProvider, URL: p.link("/broken")}); err == nil {
 		t.Fatal("adding a subscription the core rejects succeeded")
 	}
 	if view = listView(ctx, t, h.service); len(view.Items) != 0 {
@@ -501,11 +502,11 @@ func TestConfigValidator(t *testing.T) {
 		MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
 		BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop", Mode: model.ModeRule,
 	}
-	valid, err := service.RuntimeConfig([]byte(profileA), settings)
+	valid, err := service.RuntimeConfig([]byte(profileA), model.RulesProvider, settings)
 	if err != nil {
 		t.Fatalf("build runtime config: %v", err)
 	}
-	broken, err := service.RuntimeConfig([]byte(profileBroken), settings)
+	broken, err := service.RuntimeConfig([]byte(profileBroken), model.RulesProvider, settings)
 	if err != nil {
 		t.Fatalf("build broken runtime config: %v", err)
 	}

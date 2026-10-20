@@ -205,7 +205,7 @@ func flowLabels(route []model.RouteHop) []string {
 	labels := []string{"本机"}
 	for _, hop := range route {
 		if hop.Group {
-			labels = append(labels, hop.Name)
+			labels = append(labels, shownName(hop.Name))
 		}
 	}
 	return append(labels, "出口")

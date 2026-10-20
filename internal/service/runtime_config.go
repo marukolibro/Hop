@@ -1,12 +1,15 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
 	"sort"
 
 	"go.yaml.in/yaml/v3"
+
+	"hop/internal/model"
 )
 
 // RuntimeSettings are the values Hop owns in every config it hands to the
@@ -167,6 +170,13 @@ func hopTun() *tunConfig {
 			"192.168.0.0/16",
 			"169.254.0.0/16",
 			"100.64.0.0/10",
+			// Multicast and broadcast carry the LAN's discovery (mDNS,
+			// AirDrop, AirPlay, printers); IPv6's local ranges likewise.
+			"224.0.0.0/4",
+			"255.255.255.255/32",
+			"fc00::/7",
+			"fe80::/10",
+			"ff00::/8",
 		},
 	}
 }
@@ -232,6 +242,13 @@ var tunFakeIPFilter = []string{
 	"time.*.gov",
 	"ntp.*.*",
 	"stun.*.*",
+	// Captive portal checks must reach the real portal, or a hotel's or an
+	// airport's Wi-Fi never shows its sign-in page.
+	"captive.apple.com",
+	"+.msftconnecttest.com",
+	"+.msftncsi.com",
+	// Apple's location services.
+	"+.ls.apple.com",
 }
 
 type bootstrapGroup struct {
@@ -254,27 +271,58 @@ func BootstrapConfig(s RuntimeSettings) ([]byte, error) {
 	return marshalConfig(cfg)
 }
 
-// RuntimeConfig builds the config for the core from a subscription: its
-// proxies, groups and rules, under Hop's own settings.
-func RuntimeConfig(subscription []byte, s RuntimeSettings) ([]byte, error) {
-	var doc map[string]yaml.Node
-	if err := yaml.Unmarshal(subscription, &doc); err != nil {
-		return nil, fmt.Errorf("subscription is not a Clash YAML profile (a base64 link list is not supported): %w", err)
-	}
-	if err := requireProxies(doc); err != nil {
+// RuntimeConfig builds the config for the core from a subscription under
+// Hop's own settings: its nodes always, and the groups and rules its rule
+// source names — the provider's own, or Hop's template. A list of node links
+// carries no groups or rules, so it runs only with Hop's.
+func RuntimeConfig(subscription []byte, rules model.RuleSource, s RuntimeSettings) ([]byte, error) {
+	p, err := readProfile(subscription)
+	if err != nil {
 		return nil, err
 	}
-	logDropped(doc)
-
 	cfg := baseConfig(s)
-	cfg.Proxies = doc["proxies"]
-	cfg.ProxyGroups = doc["proxy-groups"]
-	cfg.ProxyProviders = doc["proxy-providers"]
-	cfg.Rules = doc["rules"]
-	cfg.RuleProviders = doc["rule-providers"]
-	cfg.SubRules = doc["sub-rules"]
+	if rules == model.RulesProvider {
+		if p.isLinkList() {
+			return nil, errors.New("a list of node links has no rules of its own; run it with Hop's rules")
+		}
+		logDropped(p.doc)
+		cfg.Proxies = p.doc["proxies"]
+		cfg.ProxyGroups = p.doc["proxy-groups"]
+		cfg.ProxyProviders = p.doc["proxy-providers"]
+		cfg.Rules = p.doc["rules"]
+		cfg.RuleProviders = p.doc["rule-providers"]
+		cfg.SubRules = p.doc["sub-rules"]
+		return marshalConfig(cfg)
+	}
+	if rules != model.RulesHop {
+		return nil, fmt.Errorf("unknown rule source %q", rules)
+	}
+	if err := applyHopTemplate(&cfg, p); err != nil {
+		return nil, err
+	}
 	return marshalConfig(cfg)
 }
+
+// RulesFor is the rule source a subscription runs with: the one chosen,
+// except that a list of node links, which has no rules of its own, runs with
+// Hop's template.
+func RulesFor(subscription []byte, chosen model.RuleSource) (model.RuleSource, error) {
+	if !slices.Contains(RuleSources, chosen) {
+		return "", fmt.Errorf("unknown rule source %q", chosen)
+	}
+	p, err := readProfile(subscription)
+	if err != nil {
+		return "", err
+	}
+	if p.isLinkList() && chosen == model.RulesProvider {
+		return model.RulesHop, nil
+	}
+	return chosen, nil
+}
+
+// RuleSources are the rule sources a subscription can choose, in the order
+// the editor shows them.
+var RuleSources = []model.RuleSource{model.RulesProvider, model.RulesHop}
 
 func requireProxies(doc map[string]yaml.Node) error {
 	_, hasProxies := doc["proxies"]
