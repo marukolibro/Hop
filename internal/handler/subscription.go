@@ -38,10 +38,10 @@ const (
 	editorEditURL
 )
 
-// controlsLocked reports whether controls must refuse a change: the outbound
-// mode is being applied or a subscription mutation runs.
+// controlsLocked says whether a change that touches the core must wait: a
+// core change, a subscription mutation, a mode change or a TUN swap runs.
 func (d *Dashboard) controlsLocked() bool {
-	return d.modeBusy || d.subscription.mutations > 0 || d.core.busy
+	return d.modeBusy || d.subscription.mutations > 0 || d.core.busy || d.tun.busy
 }
 
 // busy reports whether an operation runs on the subscription id.

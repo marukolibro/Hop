@@ -103,7 +103,7 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 					},
 				)
 				if d.core.loaded {
-					settingsGroup(c, t, "内核", d.coreRows(c, t)...)
+					settingsGroup(c, t, "内核", append(d.coreRows(c, t), d.helperRows(c, t)...)...)
 				}
 				mutedText(c, t, "Hop "+d.appVersion+" 以 GPL-3.0 许可发布,内置的 mihomo 内核同为 GPL-3.0。").AlignSelf(ui.Center)
 			})

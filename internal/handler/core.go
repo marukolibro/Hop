@@ -136,6 +136,11 @@ func (d *Dashboard) coreRows(c *ui.Context, t *ui.Theme) []func() {
 	case s.latest != nil:
 		rows = append(rows, func() { mutedText(c, t, "已是最新版本。") })
 	}
+	if d.tun.on {
+		rows = append(rows, func() {
+			mutedText(c, t, "增强模式开启时不能更换内核,先关闭增强模式。")
+		})
+	}
 	return rows
 }
 
@@ -163,7 +168,7 @@ func originText(origin model.CoreOrigin) string {
 // found.
 func (d *Dashboard) coreActions(c *ui.Context, t *ui.Theme) {
 	s := &d.core
-	canChange := s.info.Origin != model.CoreOverride && !d.controlsLocked()
+	canChange := s.info.Origin != model.CoreOverride && !d.controlsLocked() && !d.tun.on
 	ui.Row(c).Key("actions").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 		if s.info.Origin == model.CoreInstalled {
 			button(c, buttonSpec{label: "恢复内置版本", style: softButton(t), disabled: !canChange}, d.beginRestoreCore)

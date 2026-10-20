@@ -73,6 +73,9 @@ type SubscriptionService struct {
 	validator  ConfigValidator
 	core       ModeReader
 	settings   RuntimeSettings
+	// tun says whether TUN is on: every config built while a core runs keeps
+	// the tun section, or a reload would quietly drop TUN.
+	tun *TunFlag
 	// mu serializes every read and write: the core and the store are only ever
 	// changed one operation at a time, and no read races a commit sweeping old
 	// bodies.
@@ -81,11 +84,12 @@ type SubscriptionService struct {
 
 // NewSubscriptionService returns a service that builds every config under
 // settings, validates it with validator, applies it through applier and
-// reads the mode the core runs in through core.
-func NewSubscriptionService(downloader Downloader, store SubscriptionStore, applier ConfigApplier, validator ConfigValidator, core ModeReader, settings RuntimeSettings) *SubscriptionService {
+// reads the mode the core runs in through core. tun is the flag saying
+// whether TUN is on.
+func NewSubscriptionService(downloader Downloader, store SubscriptionStore, applier ConfigApplier, validator ConfigValidator, core ModeReader, settings RuntimeSettings, tun *TunFlag) *SubscriptionService {
 	return &SubscriptionService{
 		downloader: downloader, store: store, applier: applier,
-		validator: validator, core: core, settings: settings,
+		validator: validator, core: core, settings: settings, tun: tun,
 	}
 }
 
@@ -419,12 +423,42 @@ func (s *SubscriptionService) Delete(ctx context.Context, id string, replacement
 func (s *SubscriptionService) StartupConfig() ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.startupConfigWith(s.settings)
+}
+
+// StartupConfigTun returns the startup config with TUN on or off, on the
+// saved startup mode: exactly what the core would run started cold.
+func (s *SubscriptionService) StartupConfigTun(tun bool) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings := s.settings
+	settings.Tun = tun
+	return s.startupConfigWith(settings)
+}
+
+// LiveConfigTun returns the config for switching TUN while a core runs,
+// keeping the outbound mode the running core is in.
+func (s *SubscriptionService) LiveConfigTun(ctx context.Context, tun bool) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings, err := s.liveSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	settings.Tun = tun
+	return s.startupConfigWith(settings)
+}
+
+// startupConfigWith builds the config the core should start with under
+// settings: the active subscription's stored body, or the bootstrap profile
+// when none is stored. Nothing is downloaded.
+func (s *SubscriptionService) startupConfigWith(settings RuntimeSettings) ([]byte, error) {
 	entries, activeID, err := s.store.Entries()
 	if err != nil {
 		return nil, err
 	}
 	if activeID == "" {
-		return BootstrapConfig(s.settings)
+		return BootstrapConfig(settings)
 	}
 	if entryIndex(entries, activeID) < 0 {
 		return nil, unknownSubscription(activeID)
@@ -436,7 +470,7 @@ func (s *SubscriptionService) StartupConfig() ([]byte, error) {
 	if !found {
 		return nil, unknownSubscription(activeID)
 	}
-	return RuntimeConfig(active.Raw, s.settings)
+	return RuntimeConfig(active.Raw, settings)
 }
 
 // refresh downloads the subscription id's link again and records the outcome: a
@@ -560,9 +594,9 @@ func (s *SubscriptionService) switchCore(ctx context.Context, config []byte, pre
 	return fmt.Errorf("keep the change in the store, the core was put back: %w", commitErr)
 }
 
-// liveSettings returns the settings with the mode the core runs in now: applying
-// any config preserves the mode the user chose; the startup mode frozen at
-// construction is only for starting the core.
+// liveSettings returns the settings with the mode the core runs in now and
+// whether TUN is on: applying any config preserves both, so a reload never
+// drops the tun section while the helper's core serves it.
 func (s *SubscriptionService) liveSettings(ctx context.Context) (RuntimeSettings, error) {
 	mode, err := s.core.Mode(ctx)
 	if err != nil {
@@ -570,6 +604,7 @@ func (s *SubscriptionService) liveSettings(ctx context.Context) (RuntimeSettings
 	}
 	settings := s.settings
 	settings.Mode = mode
+	settings.Tun = s.tun.On()
 	return settings, nil
 }
 

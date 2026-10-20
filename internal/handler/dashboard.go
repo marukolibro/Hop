@@ -102,6 +102,15 @@ type SystemProxyService interface {
 	Disable(ctx context.Context) error
 }
 
+// TunService turns TUN mode on and off through the privileged helper, and
+// removes the helper when the user asks.
+type TunService interface {
+	Status(ctx context.Context) (model.TunStatus, error)
+	Enable(ctx context.Context) error
+	Disable(ctx context.Context) error
+	Uninstall(ctx context.Context) error
+}
+
 // LoginItem starts Hop when the user logs in: mygo.App in production.
 type LoginItem interface {
 	OpenAtLogin() bool
@@ -117,6 +126,7 @@ type Services struct {
 	Core          CoreService
 	Settings      SettingsService
 	SystemProxy   SystemProxyService
+	Tun           TunService
 	LoginItem     LoginItem
 }
 
@@ -225,6 +235,7 @@ type Dashboard struct {
 	core         coreState
 	settings     settingsState
 	sysProxy     sysProxyState
+	tun          tunState
 	// openAtLogin is whether Hop starts at login, as the system says.
 	openAtLogin bool
 	// watchCancel ends the streams from the core, which restart with it.
@@ -420,6 +431,8 @@ func (d *Dashboard) Start(ctx context.Context, win Updater) {
 	go d.startupTest(ctx, win, d.viewGen)
 	go d.loadCore(ctx, win)
 	go d.startSystemProxy(ctx, win, d.settings.settings.SystemProxy)
+	go d.startTun(ctx, win)
+	go d.watchNetState(ctx, win)
 	d.openAtLogin = d.services.LoginItem.OpenAtLogin()
 	d.startWatchers(ctx, win)
 	go d.watchCoreRestarts(ctx, win)
@@ -649,6 +662,10 @@ const (
 	actionSystemProxyOn       action = "打开系统代理失败"
 	actionSystemProxyOff      action = "关闭系统代理失败"
 	actionOpenAtLogin         action = "设置开机启动失败"
+	actionReadTun             action = "读取增强模式状态失败"
+	actionTunOn               action = "开启增强模式失败"
+	actionTunOff              action = "关闭增强模式失败"
+	actionUninstallHelper     action = "卸载特权助手失败"
 )
 
 // fail shows what went wrong without touching the connection status.
@@ -684,6 +701,7 @@ func (d *Dashboard) View(c *ui.Context) {
 	// The subscription dialogs sit over whatever page shows.
 	d.editorDialog(c, t)
 	d.deleteDialog(c, t)
+	d.tunDialog(c, t)
 }
 
 // header holds what applies to every page: the page switch and whether the
@@ -701,10 +719,10 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 }
 
 // proxying says whether traffic is handed to Hop now: its core runs and the
-// system proxy points at it. That, not the core merely running, is what the
-// status dot shows as live.
+// system proxy points at it or its TUN has taken the routes. That, not the
+// core merely running, is what the status dot shows as live.
 func (d *Dashboard) proxying() bool {
-	return d.status == statusConnected && d.sysProxy.on
+	return d.status == statusConnected && (d.sysProxy.on || d.tun.on)
 }
 
 func (d *Dashboard) statusText() string {

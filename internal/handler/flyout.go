@@ -56,6 +56,15 @@ func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func()) {
 				ui.Box(c).Grow(1)
 				d.systemProxyPill(c, t)
 			})
+			// The TUN pill sits on its own line: the panel is narrow, and
+			// the two traffic switches read together on the right.
+			ui.Row(c).Key("tun").Gap(gapTight).AlignItems(ui.Center).Children(func() {
+				ui.Box(c).Grow(1)
+				if note := d.tunHint(); note != "" {
+					mutedText(c, t, note).MaxLines(1)
+				}
+				d.tunPill(c, t)
+			})
 			if note := d.systemProxyHint(); note != "" {
 				mutedText(c, t, note).MaxLines(1).AlignSelf(ui.End)
 			}

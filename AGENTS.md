@@ -16,9 +16,20 @@ never written in Chinese. Below are the rules specific to this project.
 The user runs Clash Verge (its own mihomo, in service mode, possibly with TUN)
 on this machine while developing Hop. Hop must never interfere with it.
 
-- Never set or change TUN, DNS, routes or network settings. The system proxy
-  is the one exception, and only through `service.SystemProxyService`: it
-  changes it only when the user turns it on in Settings (off by default),
+- Never set or change DNS, routes or network settings. TUN is the one
+  exception, and only through Hop's privileged helper (`cmd/hop-helper`).
+  While its core runs with TUN on, the helper points the system DNS of the
+  enabled network services at public resolvers whose traffic enters the TUN
+  (so lookups get fake IPs), backs up what was there first, and restores it
+  when the core stops, when the helper starts and finds a backup, and at
+  quit. Tests never let the helper touch the real DNS. TUN is off
+  by default, turned on by the user, refused while another TUN holds the
+  default routes, and never turned on in a test or experiment unless the user
+  is present and agrees. Never run `sudo`, `osascript ... with administrator
+  privileges`, `launchctl`, or write under `/Library` yourself: installing the
+  helper is the user's action. The system proxy
+  is the other exception, and only through `service.SystemProxyService`: it
+  changes it only when the user turns it on (off by default),
   refuses when another app already holds it, and clears only a proxy that
   points at Hop itself (at quit and when the core gives up). Never run
   `networksetup` or touch the proxy registry keys anywhere else, and never

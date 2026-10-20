@@ -18,6 +18,7 @@ type settingsFile struct {
 	Appearance          string `json:"appearance"`
 	DelayTimeoutSeconds int    `json:"delayTimeoutSeconds"`
 	SystemProxy         bool   `json:"systemProxy"`
+	Tun                 bool   `json:"tun"`
 }
 
 // LoadSettings returns the saved settings, and false when none were saved.
@@ -38,6 +39,7 @@ func (s *Store) LoadSettings() (model.Settings, bool, error) {
 		Appearance:          model.Appearance(file.Appearance),
 		DelayTimeoutSeconds: file.DelayTimeoutSeconds,
 		SystemProxy:         file.SystemProxy,
+		Tun:                 file.Tun,
 	}, true, nil
 }
 
@@ -47,6 +49,7 @@ func (s *Store) SaveSettings(settings model.Settings) error {
 		Appearance:          string(settings.Appearance),
 		DelayTimeoutSeconds: settings.DelayTimeoutSeconds,
 		SystemProxy:         settings.SystemProxy,
+		Tun:                 settings.Tun,
 	})
 	if err != nil {
 		return fmt.Errorf("encode settings: %w", err)

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"hop/internal/model"
+	"hop/internal/repository/netservice"
 )
 
 // Current reads the proxy macOS applies now, that of the primary network
@@ -50,7 +51,7 @@ func parseScutil(out string) model.SystemProxyState {
 // Set points the web, secure web and SOCKS proxies of every enabled network
 // service at host:port, so apps use it whichever network is in use.
 func (c *Controller) Set(ctx context.Context, host string, port int) error {
-	services, err := networkServices(ctx)
+	services, err := netservice.List(ctx)
 	if err != nil {
 		return err
 	}
@@ -61,7 +62,7 @@ func (c *Controller) Set(ctx context.Context, host string, port int) error {
 			{"-setsecurewebproxy", service, host, p},
 			{"-setsocksfirewallproxy", service, host, p},
 		} {
-			if err := networksetup(ctx, args); err != nil {
+			if err := netservice.Run(ctx, args); err != nil {
 				return err
 			}
 		}
@@ -72,7 +73,7 @@ func (c *Controller) Set(ctx context.Context, host string, port int) error {
 // Clear turns the web, secure web and SOCKS proxies of every enabled network
 // service off.
 func (c *Controller) Clear(ctx context.Context) error {
-	services, err := networkServices(ctx)
+	services, err := netservice.List(ctx)
 	if err != nil {
 		return err
 	}
@@ -82,44 +83,10 @@ func (c *Controller) Clear(ctx context.Context) error {
 			{"-setsecurewebproxystate", service, "off"},
 			{"-setsocksfirewallproxystate", service, "off"},
 		} {
-			if err := networksetup(ctx, args); err != nil {
+			if err := netservice.Run(ctx, args); err != nil {
 				return err
 			}
 		}
-	}
-	return nil
-}
-
-// networkServices lists the enabled network services. networksetup prints a
-// note first and marks a disabled service with a leading "*".
-func networkServices(ctx context.Context) ([]string, error) {
-	out, err := exec.CommandContext(ctx, "networksetup", "-listallnetworkservices").Output()
-	if err != nil {
-		return nil, fmt.Errorf("list network services (networksetup -listallnetworkservices): %w", err)
-	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	var services []string
-	for _, line := range lines[1:] {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "*") {
-			continue
-		}
-		services = append(services, line)
-	}
-	return services, nil
-}
-
-// networksetup runs one change. It reports some failures, such as a missing
-// privilege, only on its output with a zero exit status, so any output is an
-// error.
-func networksetup(ctx context.Context, args []string) error {
-	out, err := exec.CommandContext(ctx, "networksetup", args...).CombinedOutput()
-	text := strings.TrimSpace(string(out))
-	if err != nil {
-		return fmt.Errorf("networksetup %s: %w (output=%q)", strings.Join(args, " "), err, text)
-	}
-	if text != "" {
-		return fmt.Errorf("networksetup %s: %s", strings.Join(args, " "), text)
 	}
 	return nil
 }

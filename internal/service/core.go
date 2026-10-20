@@ -23,6 +23,11 @@ var ErrCoreUpToDate = errors.New("the running mihomo core is already the newest 
 // developer's environment variable, which an upgrade could not replace.
 var ErrCoreNotUpgradable = errors.New("the running core comes from HOP_MIHOMO_BINARY; unset it to let Hop manage the core")
 
+// ErrCoreLockedByTun is returned when the core is asked to change while TUN
+// is on: the helper's root core owns the ports, and Hop's own core could not
+// start beside it.
+var ErrCoreLockedByTun = errors.New("the core cannot be changed while TUN is on; turn TUN off first")
+
 // CoreVersionReader asks the running core what version it is.
 type CoreVersionReader interface {
 	Version(ctx context.Context) (string, error)
@@ -61,6 +66,9 @@ type CoreService struct {
 	installs CoreInstalls
 	process  CoreProcess
 	checker  CoreChecker
+	// tun says whether TUN is on: the helper's core runs then, and a change
+	// of Hop's own core must wait.
+	tun *TunFlag
 
 	// mu serializes upgrades with each other and with reads of the state
 	// they change.
@@ -71,11 +79,12 @@ type CoreService struct {
 }
 
 // NewCoreService returns a service for a core started from binary of origin;
-// bundledBinary is the core that ships with the app.
-func NewCoreService(version CoreVersionReader, releases CoreReleases, installs CoreInstalls, process CoreProcess, checker CoreChecker, binary string, bundledBinary string, origin model.CoreOrigin) *CoreService {
+// bundledBinary is the core that ships with the app, and tun says whether
+// TUN is on.
+func NewCoreService(version CoreVersionReader, releases CoreReleases, installs CoreInstalls, process CoreProcess, checker CoreChecker, binary string, bundledBinary string, origin model.CoreOrigin, tun *TunFlag) *CoreService {
 	return &CoreService{
 		version: version, releases: releases, installs: installs, process: process, checker: checker,
-		binary: binary, bundledBinary: bundledBinary, origin: origin,
+		binary: binary, bundledBinary: bundledBinary, origin: origin, tun: tun,
 	}
 }
 
@@ -117,6 +126,9 @@ func (s *CoreService) CheckLatest(ctx context.Context) (model.CoreRelease, bool,
 func (s *CoreService) Upgrade(ctx context.Context, progress func(model.CoreProgress)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.tun.On() {
+		return ErrCoreLockedByTun
+	}
 	if s.origin == model.CoreOverride {
 		return ErrCoreNotUpgradable
 	}
@@ -173,6 +185,9 @@ func (s *CoreService) Upgrade(ctx context.Context, progress func(model.CoreProgr
 func (s *CoreService) RestoreBundled(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.tun.On() {
+		return ErrCoreLockedByTun
+	}
 	if s.origin != model.CoreInstalled {
 		return errors.New("the bundled core is already running")
 	}

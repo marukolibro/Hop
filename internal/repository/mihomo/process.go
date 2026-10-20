@@ -63,6 +63,9 @@ func launch(ctx context.Context, cfg config.Config, binary string) (*Process, er
 	if err := ReapStale(pidFile, cfg.HomeDir); err != nil {
 		return nil, err
 	}
+	if err := waitPortsFree(ctx, cfg); err != nil {
+		return nil, err
+	}
 	configPath := ConfigPath(cfg.HomeDir)
 	cmd := exec.CommandContext(ctx, binary, "-d", cfg.HomeDir, "-f", configPath)
 	// Ask the core to shut down before the context kills it.

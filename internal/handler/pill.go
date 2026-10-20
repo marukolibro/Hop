@@ -94,3 +94,13 @@ func (d *Dashboard) systemProxyPill(c *ui.Context, t *ui.Theme) ui.Element {
 		disabled: !s.loaded || (taken && !s.on),
 	}, func() { d.beginSystemProxy(!s.on) })
 }
+
+// tunPill turns TUN mode on and off. While another client's TUN holds the
+// default routes it cannot be turned on.
+func (d *Dashboard) tunPill(c *ui.Context, t *ui.Theme) ui.Element {
+	s := &d.tun
+	return togglePill(c, t, pillSpec{
+		label: "增强模式", on: s.on, busy: s.busy,
+		disabled: !s.loaded || d.controlsLocked() || (s.taken && !s.on),
+	}, func() { d.beginTun(!s.on) })
+}

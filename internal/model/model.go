@@ -347,6 +347,24 @@ type Settings struct {
 	// SystemProxy says the user wants the system proxy pointed at Hop; Hop
 	// applies it at start unless another app holds the system proxy.
 	SystemProxy bool
+	// Tun says the user wants the core run under the privileged helper with
+	// TUN on; Hop applies it at start unless another TUN holds the default
+	// routes.
+	Tun bool
+}
+
+// TunStatus is what the dashboard shows of TUN mode: whether the privileged
+// helper is installed and its version, whether its core runs, and which
+// interface holds the default routes when another client's TUN does.
+type TunStatus struct {
+	HelperInstalled bool
+	HelperVersion   string
+	// HelperOutdated says the installed helper is another version than this
+	// app's: it must be replaced before TUN can use it.
+	HelperOutdated bool
+	CoreRunning    bool
+	Taken          bool
+	TakenBy        string
 }
 
 // ProxyEndpoint is one proxy the system sends traffic to.

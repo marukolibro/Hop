@@ -48,7 +48,7 @@ func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 }
 
 // trafficControls are the route card's foot: the outbound mode on the
-// left, the system proxy on the right.
+// left, the traffic switches on the right.
 func (d *Dashboard) trafficControls(c *ui.Context, t *ui.Theme) {
 	ui.Row(c).Key("controls").Gap(gapSmall).AlignItems(ui.Center).Padding(gapSmall+2, panelPadX).Children(func() {
 		for i := range modeLabels {
@@ -58,7 +58,11 @@ func (d *Dashboard) trafficControls(c *ui.Context, t *ui.Theme) {
 		if note := d.systemProxyHint(); note != "" {
 			mutedText(c, t, note).MaxLines(1)
 		}
+		if note := d.tunHint(); note != "" {
+			mutedText(c, t, note).MaxLines(1)
+		}
 		d.systemProxyPill(c, t)
+		d.tunPill(c, t)
 	})
 }
 

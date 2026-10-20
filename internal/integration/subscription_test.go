@@ -202,6 +202,7 @@ func newHarness(t *testing.T, appDir string) *harness {
 			mihomo.NewConfigValidator(binary, filepath.Join(appDir, "validate"), validateTimeout),
 			client,
 			settings,
+			service.NewTunFlag(),
 		),
 	}
 }

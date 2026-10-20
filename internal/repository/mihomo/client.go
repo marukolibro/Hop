@@ -57,6 +57,15 @@ func NewClient(addr string, secret string, configPath string, httpClient *http.C
 	return &Client{addr: addr, secret: secret, configPath: configPath, http: httpClient, timeout: timeout}
 }
 
+// CloseIdleConnections closes the keep-alive connections to the controller.
+// Closed from this side before the core stops, they leave their TIME_WAIT on
+// this side's ephemeral ports; closed by a core that stops first, they would
+// leave it on the controller's port, which macOS then keeps from another
+// user's core for half a minute.
+func (c *Client) CloseIdleConnections() {
+	c.http.CloseIdleConnections()
+}
+
 type versionResponse struct {
 	Version string `json:"version"`
 }

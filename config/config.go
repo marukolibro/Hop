@@ -4,11 +4,13 @@ package config
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"hop/internal/model"
 	"hop/internal/repository/corestore"
@@ -24,6 +26,11 @@ const (
 
 	secretBytes = 16
 	appDirName  = "hop"
+
+	// secretFileName keeps the controller secret between starts;
+	// secretFilePerm is owner-only, like everything else in the app dir.
+	secretFileName = "controller-secret"
+	secretFilePerm = 0o600
 )
 
 // Config is everything the sidecar core and its controller client need.
@@ -43,7 +50,9 @@ type Config struct {
 	MixedPort int
 	// ControllerAddr is host:port of the core's REST controller.
 	ControllerAddr string
-	// Secret authenticates controller requests; it is new on every start.
+	// Secret authenticates controller requests; it is kept between starts so
+	// a core TUN mode left running under the helper still answers after Hop
+	// comes back.
 	Secret string
 }
 
@@ -57,7 +66,11 @@ func Load(userConfigDir string, resourcesDir string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	secret, err := newSecret()
+	// The controller secret is kept between starts, not made anew each one:
+	// a core TUN mode left running under the helper — across a crash, an
+	// adopted restart — keeps answering the controller Hop reconnects with.
+	// It lives beside the config file that carries it anyway, owner-only.
+	secret, err := loadOrCreateSecret(filepath.Join(appDir, secretFileName))
 	if err != nil {
 		return Config{}, err
 	}
@@ -123,6 +136,29 @@ func findBundledBinary(resourcesDir string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no bundled mihomo core found (tried %v): run scripts/fetch-mihomo.sh %s-%s", candidates, runtime.GOOS, runtime.GOARCH)
+}
+
+// loadOrCreateSecret returns the controller secret kept at path, generating
+// and storing one when the file does not exist yet. Stored owner-only, it is
+// no more exposed than the core's own config file, which carries the secret
+// during every session.
+func loadOrCreateSecret(path string) (string, error) {
+	if raw, err := os.ReadFile(path); err == nil {
+		if secret := strings.TrimSpace(string(raw)); secret != "" {
+			return secret, nil
+		}
+		return "", fmt.Errorf("the stored controller secret is empty (path=%q)", path)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("read the stored controller secret (path=%q): %w", path, err)
+	}
+	secret, err := newSecret()
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, []byte(secret), secretFilePerm); err != nil {
+		return "", fmt.Errorf("store the controller secret (path=%q): %w", path, err)
+	}
+	return secret, nil
 }
 
 func newSecret() (string, error) {

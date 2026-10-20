@@ -143,6 +143,7 @@ func TestCoreUpgrade(t *testing.T) {
 		store, runner,
 		mihomo.NewCoreChecker(mihomo.ConfigPath(cfg.HomeDir), filepath.Join(appDir, "validate"), validateTimeout),
 		binary, binary, model.CoreBundled,
+		service.NewTunFlag(),
 	)
 	noProgress := func(model.CoreProgress) {}
 
@@ -232,7 +233,7 @@ func TestCoreUpgrade(t *testing.T) {
 	})
 
 	t.Run("a developer's core cannot be upgraded", func(t *testing.T) {
-		override := service.NewCoreService(olderVersion{}, nil, nil, nil, nil, binary, binary, model.CoreOverride)
+		override := service.NewCoreService(olderVersion{}, nil, nil, nil, nil, binary, binary, model.CoreOverride, service.NewTunFlag())
 		if err := override.Upgrade(ctx, noProgress); !errors.Is(err, service.ErrCoreNotUpgradable) {
 			t.Errorf("err = %v, want ErrCoreNotUpgradable", err)
 		}
