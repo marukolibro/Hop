@@ -36,9 +36,12 @@ var subscriptionSections = []string{
 }
 
 type runtimeConfig struct {
-	MixedPort          int    `yaml:"mixed-port"`
-	BindAddress        string `yaml:"bind-address"`
-	AllowLAN           bool   `yaml:"allow-lan"`
+	MixedPort   int    `yaml:"mixed-port"`
+	BindAddress string `yaml:"bind-address"`
+	AllowLAN    bool   `yaml:"allow-lan"`
+	// UnifiedDelay measures a delay without the handshake, so a node's
+	// first test is as low as its later ones.
+	UnifiedDelay       bool   `yaml:"unified-delay"`
 	Mode               string `yaml:"mode"`
 	LogLevel           string `yaml:"log-level"`
 	ExternalController string `yaml:"external-controller"`
@@ -57,6 +60,7 @@ func baseConfig(s RuntimeSettings) runtimeConfig {
 		MixedPort:          s.MixedPort,
 		BindAddress:        s.BindAddress,
 		AllowLAN:           false,
+		UnifiedDelay:       true,
 		Mode:               s.Mode,
 		LogLevel:           s.LogLevel,
 		ExternalController: s.ControllerAddr,

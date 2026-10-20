@@ -2,13 +2,16 @@ package handler
 
 import (
 	"math"
+	"runtime"
 	"strings"
 	"time"
 
+	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/chart"
 
 	"hop/internal/model"
+	"hop/internal/service"
 )
 
 // Motion in Hop is for what changes: the switch slides to the new choice,
@@ -20,12 +23,12 @@ const (
 	switchHeight float32 = 28
 	switchInset  float32 = 2
 	pulsePeriod          = 2 * time.Second
-	// addressMinWidth is the window width from which the header has room
-	// for the proxy address in the status capsule.
-	addressMinWidth float32 = 820
-	entranceTime            = 420 * time.Millisecond
-	entranceStep            = 45 * time.Millisecond
-	entranceShift   float32 = 10
+	// statusTextMinWidth is the window width from which the status capsule
+	// spells out what it does.
+	statusTextMinWidth float32 = 720
+	entranceTime               = 420 * time.Millisecond
+	entranceStep               = 45 * time.Millisecond
+	entranceShift      float32 = 10
 
 	// opticalLift raises text in small controls: CJK glyphs sit about a
 	// pixel below the centre of the line box the font's metrics give.
@@ -41,21 +44,18 @@ const (
 
 // switchStyle colours a sliding switch.
 type switchStyle struct {
-	track        ui.Color
-	thumb        ui.Color
-	active       ui.Color
-	inactive     ui.Color
-	segmentWidth float32
+	track ui.Color
+	thumb ui.Color
+	// thumbMaterial, when set, fills the thumb in place of its colour.
+	thumbMaterial ui.Material
+	active        ui.Color
+	inactive      ui.Color
+	segmentWidth  float32
 }
 
-// pageSwitchStyle is the quiet switch between pages; modeSwitchStyle the
-// accented one for the outbound mode, which changes where traffic goes.
+// pageSwitchStyle is the quiet switch between pages and between choices.
 func pageSwitchStyle(t *ui.Theme, segmentWidth float32) switchStyle {
-	return switchStyle{track: t.SurfacePressed, thumb: t.Surface, active: t.Text, inactive: t.TextMuted, segmentWidth: segmentWidth}
-}
-
-func modeSwitchStyle(t *ui.Theme, segmentWidth float32) switchStyle {
-	return switchStyle{track: t.SurfacePressed, thumb: t.Accent, active: t.AccentText, inactive: t.TextMuted, segmentWidth: segmentWidth}
+	return switchStyle{track: t.SurfacePressed, thumb: t.Surface, thumbMaterial: glass.Glass{}, active: t.Text, inactive: t.TextMuted, segmentWidth: segmentWidth}
 }
 
 // slidingSwitch chooses one of labels into *selected, with a thumb that
@@ -66,8 +66,12 @@ func slidingSwitch(c *ui.Context, key string, selected *int, labels []string, st
 		Radius(switchHeight / 2).Background(style.track)
 	x := track.AnimateTo("thumb", float32(*selected)*style.segmentWidth, ui.Snappy)
 	track.Children(func() {
-		ui.Box(c).Absolute().Left(switchInset+x).Top(switchInset).Width(style.segmentWidth).Height(inner).
-			Radius(inner/2).Background(style.thumb).Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.12))
+		thumb := ui.Box(c).Absolute().Left(switchInset + x).Top(switchInset).Width(style.segmentWidth).Height(inner).Radius(inner / 2)
+		if style.thumbMaterial != nil {
+			thumb.Material(style.thumbMaterial)
+		} else {
+			thumb.Background(style.thumb).Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.12))
+		}
 		ui.Row(c).Absolute().Left(switchInset).Top(switchInset).Children(func() {
 			for i, label := range labels {
 				segment := ui.Box(c).Key(label).Width(style.segmentWidth).Height(inner).Center().Cursor(ui.CursorPointer)
@@ -105,27 +109,38 @@ func statusDot(c *ui.Context, color ui.Color, live bool) {
 	})
 }
 
-// statusCapsule says whether the core runs and where apps send traffic to
-// use it; a click copies that address.
+// statusCapsule's dot says whether Hop carries the system's traffic, or
+// that the core cannot be reached. While the core runs, the capsule copies
+// the command that sends a terminal's traffic through Hop.
 func (d *Dashboard) statusCapsule(c *ui.Context, t *ui.Theme) {
 	live := d.status == statusConnected
 	capsule := ui.Row(c).Key("status").Gap(gapTight).AlignItems(ui.Center).Height(switchHeight).Padding(0, 12, 0, 6).
-		Radius(switchHeight/2).Background(t.Surface).Border(1, t.Border).Cursor(ui.CursorPointer)
-	if capsule.Hovered() {
-		capsule.Background(t.SurfaceHover)
-	}
-	capsule.OnClick(func() {
-		c.WriteClipboard(d.proxyAddress)
-		c.Toast("已复制代理地址 " + d.proxyAddress)
-	})
-	capsule.Children(func() {
-		statusDot(c, d.statusColor(t), live)
-		ui.Text(c, d.statusText()).FontSize(fontSecondary).FontWeight(weightMedium).NoWrap().Translate(0, -opticalLift)
-		// A narrow window keeps the state and drops the address, which a
-		// click still copies.
-		if width, _ := c.Size(); live && width >= addressMinWidth {
-			ui.Text(c, d.proxyAddress).FontSize(fontSecondary).TextColor(t.TextMuted).FontFeatures("tnum").NoWrap().Translate(0, -opticalLift)
+		Radius(switchHeight/2).Background(t.Surface).Border(1, t.Border)
+	if live {
+		capsule.Label("复制终端代理").Cursor(ui.CursorPointer)
+		if capsule.Hovered() {
+			capsule.Background(t.SurfaceHover)
 		}
+		capsule.OnClick(func() {
+			c.WriteClipboard(service.TerminalProxyCommand(runtime.GOOS, d.proxyAddress))
+			c.Toast("已复制终端代理命令,粘贴到终端即可")
+		})
+	}
+	capsule.Children(func() {
+		statusDot(c, d.statusColor(t), d.proxying())
+		// A narrow window drops the words, leaving the dot and the icon.
+		width, _ := c.Size()
+		if live {
+			ui.Icon(c, iconTerminal).Width(iconInline + 1).Height(iconInline + 1).TextColor(t.TextMuted)
+		}
+		if width < statusTextMinWidth {
+			return
+		}
+		label := d.statusText()
+		if live {
+			label = "复制终端代理"
+		}
+		ui.Text(c, label).FontSize(fontSecondary).FontWeight(weightMedium).NoWrap().Translate(0, -opticalLift)
 	})
 }
 

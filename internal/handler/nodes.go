@@ -38,14 +38,20 @@ func (d *Dashboard) activeGroupView() (model.GroupView, bool) {
 	return model.GroupView{}, false
 }
 
-// nodesPage shows the route on top, then the groups in a sidebar beside
-// the options of the one chosen.
+// nodesPage shows the route on top, then the groups in a sidebar beside the
+// options of the one chosen. The subscription management page is a subpage of
+// it, reached from the subscription bar.
 func (d *Dashboard) nodesPage(c *ui.Context, t *ui.Theme) {
+	if d.subscription.managing {
+		d.managePage(c, t)
+		return
+	}
 	d.routeBar(c, t)
 	d.subscriptionBar(c, t)
 	// The row and both panes may shrink below their content, so each pane
 	// scrolls inside the window rather than pushing past it.
-	ui.Row(c).Grow(1).Basis(0).MinHeight(0).AlignItems(ui.Stretch).Gap(gapSection).Padding(0, 0, 0, pagePadding).Children(func() {
+	ui.Row(c).Grow(1).Basis(0).MinHeight(0).AlignItems(ui.Stretch).Gap(gapSection).Padding(0, 0, 0, pagePadding).
+		Disabled(d.controlsLocked()).Children(func() {
 		d.groupSidebar(c, t)
 		ui.Column(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
 			d.groupHeader(c, t)
@@ -155,16 +161,15 @@ func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, 
 			title.FontWeight(weightMedium)
 		}
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
-			ui.Row(c).Gap(4).Grow(1).Basis(0).AlignItems(ui.Center).Clip().Children(func() {
+			// The labels wrap inside one line's height, so a label that does
+			// not fit whole is out of sight rather than cut in half.
+			ui.Row(c).Gap(4).GapY(chipLineGap).Wrap().Height(chipHeight).Clip().Grow(1).Basis(0).Children(func() {
 				if node.Via != "" {
 					ui.Text(c, node.Via).FontSize(fontCaption).TextColor(t.TextMuted).MaxLines(1)
 					return
 				}
-				for _, label := range nodeLabels(node) {
-					chip(c, label, t.TextMuted)
-				}
-				if node.Multiplier != "" {
-					chip(c, node.Multiplier, t.Warning)
+				for _, label := range tileChips(t, node) {
+					chip(c, label.text, label.color)
 				}
 			})
 			delayLabel(c, t, node.Delay, fontSecondary)
@@ -212,6 +217,31 @@ func nodeLabels(node model.NodeView) []string {
 	return append(labels, node.Tags...)
 }
 
+// tileChip is one small label on a tile.
+type tileChip struct {
+	text  string
+	color ui.Color
+}
+
+// tileChips are the labels of a tile in the order that survives a narrow
+// tile best: the protocol, UDP, the rate, which costs something, then the
+// lines the name gives.
+func tileChips(t *ui.Theme, node model.NodeView) []tileChip {
+	labels := nodeLabels(node)
+	fixed := min(len(labels), len(labels)-len(node.Tags))
+	chips := make([]tileChip, 0, len(labels)+1)
+	for _, label := range labels[:fixed] {
+		chips = append(chips, tileChip{label, t.TextMuted})
+	}
+	if node.Multiplier != "" {
+		chips = append(chips, tileChip{node.Multiplier, t.Warning})
+	}
+	for _, label := range labels[fixed:] {
+		chips = append(chips, tileChip{label, t.TextMuted})
+	}
+	return chips
+}
+
 // speedScore is how full a latency bar is: nearly full for an instant
 // answer, short near barCeiling, empty before a test or after a failure.
 func speedScore(delay model.Delay) float32 {
@@ -242,8 +272,8 @@ func delayLabel(c *ui.Context, t *ui.Theme, delay model.Delay, size float32) {
 		ContentTransition(ui.ContentTransition{Numeric: true})
 }
 
-// delayText words a latency: milliseconds, "超时" for a failed test, a dash
-// before any test.
+// delayText words a latency: milliseconds, "超时" for a failed test, a dash before
+// any test.
 func delayText(delay model.Delay) string {
 	switch {
 	case !delay.Measured:

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -16,8 +17,9 @@ const idleRate = 1024
 
 // MenuBar is Hop's menu bar item: its mark with the live speed beside it,
 // and a panel to see the route and switch the mode and the node without
-// opening the window. Closing the window hides it; Hop keeps running until
-// quit. All its methods run on the main thread.
+// opening the window. Closing the window hides it and Hop's Dock icon; Hop
+// keeps running in the menu bar until quit. All its methods run on the main
+// thread.
 type MenuBar struct {
 	tray *mygo.Tray
 	win  *mygo.Window
@@ -25,6 +27,10 @@ type MenuBar struct {
 	// panel is the open panel, or nil.
 	panel    *mygo.Window
 	quitting bool
+	// mark is the plain icon; shown is the speed the icon shows now, ""
+	// for the plain mark.
+	mark  []byte
+	shown string
 }
 
 // NewMenuBar puts Hop in the menu bar and keeps it running when win is
@@ -39,14 +45,14 @@ func NewMenuBar(win *mygo.Window, d *Dashboard) (*MenuBar, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create menu bar item: %w", err)
 	}
-	m := &MenuBar{tray: tray, win: win, d: d}
+	m := &MenuBar{tray: tray, win: win, d: d, mark: icon}
 	tray.OnClick(m.togglePanel)
 	tray.OnRightClick(m.popUpMenu)
 	d.OnTraffic(m.showSpeed)
 	win.OnClose(func(e *mygo.CloseEvent) {
 		if !m.quitting {
 			e.PreventDefault()
-			win.Hide()
+			m.hideWindow()
 		}
 	})
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { m.quitting = true })
@@ -70,12 +76,21 @@ func (m *MenuBar) Update(fn func()) {
 	})
 }
 
+// showWindow brings the window back, and Hop's Dock icon with it.
 func (m *MenuBar) showWindow() {
 	if m.panel != nil {
 		m.panel.Close()
 	}
+	mygo.App.SetActivationPolicy(mygo.ActivationPolicyRegular)
 	m.win.Show()
 	m.win.Focus()
+}
+
+// hideWindow puts the window away; Hop keeps running in the menu bar only,
+// without a Dock icon, until the window is shown again.
+func (m *MenuBar) hideWindow() {
+	m.win.Hide()
+	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 }
 
 // togglePanel opens the panel under the icon, or closes it. The panel
@@ -116,13 +131,36 @@ func (m *MenuBar) popUpMenu() {
 	m.tray.PopUpMenu()
 }
 
-// showSpeed puts the current speed beside the mark while traffic flows.
+// showSpeed draws the current speed beside the mark while traffic flows,
+// upload over download in a column of fixed width, so the item does not
+// shift as the numbers change. It redraws only when the numbers do.
 func (m *MenuBar) showSpeed(sample model.Traffic) {
 	if sample.Down+sample.Up < idleRate {
-		m.tray.SetTitle("")
+		m.setIcon("", m.mark)
 		return
 	}
-	m.tray.SetTitle("↓" + compactRate(sample.Down) + " ↑" + compactRate(sample.Up))
+	up, down := compactRate(sample.Up), compactRate(sample.Down)
+	if up+"/"+down == m.shown {
+		return
+	}
+	icon, err := traySpeedIcon(up, down)
+	if err != nil {
+		slog.Warn("draw menu bar speed", "error", err)
+		return
+	}
+	m.setIcon(up+"/"+down, icon)
+}
+
+// setIcon shows icon in the menu bar as what shown names.
+func (m *MenuBar) setIcon(shown string, icon []byte) {
+	if shown == m.shown {
+		return
+	}
+	if err := m.tray.SetIcon(icon, true); err != nil {
+		slog.Warn("set menu bar icon", "error", err)
+		return
+	}
+	m.shown = shown
 }
 
 // compactRate is a speed short enough for the menu bar, such as "2.4M".

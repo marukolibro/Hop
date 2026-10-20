@@ -1,0 +1,16 @@
+# The mihomo core Hop ships, from https://github.com/MetaCubeX/mihomo/releases.
+# scripts/fetch-mihomo.sh downloads these assets and refuses any whose SHA-256
+# differs, so upgrading means changing the version and every hash together.
+MIHOMO_VERSION=v1.19.32
+MIHOMO_SHA256_DARWIN_ARM64=3312a6780652c622890fd4357c6a853bbf865464fd047ac7b7f52dab8de18652
+# The "compatible" build runs on CPUs without AVX2.
+MIHOMO_SHA256_WINDOWS_AMD64=974a4d7ad69aed27aa2e8f91d61113573c14dadb14562c63e58effabf59816f0
+
+# Geodata the generated configs can need: the files the core itself
+# downloads by default (its geox-url, verified against the pinned core
+# v1.19.32), taken from one commit of meta-rules-dat's release branch so the
+# pin holds while upstream re-rolls its "latest" release every day. Moving the
+# pin means changing the commit and both hashes together.
+GEODATA_COMMIT=2a9d2876677099ee55b84aedb0e140b699e492cf
+GEODATA_SHA256_GEOSITE_DAT=9c3564269492ddd77539c0299223c70763dbdbb2742e20969522714e301ece34
+GEODATA_SHA256_GEOIP_METADB=aacbe3fd6e5cd2329a253e6e3397083a89ff209020a7bc4a74c3ffa30095c81d

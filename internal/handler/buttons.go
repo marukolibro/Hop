@@ -96,3 +96,24 @@ func iconButton(c *ui.Context, label string, icon *ui.SVG, style buttonStyle, on
 	})
 	return b
 }
+
+// iconMenuButton is iconButton that opens a menu instead of acting right away;
+// build fills the menu, label names the button for assistive technology, and
+// disabled keeps the menu from opening.
+func iconMenuButton(c *ui.Context, label string, icon *ui.SVG, style buttonStyle, disabled bool, build func(m *ui.Menu)) ui.Element {
+	const size float32 = 24
+	b := ui.ButtonBase(c).Key(label).Label(label).Width(size).Height(size).Radius(size / 2).Disabled(disabled)
+	fill := ui.Transparent
+	if b.Hovered() && !disabled {
+		fill = style.fill
+	}
+	b.Background(b.AnimateColor("fill", fill, ui.Smooth))
+	if !disabled {
+		b.Cursor(ui.CursorPointer)
+	}
+	b.Menu(build)
+	b.Children(func() {
+		ui.Icon(c, icon).Width(iconInline).Height(iconInline).TextColor(style.ink)
+	})
+	return b
+}

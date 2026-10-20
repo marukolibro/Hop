@@ -62,14 +62,26 @@ type Download struct {
 	UserInfo string
 }
 
-// Subscription is a profile downloaded from a provider: where it came from,
-// the Clash YAML it returned as received, its usage header and when it was
-// downloaded.
+// SubscriptionInput is what the user typed about a subscription: the name to
+// show for it and the link it is downloaded from.
+type SubscriptionInput struct {
+	Name string
+	URL  string
+}
+
+// Subscription is a profile downloaded from a provider: its stable identity and
+// name, where it came from, the Clash YAML it returned as received, its usage
+// header, when it was downloaded, and why its last refresh failed ("" when it
+// worked).
 type Subscription struct {
+	ID        string
+	Name      string
 	URL       string
 	Raw       []byte
 	UserInfo  string
 	UpdatedAt time.Time
+	// LastError is why the last refresh failed, cleared by a success.
+	LastError string
 }
 
 // Usage is the traffic and term of the account, as the provider reports
@@ -81,13 +93,25 @@ type Usage struct {
 	Expire   time.Time
 }
 
-// SubscriptionSummary is what the dashboard shows of the subscription.
+// SubscriptionSummary is what the subscriptions page shows of one stored
+// subscription. The link itself is not part of it: a link is a credential.
 type SubscriptionSummary struct {
+	ID        string
+	Name      string
 	Host      string
 	UpdatedAt time.Time
 	Usage     Usage
 	// HasUsage is set when the provider sent usage with the profile.
 	HasUsage bool
+	// LastError is why the last refresh failed, cleared by a success.
+	LastError string
+}
+
+// SubscriptionsView is all the subscriptions page shows: one summary per stored
+// subscription, and the ID of the one the core runs.
+type SubscriptionsView struct {
+	Items    []SubscriptionSummary
+	ActiveID string
 }
 
 // Delay is a proxy's latest delay test. Millis is 0 when a test ran and got
@@ -101,12 +125,12 @@ type Delay struct {
 type NodeView struct {
 	// Name is the proxy's full name, which selecting it sends to the core.
 	Name string
-	// Flag and Region place the node, such as "🇯🇵" and "日本"; both are ""
-	// for names without a flag.
+	// Flag and Region place the node, such as "🇯🇵" and "日本"; both are "" for
+	// names without a flag.
 	Flag   string
 	Region string
-	// Title is the name without its flag, region and the lines after "|",
-	// such as "高速01" for "🇯🇵日本高速01|CTCU|0.5x".
+	// Title is the name without its flag, region and the lines after "|", such
+	// as "高速01" for "🇯🇵日本高速01|CTCU|0.5x".
 	Title      string
 	Tags       []string
 	Multiplier string
@@ -149,6 +173,9 @@ type GroupView struct {
 	Selectable bool
 	// Kind is what the group is for, one of the GroupKind constants.
 	Kind string
+	// Service is the kind of service a group routes, one of the Service
+	// constants, "" when its name says none.
+	Service string
 	// Pick words the group's direct choice, and Exit is the proxy that
 	// choice leads to through nested groups (zero when none).
 	Pick    string
@@ -225,4 +252,134 @@ type LogEntry struct {
 	Level   string
 	Message string
 	Time    time.Time
+}
+
+// CoreOrigin says where the running mihomo core came from.
+type CoreOrigin string
+
+const (
+	// CoreBundled is the core that ships inside Hop.
+	CoreBundled CoreOrigin = "bundled"
+	// CoreInstalled is a core Hop downloaded when the user upgraded.
+	CoreInstalled CoreOrigin = "installed"
+	// CoreOverride is a core named by HOP_MIHOMO_BINARY, for development.
+	CoreOverride CoreOrigin = "override"
+)
+
+// CoreInfo describes the mihomo core that is running.
+type CoreInfo struct {
+	// Version is what the core itself reports, such as "v1.19.32".
+	Version string
+	Origin  CoreOrigin
+}
+
+// CoreRelease is the newest mihomo release for this platform, with the one
+// asset Hop would install and the digest GitHub published for it.
+type CoreRelease struct {
+	Tag       string
+	AssetName string
+	AssetURL  string
+	Size      int64
+	SHA256    string
+}
+
+// CoreStage is a step of a core upgrade.
+type CoreStage string
+
+const (
+	CoreStageDownload CoreStage = "download"
+	CoreStageVerify   CoreStage = "verify"
+	CoreStageRestart  CoreStage = "restart"
+)
+
+// CoreProgress is how far a core upgrade has come. Done and Total are bytes
+// while downloading and 0 otherwise.
+type CoreProgress struct {
+	Stage CoreStage
+	Done  int64
+	Total int64
+}
+
+// CoreRestart says what Hop did after its core left on its own: either it
+// started the core again (InARow is which crash in a row this was, Exit why
+// the core left), or it gave up (GaveUp) and no core runs.
+type CoreRestart struct {
+	InARow int
+	Exit   string
+	GaveUp bool
+}
+
+// Services a policy group can route, as its name says.
+const (
+	ServiceVideo     = "video"
+	ServiceMusic     = "music"
+	ServiceAI        = "ai"
+	ServiceSearch    = "search"
+	ServiceApple     = "apple"
+	ServiceMicrosoft = "microsoft"
+	ServiceGame      = "game"
+	ServiceChat      = "chat"
+	ServiceTelegram  = "telegram"
+	ServiceSocial    = "social"
+	ServiceCloud     = "cloud"
+	ServiceDev       = "dev"
+	ServiceShop      = "shop"
+	ServiceDownload  = "download"
+	ServiceAdBlock   = "adblock"
+	ServiceDirect    = "direct"
+	ServiceFinal     = "final"
+)
+
+// Appearance is the look the user chose for Hop's windows.
+type Appearance string
+
+const (
+	AppearanceSystem Appearance = "system"
+	AppearanceLight  Appearance = "light"
+	AppearanceDark   Appearance = "dark"
+)
+
+// Settings are the user's preferences, kept between starts.
+type Settings struct {
+	Appearance Appearance
+	// DelayTimeoutSeconds is how long a delay test waits for one node.
+	DelayTimeoutSeconds int
+	// SystemProxy says the user wants the system proxy pointed at Hop; Hop
+	// applies it at start unless another app holds the system proxy.
+	SystemProxy bool
+}
+
+// ProxyEndpoint is one proxy the system sends traffic to.
+type ProxyEndpoint struct {
+	Enabled bool
+	Host    string
+	Port    int
+}
+
+// SystemProxyState is what the system proxy is set to now. AutoConfig is a
+// PAC script in use, which only another app sets.
+type SystemProxyState struct {
+	HTTP       ProxyEndpoint
+	HTTPS      ProxyEndpoint
+	SOCKS      ProxyEndpoint
+	AutoConfig bool
+}
+
+// ProxyOwner is who the system proxy points at.
+type ProxyOwner string
+
+const (
+	// ProxyOwnerNone: no system proxy is set.
+	ProxyOwnerNone ProxyOwner = "none"
+	// ProxyOwnerHop: every proxy set points at Hop.
+	ProxyOwnerHop ProxyOwner = "hop"
+	// ProxyOwnerOther: some proxy points elsewhere, so another app holds it.
+	ProxyOwnerOther ProxyOwner = "other"
+)
+
+// SystemProxyStatus is who holds the system proxy, and where it points when
+// another app holds it ("" otherwise).
+type SystemProxyStatus struct {
+	Owner ProxyOwner
+	Other string
 }

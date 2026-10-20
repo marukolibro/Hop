@@ -144,8 +144,34 @@ func (d *Dashboard) sidebarItem(c *ui.Context, t *ui.Theme, group model.GroupVie
 	})
 }
 
-// groupIcon marks a group: its flag for a region, otherwise an icon for
-// what it is for, on a soft tile.
+// serviceIconScale draws a service's icon a little larger than the plain
+// glyphs, which are lighter.
+const serviceIconScale float32 = 1.12
+
+// serviceIcons are the icons of the services a group can route.
+var serviceIcons = map[string]*ui.SVG{
+	model.ServiceVideo:     iconVideo,
+	model.ServiceMusic:     iconMusic,
+	model.ServiceAI:        iconSparkle,
+	model.ServiceSearch:    iconSearch,
+	model.ServiceApple:     iconPhone,
+	model.ServiceMicrosoft: iconGrid,
+	model.ServiceGame:      iconGamepad,
+	model.ServiceChat:      iconChat,
+	model.ServiceTelegram:  iconPlane,
+	model.ServiceSocial:    iconUsers,
+	model.ServiceCloud:     iconCloud,
+	model.ServiceDev:       iconCode,
+	model.ServiceShop:      iconBag,
+	model.ServiceDownload:  iconDownload,
+	model.ServiceAdBlock:   iconShield,
+	model.ServiceDirect:    iconHome,
+	model.ServiceFinal:     iconTarget,
+}
+
+// groupIcon marks a group: its flag for a region, an icon for the service a
+// routing group serves or the first letter of its name when it serves none
+// Hop knows, and otherwise an icon for what it is for, on a soft tile.
 func groupIcon(c *ui.Context, t *ui.Theme, group model.GroupView, size float32) {
 	flag, isRegional := service.LeadingFlag(group.Label)
 	ui.Box(c).Width(size).Height(size).Radius(size * 0.3).Center().Background(t.Text.Alpha(softFillAlpha)).Children(func() {
@@ -158,11 +184,25 @@ func groupIcon(c *ui.Context, t *ui.Theme, group model.GroupView, size float32) 
 		case group.Kind == model.GroupKindAuto:
 			ui.Icon(c, iconBolt).Width(glyph).Height(glyph).TextColor(t.Warning)
 		case group.Kind == model.GroupKindRouting:
-			ui.Icon(c, iconRoute).Width(glyph).Height(glyph).TextColor(t.Accent)
+			serviceMark(c, t, group, size, glyph)
 		default:
 			ui.Icon(c, iconList).Width(glyph).Height(glyph).TextColor(t.TextMuted)
 		}
 	})
+}
+
+// serviceMark is the mark of a routing group: its service's icon, or the
+// first letter of its name.
+func serviceMark(c *ui.Context, t *ui.Theme, group model.GroupView, size float32, glyph float32) {
+	if icon, known := serviceIcons[group.Service]; known {
+		mark := glyph * serviceIconScale
+		ui.Icon(c, icon).Width(mark).Height(mark).TextColor(t.Accent)
+		return
+	}
+	for _, r := range group.Label {
+		ui.Text(c, strings.ToUpper(string(r))).FontSize(size*0.42).FontWeight(weightSemibold).TextColor(t.Accent).Translate(0, -opticalLift)
+		return
+	}
 }
 
 // groupTitle is a group's name without the flag its icon already shows.

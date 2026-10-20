@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -58,6 +59,10 @@ func NewClient(addr string, secret string, configPath string, httpClient *http.C
 
 type versionResponse struct {
 	Version string `json:"version"`
+}
+
+type delayResponse struct {
+	Delay int `json:"delay"`
 }
 
 type proxiesResponse struct {
@@ -147,24 +152,29 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	return model.Snapshot{Groups: groups, Global: globalGroupView, Delays: delays, Facts: facts}, nil
 }
 
-// TestGroupDelay measures every proxy of group against testURL and returns
-// the delays the core got, in milliseconds; proxies that timed out are
-// missing. The core keeps the results, so later snapshots carry them.
-func (c *Client) TestGroupDelay(ctx context.Context, group string, testURL string, timeout time.Duration) (map[string]int, error) {
+// TestProxyDelay measures one proxy against testURL and returns its delay in
+// milliseconds. A proxy that failed the test or did not answer within timeout
+// returns 0: that is the answer of the test, not an error. The core keeps the
+// result, so later snapshots carry it.
+func (c *Client) TestProxyDelay(ctx context.Context, proxy string, testURL string, timeout time.Duration) (int, error) {
 	query := url.Values{}
 	query.Set("url", testURL)
 	query.Set("timeout", strconv.FormatInt(timeout.Milliseconds(), 10))
-	path := "/group/" + url.PathEscape(group) + "/delay?" + query.Encode()
-	// The core answers only once every proxy has replied or timed out.
+	path := "/proxies/" + url.PathEscape(proxy) + "/delay?" + query.Encode()
+	// The core answers once the proxy has replied or timed out.
 	raw, err := c.do(ctx, c.timeout+timeout, http.MethodGet, path, nil, http.StatusOK)
 	if err != nil {
-		return nil, err
+		var apiErr *APIError
+		if errors.As(err, &apiErr) && (apiErr.Status == http.StatusServiceUnavailable || apiErr.Status == http.StatusGatewayTimeout) {
+			return 0, nil
+		}
+		return 0, err
 	}
-	var delays map[string]int
-	if err := json.Unmarshal(raw, &delays); err != nil {
-		return nil, fmt.Errorf("decode mihomo group delay response (group=%q body=%q): %w", group, raw, err)
+	var out delayResponse
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return 0, fmt.Errorf("decode mihomo delay response (proxy=%q body=%q): %w", proxy, raw, err)
 	}
-	return delays, nil
+	return out.Delay, nil
 }
 
 // SelectProxy makes group use proxy.

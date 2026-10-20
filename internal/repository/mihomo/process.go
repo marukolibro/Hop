@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"hop/config"
@@ -26,7 +25,16 @@ const (
 
 // Process is a running mihomo core owned by Hop.
 type Process struct {
-	cmd *exec.Cmd
+	cmd     *exec.Cmd
+	pidFile string
+	// startedAt is when the core was started; a supervisor tells a stable
+	// run from a fast crash by it.
+	startedAt time.Time
+
+	// done is closed once the core has exited and been waited, so any
+	// number of Wait callers hear the one result in waitErr.
+	done    chan struct{}
+	waitErr error
 }
 
 // ConfigPath is the config file of a core whose home directory is homeDir.
@@ -45,28 +53,63 @@ func Start(ctx context.Context, cfg config.Config, configYAML []byte) (*Process,
 	if err := os.WriteFile(configPath, configYAML, configPerm); err != nil {
 		return nil, fmt.Errorf("write mihomo config (path=%q): %w", configPath, err)
 	}
+	return launch(ctx, cfg, cfg.MihomoBinary)
+}
 
-	cmd := exec.CommandContext(ctx, cfg.MihomoBinary, "-d", cfg.HomeDir, "-f", configPath)
+// launch starts binary on the config file already in the home directory,
+// first stopping a core an earlier Hop left running.
+func launch(ctx context.Context, cfg config.Config, binary string) (*Process, error) {
+	pidFile := filepath.Join(cfg.AppDir, pidFileName)
+	if err := ReapStale(pidFile, cfg.HomeDir); err != nil {
+		return nil, err
+	}
+	configPath := ConfigPath(cfg.HomeDir)
+	cmd := exec.CommandContext(ctx, binary, "-d", cfg.HomeDir, "-f", configPath)
 	// Ask the core to shut down before the context kills it.
-	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.Cancel = func() error { return requestStop(cmd.Process) }
 	cmd.WaitDelay = stopGrace
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start mihomo (binary=%q home=%q): %w", cfg.MihomoBinary, cfg.HomeDir, err)
+		return nil, fmt.Errorf("start mihomo (binary=%q home=%q): %w", binary, cfg.HomeDir, err)
 	}
-	slog.Info("mihomo started", "pid", cmd.Process.Pid, "home", cfg.HomeDir, "controller", cfg.ControllerAddr, "mixed_port", cfg.MixedPort)
-	return &Process{cmd: cmd}, nil
+	if err := writePidFile(pidFile, cmd.Process.Pid); err != nil {
+		// Without the pid file a crash of Hop would leave the core
+		// unrecoverable, so do not run it.
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, err
+	}
+	p := &Process{cmd: cmd, pidFile: pidFile, startedAt: time.Now(), done: make(chan struct{})}
+	go p.await()
+	slog.Info("mihomo started", "pid", cmd.Process.Pid, "binary", binary, "home", cfg.HomeDir, "controller", cfg.ControllerAddr, "mixed_port", cfg.MixedPort)
+	return p, nil
+}
+
+// await waits the core and records why it left, so every Wait caller hears
+// one result. Goroutine ownership: started by launch, it ends when the core
+// has exited and its pid file was removed.
+func (p *Process) await() {
+	waitErr := p.cmd.Wait()
+	if waitErr != nil {
+		if errors.Is(waitErr, context.Canceled) {
+			// A shutdown the context asked for is a normal stop.
+			waitErr = nil
+		} else {
+			waitErr = fmt.Errorf("mihomo exited (pid=%d): %w", p.cmd.Process.Pid, waitErr)
+		}
+	}
+	p.waitErr = errors.Join(waitErr, removePidFile(p.pidFile))
+	close(p.done)
 }
 
 // Wait blocks until the core exits. An exit caused by cancelling the context
 // given to Start is a normal shutdown, not an error: exec reports it as
-// context.Canceled even when the core stopped cleanly after SIGTERM.
+// context.Canceled even when the core stopped cleanly after SIGTERM. Any
+// number of callers may wait; all hear the same result.
 func (p *Process) Wait() error {
-	if err := p.cmd.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-		return fmt.Errorf("mihomo exited (pid=%d): %w", p.cmd.Process.Pid, err)
-	}
-	return nil
+	<-p.done
+	return p.waitErr
 }
 
 // WaitReady polls the controller until it answers, retrying with a warning

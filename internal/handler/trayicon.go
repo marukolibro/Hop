@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
 	"math"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // Hop's mark is a ball bouncing twice and landing: a tall arc, a short one,
@@ -64,6 +67,15 @@ func (arc markArc) trimmed() (markPoint, markPoint, markPoint) {
 // trayIcon draws the mark black on transparent, for macOS to tint to the
 // menu bar.
 func trayIcon() ([]byte, error) {
+	var out bytes.Buffer
+	if err := png.Encode(&out, markImage()); err != nil {
+		return nil, fmt.Errorf("encode tray icon: %w", err)
+	}
+	return out.Bytes(), nil
+}
+
+// markImage is the mark's pixels, black on transparent, markSize square.
+func markImage() *image.NRGBA {
 	segments := markSegments()
 	img := image.NewNRGBA(image.Rect(0, 0, markSize, markSize))
 	for y := range markSize {
@@ -74,11 +86,7 @@ func trayIcon() ([]byte, error) {
 			}
 		}
 	}
-	var out bytes.Buffer
-	if err := png.Encode(&out, img); err != nil {
-		return nil, fmt.Errorf("encode tray icon: %w", err)
-	}
-	return out.Bytes(), nil
+	return img
 }
 
 // markSegments approximates the arcs with short straight segments.
@@ -125,4 +133,46 @@ func segmentDistance(x float64, y float64, a markPoint, b markPoint) float64 {
 	dx, dy := b.x-a.x, b.y-a.y
 	t := max(0, min(1, ((x-a.x)*dx+(y-a.y)*dy)/(dx*dx+dy*dy)))
 	return math.Hypot(x-(a.x+t*dx), y-(a.y+t*dy))
+}
+
+// The speed beside the mark in the menu bar: upload over download, each
+// right-aligned in a column wide enough for the longest compact rate, so
+// the item keeps its width as the numbers change.
+const (
+	// traySpeedWidth is the speed column's width in points; it holds the
+	// widest compact rates, such as "↑ 1023K" and "↓ 9.99M".
+	traySpeedWidth = 40
+	traySpeedGap   = 3
+	// traySpeedFont is the speed's size in points: two lines fill the 18
+	// points of the menu bar.
+	traySpeedFont = 8
+	// trayHeight is the menu bar icon's height in points; macOS draws it at
+	// that height whatever the image's pixel size.
+	trayHeight = 18
+	// trayScale renders the icon for Retina menu bars.
+	trayScale = 2
+)
+
+// traySpeedIcon draws the mark with the upload and download rates beside
+// it, black on transparent, for macOS to tint to the menu bar.
+func traySpeedIcon(up string, down string) ([]byte, error) {
+	speed := ui.Render(func(c *ui.Context) {
+		c.Root().Background(ui.Transparent)
+		ui.Column(c).Fill().Justify(ui.Center).Children(func() {
+			for _, line := range []string{"↑ " + up, "↓ " + down} {
+				ui.Text(c, line).FontSize(traySpeedFont).FontWeight(weightSemibold).FontFeatures("tnum").
+					LineHeight(1.08).TextColor(ui.RGBA(0, 0, 0, 1)).TextAlign(ui.End).NoWrap()
+			}
+		})
+	}, traySpeedWidth, trayHeight, trayScale)
+	mark := markImage()
+	gap := traySpeedGap * trayScale
+	img := image.NewNRGBA(image.Rect(0, 0, markSize+gap+speed.Bounds().Dx(), markSize))
+	draw.Draw(img, mark.Bounds(), mark, image.Point{}, draw.Src)
+	draw.Draw(img, speed.Bounds().Add(image.Point{X: markSize + gap}), speed, image.Point{}, draw.Over)
+	var out bytes.Buffer
+	if err := png.Encode(&out, img); err != nil {
+		return nil, fmt.Errorf("encode tray speed icon: %w", err)
+	}
+	return out.Bytes(), nil
 }

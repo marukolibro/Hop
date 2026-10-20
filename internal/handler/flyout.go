@@ -12,7 +12,7 @@ import (
 
 const (
 	flyoutWidth   = 340
-	flyoutHeight  = 536
+	flyoutHeight  = 576
 	flyoutPadding = gapLarge
 	fastestCount  = 5
 	quickRowH     = 32
@@ -28,19 +28,18 @@ const (
 // mode, and the fastest nodes to switch to, without opening the window.
 // Its sections rise into place one after another as it opens.
 func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func()) {
-	c.SetTheme(hopTheme(c.Theme().Dark))
+	c.SetTheme(d.theme(c))
 	t := c.Theme()
 	c.Root().Background(ui.Transparent)
 	panel := ui.Column(c).Fill().Padding(flyoutPadding).Gap(14)
 	if !c.Vibrancy() {
 		panel.Background(t.Background).Radius(radiusPanel).Border(1, t.Border)
 	}
-	inner := flyoutWidth - 2*flyoutPadding
 	panel.Children(func() {
 		entrance(ui.Row(c).Key("top").Gap(gapSmall).AlignItems(ui.Center), 0).Children(func() {
 			brandLockup(c, t, 20)
 			ui.Box(c).Grow(1)
-			statusDot(c, d.statusColor(t), d.status == statusConnected)
+			statusDot(c, d.statusColor(t), d.proxying())
 			mutedText(c, t, d.statusText())
 		})
 		entrance(ui.Column(c).Key("route"), 1).Gap(10).Padding(12, 14).Radius(radiusPanel).Background(t.Surface).Border(1, t.Border).Children(func() {
@@ -49,10 +48,20 @@ func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func()) {
 		entrance(ui.Column(c).Key("speed"), 2).Children(func() {
 			d.flyoutSpeeds(c, t)
 		})
-		entrance(ui.Box(c).Key("mode"), 3).Children(func() {
-			d.modeSwitch(c, t, inner/float32(len(modeLabels))-1)
+		entrance(ui.Column(c).Key("mode"), 3).Gap(gapTight).Children(func() {
+			ui.Row(c).Key("pills").Gap(gapTight).AlignItems(ui.Center).Children(func() {
+				for i := range modeLabels {
+					d.modePill(c, t, i)
+				}
+				ui.Box(c).Grow(1)
+				d.systemProxyPill(c, t)
+			})
+			if note := d.systemProxyHint(); note != "" {
+				mutedText(c, t, note).MaxLines(1).AlignSelf(ui.End)
+			}
 		})
-		entrance(ui.Column(c).Key("fastest"), 4).Gap(2).Grow(1).Clip().Children(func() {
+		entrance(ui.Column(c).Key("fastest"), 4).Gap(2).Grow(1).Clip().
+			Disabled(d.controlsLocked()).Children(func() {
 			d.fastestNodes(c, t)
 		})
 		entrance(ui.Row(c).Key("footer"), 5).Gap(gapSmall).Children(func() {
@@ -65,7 +74,7 @@ func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func()) {
 func (d *Dashboard) flyoutRoute(c *ui.Context, t *ui.Theme) {
 	route := d.view.Route
 	if len(route) == 0 {
-		mutedText(c, t, "还没有导入订阅。打开主窗口,粘贴订阅链接。")
+		mutedText(c, t, "还没有使用中的订阅。打开主窗口添加一个。")
 		return
 	}
 	routeFlow(c, t, route, d.last)

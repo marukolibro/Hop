@@ -4,9 +4,9 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"hop/internal/model"
@@ -17,15 +17,18 @@ type Controller interface {
 	Snapshot(ctx context.Context) (model.Snapshot, error)
 	Mode(ctx context.Context) (string, error)
 	SelectProxy(ctx context.Context, group string, proxy string) error
-	TestGroupDelay(ctx context.Context, group string, testURL string, timeout time.Duration) (map[string]int, error)
+	TestProxyDelay(ctx context.Context, proxy string, testURL string, timeout time.Duration) (int, error)
 	StreamTraffic(ctx context.Context, handle func(model.Traffic)) error
 }
 
 const (
 	// delayTestURL answers 204 with no body, so the delay measures the
 	// route rather than the page.
-	delayTestURL     = "https://www.gstatic.com/generate_204"
-	delayTestTimeout = 5 * time.Second
+	delayTestURL = "https://www.gstatic.com/generate_204"
+	// delayTestWorkers is how many nodes are tested at once. The core takes
+	// them all at once; Hop bounds it so a profile of hundreds of nodes does
+	// not open hundreds of connections together.
+	delayTestWorkers = 32
 )
 
 // ProxyService exposes the proxy groups and live traffic of the core.
@@ -52,21 +55,26 @@ func (s *ProxyService) View(ctx context.Context) (model.ProxyView, error) {
 	return BuildView(snapshot, mode), nil
 }
 
-// TestDelay measures every node of group. The results show up in the next
-// View.
-func (s *ProxyService) TestDelay(ctx context.Context, group string) error {
-	_, err := s.controller.TestGroupDelay(ctx, group, delayTestURL, delayTestTimeout)
-	return err
+// TestDelay measures every node of group, those of the groups inside it
+// too. The results show up in the next View, one node after the other as they
+// answer.
+// A node that has not answered within timeout counts as down.
+func (s *ProxyService) TestDelay(ctx context.Context, group string, timeout time.Duration) error {
+	snapshot, err := s.controller.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	return s.testNodes(ctx, leafNodes(snapshot, []string{group}), timeout)
 }
 
 // autoGroupTypes pick their node from delay tests.
 var autoGroupTypes = []string{model.GroupURLTest, model.GroupFallback, model.GroupLoadBalance}
 
-// TestAutoGroups measures the groups that pick their node by delay, which
-// also makes them pick again from fresh results. Before any test such a
-// group sits on its first option, which may not be a usable node. Without
-// such groups it measures the first group, so its nodes show a delay.
-func (s *ProxyService) TestAutoGroups(ctx context.Context) error {
+// TestAutoGroups measures the nodes of the groups that pick their node by
+// delay, so that they pick from fresh results. Before any test such a group
+// sits on its first option, which may not be a usable node. Without such
+// groups it measures the first group, so its nodes show a delay.
+func (s *ProxyService) TestAutoGroups(ctx context.Context, timeout time.Duration) error {
 	snapshot, err := s.controller.Snapshot(ctx)
 	if err != nil {
 		return err
@@ -80,13 +88,84 @@ func (s *ProxyService) TestAutoGroups(ctx context.Context) error {
 	if len(targets) == 0 && len(snapshot.Groups) > 0 {
 		targets = []string{snapshot.Groups[0].Name}
 	}
-	var errs []error
-	for _, group := range targets {
-		if _, err := s.controller.TestGroupDelay(ctx, group, delayTestURL, delayTestTimeout); err != nil {
-			errs = append(errs, fmt.Errorf("test group %q: %w", group, err))
+	return s.testNodes(ctx, leafNodes(snapshot, targets), timeout)
+}
+
+// testNodes measures nodes concurrently, at most delayTestWorkers at a time.
+// A node that does not answer is a result, not a failure; only a request the
+// core could not take is, and the first of those is returned with how many
+// there were.
+func (s *ProxyService) testNodes(ctx context.Context, nodes []string, timeout time.Duration) error {
+	var (
+		wg     sync.WaitGroup
+		mu     sync.Mutex
+		failed int
+		first  error
+		slots  = make(chan struct{}, delayTestWorkers)
+	)
+	for _, node := range nodes {
+		select {
+		case slots <- struct{}{}:
+		case <-ctx.Done():
+			wg.Wait()
+			return ctx.Err()
 		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-slots }()
+			if _, err := s.controller.TestProxyDelay(ctx, node, delayTestURL, timeout); err != nil && ctx.Err() == nil {
+				mu.Lock()
+				defer mu.Unlock()
+				failed++
+				if first == nil {
+					first = fmt.Errorf("test node %q: %w", node, err)
+				}
+			}
+		}()
 	}
-	return errors.Join(errs...)
+	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if first != nil {
+		return fmt.Errorf("%d of %d nodes could not be tested, first: %w", failed, len(nodes), first)
+	}
+	return nil
+}
+
+// leafNodes lists the nodes behind groups, once each and in order: the
+// options that are no group, following groups inside groups. Built-in
+// outbounds and the account details providers list as nodes are no nodes to
+// test: the latter never answer and would hold a test until its timeout.
+func leafNodes(snapshot model.Snapshot, groups []string) []string {
+	byName := make(map[string]model.ProxyGroup, len(snapshot.Groups))
+	for _, g := range snapshot.Groups {
+		byName[g.Name] = g
+	}
+	var leaves []string
+	seen := map[string]bool{}
+	var walk func(name string)
+	walk = func(name string) {
+		if seen[name] {
+			return
+		}
+		seen[name] = true
+		if g, isGroup := byName[name]; isGroup {
+			for _, option := range g.Options {
+				walk(option)
+			}
+			return
+		}
+		if name == "DIRECT" || name == "REJECT" || isPlanNote(name) {
+			return
+		}
+		leaves = append(leaves, name)
+	}
+	for _, name := range groups {
+		walk(name)
+	}
+	return leaves
 }
 
 // Select makes group use proxy.

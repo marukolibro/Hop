@@ -23,10 +23,14 @@ const (
 	// userInfoHeader carries the account's traffic and expiry.
 	userInfoHeader = "Subscription-Userinfo"
 
-	maxSize       = 16 << 20
-	maxErrorBody  = 256
-	fetchAttempts = 3
-	retryDelay    = 2 * time.Second
+	maxSize      = 16 << 20
+	maxErrorBody = 256
+	// minBareCredentialLen is how long a query value must be before it is
+	// masked wherever it appears alone: shorter ones ("1", "clash") would
+	// mangle the text around them.
+	minBareCredentialLen = 8
+	fetchAttempts        = 3
+	retryDelay           = 2 * time.Second
 )
 
 // StatusError is a provider response that was not a success.
@@ -91,6 +95,38 @@ func Redact(rawURL string) (string, error) {
 	return u.Scheme + "://" + u.Host + u.Path, nil
 }
 
+// RedactQuery removes from text every credential the link's query carries: the
+// whole link, each key=value pair and the values alone, percent-decoded forms
+// included. The rest of the text stays.
+func RedactQuery(text string, rawURL string) string {
+	text = strings.ReplaceAll(text, rawURL, "<link>")
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return text
+	}
+	for key, values := range u.Query() {
+		for _, value := range values {
+			for _, form := range queryValueForms(value) {
+				text = strings.ReplaceAll(text, key+"="+form, "<credential>")
+				if len(form) >= minBareCredentialLen {
+					text = strings.ReplaceAll(text, form, "<credential>")
+				}
+			}
+		}
+	}
+	return text
+}
+
+// queryValueForms lists the forms a query value may appear in: as-is and
+// percent-decoded.
+func queryValueForms(value string) []string {
+	forms := []string{value}
+	if decoded, err := url.QueryUnescape(value); err == nil && decoded != value {
+		forms = append(forms, decoded)
+	}
+	return forms
+}
+
 // stripURL drops the URL, query included, that net/url and net/http echo
 // in their errors, keeping the underlying cause.
 func stripURL(err error) error {
@@ -101,7 +137,7 @@ func stripURL(err error) error {
 	return err
 }
 
-func (f *Fetcher) fetchOnce(ctx context.Context, rawURL string, target string) (model.Download, error) {
+func (f *Fetcher) fetchOnce(ctx context.Context, rawURL string, target string) (download model.Download, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody)
 	if err != nil {
 		return model.Download{}, fmt.Errorf("build subscription request (target=%s): %w", target, stripURL(err))
@@ -111,13 +147,20 @@ func (f *Fetcher) fetchOnce(ctx context.Context, rawURL string, target string) (
 	if err != nil {
 		return model.Download{}, fmt.Errorf("download subscription (target=%s): %w", target, stripURL(err))
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close subscription response (target=%s): %w", target, stripURL(closeErr)))
+		}
+	}()
 	if resp.StatusCode != http.StatusOK {
 		snippet, readErr := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 		if readErr != nil {
 			return model.Download{}, fmt.Errorf("read subscription error response (target=%s status=%d): %w", target, resp.StatusCode, readErr)
 		}
-		return model.Download{}, &StatusError{Target: target, Status: resp.StatusCode, Body: strings.TrimSpace(string(snippet))}
+		// A provider's error body may echo the request's link, path or bare
+		// token: it is scrubbed with the known request credentials before
+		// leaving the repository layer.
+		return model.Download{}, &StatusError{Target: target, Status: resp.StatusCode, Body: RedactQuery(strings.TrimSpace(string(snippet)), rawURL)}
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSize+1))
 	if err != nil {

@@ -58,7 +58,9 @@ func (d *Dashboard) speeds(c *ui.Context, t *ui.Theme) {
 			speedLine(c, t, "↓", formatRate(d.last.Down), t.Accent)
 			speedLine(c, t, "↑", formatRate(d.last.Up), t.Warning)
 		})
-		d.sparkline(c, t)
+		if width, _ := c.Size(); width >= sparkMinWidth {
+			d.sparkline(c, t)
+		}
 	})
 }
 

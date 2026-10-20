@@ -8,27 +8,57 @@ import (
 	"hop/internal/model"
 )
 
-// routeFlowWidth keeps the stops close enough to read as one line.
-const routeFlowWidth = 520
+const (
+	// routeFlowWidth keeps the stops close enough to read as one line.
+	routeFlowWidth = 460
+	// exitWidth fits "🇸🇬 Singapore 01" and its latency on one line.
+	exitWidth = 210
+	// sparkMinWidth is the window width from which the sparkline fits
+	// beside the route.
+	sparkMinWidth = 900
+)
 
-// routeBar leads the nodes page: the path traffic takes right now, drawn as
-// a short transit line through the groups to the node it leaves by, with
-// the live speed beside it.
+// routeBar leads the nodes page: the node traffic leaves by, the path it
+// takes there drawn as a short transit line through the groups, and the
+// live speed, on one row; under it, how traffic gets in and is sent on: the
+// outbound mode and the system proxy.
 func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 	route := d.view.Route
-	ui.Row(c).Gap(gapSection).AlignItems(ui.Center).Padding(14, 18).Margin(0, pagePadding, gapLarge, pagePadding).
+	ui.Column(c).Margin(0, pagePadding, gapLarge, pagePadding).
 		Radius(radiusPanel).Background(t.Surface).Border(1, t.Border).Children(func() {
-		ui.Column(c).Grow(1).Gap(gapSmall).Children(func() {
+		ui.Row(c).Key("route").Gap(gapSection).AlignItems(ui.Center).Padding(panelPadY, panelPadX).Children(func() {
 			if len(route) == 0 {
-				mutedText(c, t, "导入订阅后,这里会显示流量经过的线路")
+				mutedText(c, t, "导入订阅后,这里会显示流量经过的线路").Grow(1)
+				d.speeds(c, t)
 				return
 			}
-			ui.Box(c).MaxWidth(routeFlowWidth).Children(func() {
-				routeFlow(c, t, route, d.last)
+			ui.Column(c).Key("exit").Gap(gapTight).Width(exitWidth).Children(func() {
+				exitNode(c, t, route[len(route)-1])
 			})
-			exitNode(c, t, route[len(route)-1])
+			ui.Box(c).Key("flow").Grow(1).Basis(0).MinWidth(0).Children(func() {
+				ui.Box(c).MaxWidth(routeFlowWidth).Children(func() {
+					routeFlow(c, t, route, d.last)
+				})
+			})
+			d.speeds(c, t)
 		})
-		d.speeds(c, t)
+		ui.Box(c).Height(1).Background(t.Border.Alpha(cardDividerAlpha))
+		d.trafficControls(c, t)
+	})
+}
+
+// trafficControls are the route card's foot: the outbound mode on the
+// left, the system proxy on the right.
+func (d *Dashboard) trafficControls(c *ui.Context, t *ui.Theme) {
+	ui.Row(c).Key("controls").Gap(gapSmall).AlignItems(ui.Center).Padding(gapSmall+2, panelPadX).Children(func() {
+		for i := range modeLabels {
+			d.modePill(c, t, i)
+		}
+		ui.Box(c).Grow(1)
+		if note := d.systemProxyHint(); note != "" {
+			mutedText(c, t, note).MaxLines(1)
+		}
+		d.systemProxyPill(c, t)
 	})
 }
 

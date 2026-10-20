@@ -5,6 +5,7 @@ package handler
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -27,6 +28,9 @@ const (
 	statusFailed     = "failed"
 
 	testingAll = "*"
+
+	// testRefreshEvery is how often the node view reloads during a delay test.
+	testRefreshEvery = 300 * time.Millisecond
 )
 
 // Pages of the main window, in the order the switch shows them.
@@ -34,9 +38,10 @@ const (
 	pageNodes = iota
 	pageConnections
 	pageLogs
+	pageSettings
 )
 
-var pageLabels = []string{"节点", "连接", "日志"}
+var pageLabels = []string{"节点", "连接", "日志", "设置"}
 
 // modeLabels name service.Modes, index for index.
 var modeLabels = []string{"规则", "全局", "直连"}
@@ -45,16 +50,22 @@ var modeLabels = []string{"规则", "全局", "直连"}
 type ProxyService interface {
 	View(ctx context.Context) (model.ProxyView, error)
 	Select(ctx context.Context, group string, proxy string) error
-	TestDelay(ctx context.Context, group string) error
-	TestAutoGroups(ctx context.Context) error
+	TestDelay(ctx context.Context, group string, timeout time.Duration) error
+	TestAutoGroups(ctx context.Context, timeout time.Duration) error
 	WatchTraffic(ctx context.Context, handle func(model.Traffic)) error
 }
 
-// SubscriptionService is what the dashboard needs to manage the profile.
+// SubscriptionService is what the dashboard needs to manage saved profiles:
+// subscriptions kept whole, one of them in use.
 type SubscriptionService interface {
-	Import(ctx context.Context, link string) error
-	Update(ctx context.Context) error
-	Summary() (model.SubscriptionSummary, bool, error)
+	List(ctx context.Context) (model.SubscriptionsView, error)
+	Source(ctx context.Context, id string) (model.SubscriptionInput, error)
+	Add(ctx context.Context, input model.SubscriptionInput) error
+	Edit(ctx context.Context, id string, input model.SubscriptionInput) error
+	Use(ctx context.Context, id string) error
+	Update(ctx context.Context, id string) error
+	UpdateAll(ctx context.Context) error
+	Delete(ctx context.Context, id string, replacementID string) error
 }
 
 // ModeService switches the outbound mode.
@@ -70,12 +81,43 @@ type MonitorService interface {
 	WatchLogs(ctx context.Context, level string, handle func(model.LogEntry)) error
 }
 
+// CoreService reports which mihomo core runs and upgrades it.
+type CoreService interface {
+	Info(ctx context.Context) (model.CoreInfo, error)
+	CheckLatest(ctx context.Context) (model.CoreRelease, bool, error)
+	Upgrade(ctx context.Context, progress func(model.CoreProgress)) error
+	RestoreBundled(ctx context.Context) error
+}
+
+// SettingsService keeps the user's settings.
+type SettingsService interface {
+	Save(settings model.Settings) error
+}
+
+// SystemProxyService points the system proxy at Hop and back, never over
+// another app's.
+type SystemProxyService interface {
+	Status(ctx context.Context) (model.SystemProxyStatus, error)
+	Enable(ctx context.Context) error
+	Disable(ctx context.Context) error
+}
+
+// LoginItem starts Hop when the user logs in: mygo.App in production.
+type LoginItem interface {
+	OpenAtLogin() bool
+	SetOpenAtLogin(open bool) error
+}
+
 // Services are the business services the dashboard drives.
 type Services struct {
 	Proxies       ProxyService
 	Subscriptions SubscriptionService
 	Modes         ModeService
 	Monitor       MonitorService
+	Core          CoreService
+	Settings      SettingsService
+	SystemProxy   SystemProxyService
+	LoginItem     LoginItem
 }
 
 // Updater runs fn on the window's UI thread, as mygo.Window does.
@@ -89,17 +131,66 @@ type failure struct {
 	detail string
 }
 
-// subscriptionState is what the subscription bar shows and edits.
-type subscriptionState struct {
-	// saved is set once a subscription is imported; summary describes it.
-	saved   bool
-	summary model.SubscriptionSummary
-	// input is the link being typed.
-	input string
-	// editing shows the input even though a subscription exists.
-	editing bool
-	// busy is set while a download is running.
+// subscriptionEditor is the state of the add/edit dialog.
+type subscriptionEditor struct {
+	// seq orders opens, so a Source reply from an older open is dropped.
+	seq int
+	// editingID is the subscription being edited, "" when adding.
+	editingID string
+	// intent is what the dialog was opened for, which sets its title and
+	// description.
+	intent editorIntent
+	// original is the input as stored; sourceLoaded is set once Source answered,
+	// or at once when adding.
+	original     model.SubscriptionInput
+	sourceLoaded bool
+	// name and url are the fields being edited.
+	name string
+	url  string
+	// busy is set while Add or Edit runs; err is the form's last error.
 	busy bool
+	err  string
+}
+
+// deleteDialogState is the state of the delete confirmation.
+type deleteDialogState struct {
+	// seq orders opens; a completion from an older open turns into a notice.
+	seq int
+	// id is the subscription to delete and name what the copy calls it.
+	id   string
+	name string
+	// replacement is the successor chosen when the subscription in use is
+	// deleted and others remain.
+	replacement string
+	// busy is set while Delete runs; err is the form's last error.
+	busy bool
+	err  string
+}
+
+// subscriptionsState is the saved collection, the entry in use and the dialogs
+// and busy marks of managing them.
+type subscriptionsState struct {
+	// view is the latest collection; loaded is set once List answered, so an
+	// empty list reads as empty, not unread.
+	view   model.SubscriptionsView
+	loaded bool
+	// managing shows the management page instead of the nodes page.
+	managing bool
+	// activeChoice is what the bar's picker holds, set back to the view's
+	// ActiveID after every reload.
+	activeChoice string
+	// busyIDs are the subscriptions with an operation running; listBusy marks
+	// the refresh of all of them; mutations counts running mutations, at most
+	// one at a time, whose applies the mode switch waits for.
+	busyIDs   map[string]struct{}
+	listBusy  bool
+	mutations int
+	// editorOpen and deleteOpen show the dialogs; editor and deleting hold
+	// their fields between frames.
+	editorOpen bool
+	editor     subscriptionEditor
+	deleteOpen bool
+	deleting   deleteDialogState
 }
 
 // connectionsState is what the connections page shows and edits.
@@ -124,14 +215,34 @@ type Dashboard struct {
 	services Services
 	// proxyAddress is where apps send traffic to use Hop, as host:port.
 	proxyAddress string
+	// appVersion is Hop's own version, as the about section shows it.
+	appVersion string
 
 	page         int
 	status       string
 	failure      *failure
-	subscription subscriptionState
-	view         model.ProxyView
+	subscription subscriptionsState
+	core         coreState
+	settings     settingsState
+	sysProxy     sysProxyState
+	// openAtLogin is whether Hop starts at login, as the system says.
+	openAtLogin bool
+	// watchCancel ends the streams from the core, which restart with it.
+	watchCancel context.CancelFunc
+	view        model.ProxyView
 	// modeIndex is the index in service.Modes the mode switch shows.
 	modeIndex int
+	// modeBusy is set while the outbound mode is being applied, so subscription
+	// mutations wait: an apply right after a mode change could read a stale mode
+	// and undo the user's choice.
+	modeBusy bool
+	// viewGen is the core's runtime epoch: work that changes or reads the
+	// runtime takes the token on the UI thread as it launches, and replies from
+	// an older epoch are dropped.
+	viewGen int
+	// delayCancel is UI-thread-owned and cancels the previous epoch's delay
+	// probes.
+	delayCancel context.CancelFunc
 	// activeGroup is the group whose nodes the grid shows.
 	activeGroup string
 	// groupFilter narrows the sidebar to groups whose name contains it.
@@ -143,22 +254,46 @@ type Dashboard struct {
 	history     model.TrafficHistory
 	connections connectionsState
 	logs        logsState
+	// coreRestarts carries what the runner's supervision did after the core
+	// left on its own; it is a channel because it is fed from the
+	// supervisor's goroutine, unlike everything else here.
+	coreRestarts chan model.CoreRestart
 
 	// onTraffic, when set, hears every traffic sample on the UI thread.
 	onTraffic func(model.Traffic)
 
-	selectProxy        func(group string, proxy string)
-	setMode            func(mode string)
-	testDelay          func(group string)
-	importSubscription func(link string)
-	updateSubscription func()
-	closeConnection    func(id string)
-	closeAll           func()
+	// opCtx/opWin are the context and updater Start got, for late starters such
+	// as dialog submits.
+	opCtx context.Context
+	opWin Updater
+
+	selectProxy             func(group string, proxy string)
+	setMode                 func(mode string)
+	testDelay               func(group string)
+	useSubscription         func(id string)
+	refreshSubscription     func(id string)
+	refreshAllSubscriptions func()
+	// openEditor opens the editor for an intent, "" id to add.
+	openEditor      func(intent editorIntent, id string)
+	submitEditor    func()
+	openDelete      func(id string)
+	submitDelete    func()
+	closeConnection func(id string)
+	closeAll        func()
 }
 
-// NewDashboard returns a dashboard that has not started loading yet.
-func NewDashboard(services Services, proxyAddress string) *Dashboard {
-	d := &Dashboard{services: services, proxyAddress: proxyAddress, status: statusConnecting}
+// NewDashboard returns a dashboard that has not started loading yet, on the
+// settings saved from the last run.
+func NewDashboard(services Services, proxyAddress string, settings model.Settings, appVersion string) *Dashboard {
+	d := &Dashboard{
+		services:     services,
+		proxyAddress: proxyAddress,
+		appVersion:   appVersion,
+		settings:     newSettingsState(settings),
+		status:       statusConnecting,
+		coreRestarts: make(chan model.CoreRestart, 8),
+	}
+	d.subscription.busyIDs = map[string]struct{}{}
 	d.logs.list.FollowEnd = true
 	d.connections.list.Key = func(row int) any { return d.visibleConnections()[row].ID }
 	return d
@@ -174,34 +309,142 @@ func (d *Dashboard) OnTraffic(fn func(model.Traffic)) {
 // the log. The goroutines it starts belong to main: they end when ctx is
 // cancelled.
 func (d *Dashboard) Start(ctx context.Context, win Updater) {
-	d.selectProxy = func(group string, proxy string) { go d.choose(ctx, win, group, proxy) }
-	d.setMode = func(mode string) { go d.switchMode(ctx, win, mode) }
-	d.testDelay = func(group string) { go d.runDelayTest(ctx, win, group) }
-	d.importSubscription = func(link string) { go d.runImport(ctx, win, link) }
-	d.updateSubscription = func() { go d.runUpdate(ctx, win) }
-	d.closeConnection = func(id string) { go d.runClose(ctx, win, id) }
-	d.closeAll = func() { go d.runCloseAll(ctx, win) }
-	go d.loadSummary(win)
-	go d.startupTest(ctx, win)
-	go d.watchTraffic(ctx, win)
-	go d.watchConnections(ctx, win)
-	go d.watchLogs(ctx, win)
-}
-
-func (d *Dashboard) loadSummary(win Updater) {
-	summary, saved, err := d.services.Subscriptions.Summary()
-	win.Update(func() {
-		if err != nil {
-			d.fail(actionReadSubscription, err)
+	d.opCtx, d.opWin = ctx, win
+	d.selectProxy = func(group string, proxy string) {
+		if d.controlsLocked() {
 			return
 		}
-		d.subscription.saved, d.subscription.summary = saved, summary
-	})
+		go d.choose(ctx, win, group, proxy, d.nextViewGen())
+	}
+	d.setMode = func(mode string) {
+		// A mode change and a subscription apply cannot run together, or the
+		// reload could carry the mode the user just left back in.
+		if d.controlsLocked() {
+			return
+		}
+		d.modeBusy = true
+		go d.switchMode(ctx, win, mode, d.nextViewGen())
+	}
+	d.testDelay = func(group string) {
+		if d.controlsLocked() {
+			return
+		}
+		gen := d.nextViewGen()
+		testCtx, cancel := context.WithCancel(ctx)
+		d.delayCancel = cancel
+		d.testing = group
+		timeout := service.DelayTimeout(d.settings.settings)
+		// The probe belongs to the runtime epoch and window context.
+		go func() {
+			defer cancel()
+			stop := d.refreshWhileTesting(testCtx, win, gen)
+			err := d.services.Proxies.TestDelay(testCtx, group, timeout)
+			stop()
+			d.finishDelayTest(testCtx, win, gen, err)
+		}()
+	}
+	d.useSubscription = func(id string) {
+		if d.controlsLocked() || id == d.subscription.view.ActiveID {
+			return
+		}
+		d.beginSubOp(subOp{
+			a: actionUseSubscription, id: id,
+			// A failed switch may have left the runtime mid-way; reload either
+			// way.
+			reloadAfter: true, reloadOnError: true,
+			run: func(opCtx context.Context) error { return d.services.Subscriptions.Use(opCtx, id) },
+			finish: func(err error) {
+				if err != nil {
+					d.fail(actionUseSubscription, err)
+				}
+			},
+		})
+	}
+	d.refreshSubscription = func(id string) {
+		if d.controlsLocked() {
+			return
+		}
+		isActive := id == d.subscription.view.ActiveID
+		d.beginSubOp(subOp{
+			a: actionRefreshSubscription, id: id,
+			// Read actual runtime after an apply, persistence or rollback
+			// failure.
+			reloadAfter: isActive, reloadOnError: isActive,
+			run: func(opCtx context.Context) error { return d.services.Subscriptions.Update(opCtx, id) },
+			finish: func(err error) {
+				if err != nil {
+					d.fail(actionRefreshSubscription, err)
+				}
+			},
+		})
+	}
+	d.refreshAllSubscriptions = func() {
+		if d.controlsLocked() || d.subscription.listBusy ||
+			len(d.subscription.view.Items) == 0 {
+			return
+		}
+		hasActive := d.subscription.view.ActiveID != ""
+		d.beginSubOp(subOp{
+			a: actionRefreshSubscription, list: true,
+			// A partial failure may still have refreshed the entry in use;
+			// reload then too.
+			reloadAfter: hasActive, reloadOnError: hasActive,
+			run: func(opCtx context.Context) error { return d.services.Subscriptions.UpdateAll(opCtx) },
+			finish: func(err error) {
+				if err != nil {
+					d.fail(actionRefreshSubscription, err)
+				}
+			},
+		})
+	}
+	d.openEditor = func(intent editorIntent, id string) {
+		if seq := d.openEditorDialog(intent, id); id != "" {
+			go d.loadSource(ctx, win, id, seq)
+		}
+	}
+	d.submitEditor = func() { d.beginEditorSubmit() }
+	d.openDelete = func(id string) {
+		for _, item := range d.subscription.view.Items {
+			if item.ID == id {
+				s := &d.subscription
+				s.deleting = deleteDialogState{seq: s.deleting.seq + 1, id: item.ID, name: item.Name}
+				s.deleteOpen = true
+				return
+			}
+		}
+	}
+	d.submitDelete = func() { d.beginDeleteSubmit() }
+	d.closeConnection = func(id string) { go d.runClose(ctx, win, id) }
+	d.closeAll = func() { go d.runCloseAll(ctx, win) }
+	go d.loadSubscriptions(ctx, win)
+	go d.startupTest(ctx, win, d.viewGen)
+	go d.loadCore(ctx, win)
+	go d.startSystemProxy(ctx, win, d.settings.settings.SystemProxy)
+	d.openAtLogin = d.services.LoginItem.OpenAtLogin()
+	d.startWatchers(ctx, win)
+	go d.watchCoreRestarts(ctx, win)
 }
 
-func (d *Dashboard) loadView(ctx context.Context, win Updater) {
+// nextViewGen starts work that publishes a new view and supersedes older views
+// and test indicators.
+func (d *Dashboard) nextViewGen() int {
+	d.viewGen++
+	if d.delayCancel != nil {
+		d.delayCancel()
+		d.delayCancel = nil
+	}
+	d.testing = ""
+	return d.viewGen
+}
+
+// loadView reads the node view; a reply from an epoch older than the current one
+// is dropped, so state from an old profile cannot cover the new one.
+func (d *Dashboard) loadView(ctx context.Context, win Updater, gen int) {
 	view, err := d.services.Proxies.View(ctx)
 	win.Update(func() {
+		if gen != d.viewGen {
+			return
+		}
 		if err != nil {
 			d.failConnection(actionLoadGroups, err)
 			return
@@ -213,19 +456,74 @@ func (d *Dashboard) loadView(ctx context.Context, win Updater) {
 	})
 }
 
-// startupTest shows the profile at once, then measures the groups that pick
-// by delay so they leave the placeholder they start on.
-func (d *Dashboard) startupTest(ctx context.Context, win Updater) {
-	d.loadView(ctx, win)
-	win.Update(func() { d.testing = testingAll })
-	err := d.services.Proxies.TestAutoGroups(ctx)
+// startupTest loads the profile and starts background probes without holding
+// subscription completion.
+func (d *Dashboard) startupTest(ctx context.Context, win Updater, gen int) {
+	d.loadView(ctx, win, gen)
 	win.Update(func() {
+		if gen != d.viewGen || ctx.Err() != nil {
+			return
+		}
+		testCtx, cancel := context.WithCancel(ctx)
+		d.delayCancel = cancel
+		d.testing = testingAll
+		timeout := service.DelayTimeout(d.settings.settings)
+		// The probes belong to the runtime epoch and window context.
+		go func() {
+			defer cancel()
+			stop := d.refreshWhileTesting(testCtx, win, gen)
+			err := d.services.Proxies.TestAutoGroups(testCtx, timeout)
+			stop()
+			d.finishDelayTest(testCtx, win, gen, err)
+		}()
+	})
+}
+
+// refreshWhileTesting reloads the node view at a steady pace while a delay
+// test runs, so each node shows its latency as soon as it answers instead of
+// all of them at the end. The returned function ends it and waits until its
+// last reload is in, so none arrives after the test's own final one.
+func (d *Dashboard) refreshWhileTesting(ctx context.Context, win Updater, gen int) (stop func()) {
+	done := make(chan struct{})
+	exited := make(chan struct{})
+	go func() {
+		defer close(exited)
+		ticker := time.NewTicker(testRefreshEvery)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				d.loadView(ctx, win, gen)
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		<-exited
+	}
+}
+
+// finishDelayTest publishes only current probe results; intentional cancellation
+// is not a failure.
+func (d *Dashboard) finishDelayTest(ctx context.Context, win Updater, gen int, err error) {
+	if ctx.Err() != nil {
+		return
+	}
+	d.loadView(ctx, win, gen)
+	win.Update(func() {
+		if gen != d.viewGen {
+			return
+		}
+		d.delayCancel = nil
 		d.testing = ""
 		if err != nil {
 			d.fail(actionTestLatency, err)
 		}
 	})
-	d.loadView(ctx, win)
 }
 
 func modeIndexOf(mode string) int {
@@ -287,67 +585,25 @@ func (d *Dashboard) watchLogs(ctx context.Context, win Updater) {
 	win.Update(func() { d.fail(actionWatchLogs, err) })
 }
 
-func (d *Dashboard) choose(ctx context.Context, win Updater, group string, proxy string) {
+func (d *Dashboard) choose(ctx context.Context, win Updater, group string, proxy string, gen int) {
 	if err := d.services.Proxies.Select(ctx, group, proxy); err != nil {
 		win.Update(func() { d.fail(actionSwitchNode, err) })
 	}
 	// Reload either way, so the view shows what the core really uses.
-	d.loadView(ctx, win)
+	d.loadView(ctx, win, gen)
 }
 
-func (d *Dashboard) switchMode(ctx context.Context, win Updater, mode string) {
-	if err := d.services.Modes.Set(ctx, mode); err != nil {
-		win.Update(func() { d.fail(actionSwitchMode, err) })
-	}
-	d.loadView(ctx, win)
-}
-
-func (d *Dashboard) runDelayTest(ctx context.Context, win Updater, group string) {
-	win.Update(func() { d.testing = group })
-	err := d.services.Proxies.TestDelay(ctx, group)
+// switchMode applies the outbound mode and reloads the view; modeBusy clears
+// whatever the epoch, as it must.
+func (d *Dashboard) switchMode(ctx context.Context, win Updater, mode string, gen int) {
+	err := d.services.Modes.Set(ctx, mode)
 	win.Update(func() {
-		d.testing = ""
+		d.modeBusy = false
 		if err != nil {
-			d.fail(actionTestLatency, err)
+			d.fail(actionSwitchMode, err)
 		}
 	})
-	d.loadView(ctx, win)
-}
-
-func (d *Dashboard) runImport(ctx context.Context, win Updater, link string) {
-	win.Update(func() { d.subscription.busy = true })
-	err := d.services.Subscriptions.Import(ctx, link)
-	d.finishSubscription(ctx, win, actionImport, err)
-}
-
-func (d *Dashboard) runUpdate(ctx context.Context, win Updater) {
-	win.Update(func() { d.subscription.busy = true })
-	err := d.services.Subscriptions.Update(ctx)
-	d.finishSubscription(ctx, win, actionUpdate, err)
-}
-
-// finishSubscription reports the outcome of a download and, when it worked,
-// shows the new profile.
-func (d *Dashboard) finishSubscription(ctx context.Context, win Updater, a action, err error) {
-	summary, saved, summaryErr := d.services.Subscriptions.Summary()
-	win.Update(func() {
-		d.subscription.busy = false
-		if err != nil {
-			d.fail(a, err)
-			return
-		}
-		if summaryErr != nil {
-			d.fail(actionReadSubscription, summaryErr)
-			return
-		}
-		d.failure = nil
-		d.subscription.saved, d.subscription.summary = saved, summary
-		d.subscription.input = ""
-		d.subscription.editing = false
-	})
-	if err == nil {
-		d.startupTest(ctx, win)
-	}
+	d.loadView(ctx, win, gen)
 }
 
 func (d *Dashboard) runClose(ctx context.Context, win Updater, id string) {
@@ -367,17 +623,32 @@ func (d *Dashboard) runCloseAll(ctx context.Context, win Updater) {
 type action string
 
 const (
-	actionReadSubscription action = "读取已保存的订阅失败"
-	actionLoadGroups       action = "无法读取节点列表"
-	actionWatchTraffic     action = "与内核的连接已断开"
-	actionWatchConnections action = "无法读取连接列表"
-	actionWatchLogs        action = "无法读取内核日志"
-	actionSwitchNode       action = "切换节点失败"
-	actionSwitchMode       action = "切换出站模式失败"
-	actionTestLatency      action = "测速失败"
-	actionImport           action = "导入订阅失败"
-	actionUpdate           action = "刷新订阅失败"
-	actionCloseConnection  action = "断开连接失败"
+	actionReadSubscription    action = "读取订阅列表失败"
+	actionLoadSource          action = "读取订阅信息失败"
+	actionLoadGroups          action = "无法读取节点列表"
+	actionWatchTraffic        action = "与内核的连接已断开"
+	actionWatchConnections    action = "无法读取连接列表"
+	actionWatchLogs           action = "无法读取内核日志"
+	actionSwitchNode          action = "切换节点失败"
+	actionSwitchMode          action = "切换出站模式失败"
+	actionTestLatency         action = "测速失败"
+	actionUseSubscription     action = "使用订阅失败"
+	actionAddSubscription     action = "添加订阅失败"
+	actionEditSubscription    action = "修改订阅失败"
+	actionDeleteSubscription  action = "删除订阅失败"
+	actionRefreshSubscription action = "刷新订阅失败"
+	actionCloseConnection     action = "断开连接失败"
+	actionReadCore            action = "读取内核版本失败"
+	actionCheckCore           action = "检查内核更新失败"
+	actionUpgradeCore         action = "升级内核失败"
+	actionRestoreCore         action = "恢复内置内核失败"
+	actionCoreRestarted       action = "内核意外退出,已自动重启"
+	actionCoreGaveUp          action = "内核反复退出,已停止自动重启"
+	actionSaveSettings        action = "保存设置失败"
+	actionReadSystemProxy     action = "读取系统代理失败"
+	actionSystemProxyOn       action = "打开系统代理失败"
+	actionSystemProxyOff      action = "关闭系统代理失败"
+	actionOpenAtLogin         action = "设置开机启动失败"
 )
 
 // fail shows what went wrong without touching the connection status.
@@ -394,7 +665,7 @@ func (d *Dashboard) failConnection(a action, err error) {
 
 // View builds one frame of the main window.
 func (d *Dashboard) View(c *ui.Context) {
-	c.SetTheme(hopTheme(c.Theme().Dark))
+	c.SetTheme(d.theme(c))
 	t := c.Theme()
 	ui.Column(c).Fill().Children(func() {
 		d.header(c, t)
@@ -404,53 +675,58 @@ func (d *Dashboard) View(c *ui.Context) {
 			d.connectionsPage(c, t)
 		case pageLogs:
 			d.logsPage(c, t)
+		case pageSettings:
+			d.settingsPage(c, t)
 		default:
 			d.nodesPage(c, t)
 		}
 	})
+	// The subscription dialogs sit over whatever page shows.
+	d.editorDialog(c, t)
+	d.deleteDialog(c, t)
 }
 
-// header holds what applies to every page: the page switch, the outbound
-// mode and whether the core is reachable.
+// header holds what applies to every page: the page switch and whether the
+// core is reachable.
 func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 	// The window has no title bar of its own: the header is it. It keeps
 	// clear of the traffic lights and drags the window.
 	left := max(pagePadding, c.TitleBar().Left+gapSmall)
 	ui.Row(c).Gap(gapLarge).AlignItems(ui.Center).Height(headerHeight).Padding(0, pagePadding, 0, left).DragWindow().Children(func() {
 		brandLockup(c, t, 24)
-		slidingSwitch(c, "页面", &d.page, pageLabels, pageSwitchStyle(t, 56), func(int) {})
+		slidingSwitch(c, "页面", &d.page, pageLabels, pageSwitchStyle(t, 48), func(int) {})
 		ui.Box(c).Grow(1)
-		d.modeSwitch(c, t, 52)
 		d.statusCapsule(c, t)
 	})
 }
 
-// modeSwitch switches the outbound mode; it waits for the core to report
-// its mode before it takes clicks.
-func (d *Dashboard) modeSwitch(c *ui.Context, t *ui.Theme, segmentWidth float32) {
-	ui.Box(c).Key("mode").Disabled(d.view.Mode == "").Children(func() {
-		slidingSwitch(c, "出站模式", &d.modeIndex, modeLabels, modeSwitchStyle(t, segmentWidth), func(i int) {
-			d.setMode(service.Modes[i])
-		})
-	})
+// proxying says whether traffic is handed to Hop now: its core runs and the
+// system proxy points at it. That, not the core merely running, is what the
+// status dot shows as live.
+func (d *Dashboard) proxying() bool {
+	return d.status == statusConnected && d.sysProxy.on
 }
 
 func (d *Dashboard) statusText() string {
-	switch d.status {
-	case statusConnected:
-		return "运行中"
-	case statusFailed:
+	switch {
+	case d.proxying():
+		return "代理中"
+	case d.status == statusConnected:
+		return "未开代理"
+	case d.status == statusFailed:
 		return "未连接"
 	default:
 		return "连接中"
 	}
 }
 
+// statusColor is green only while Hop carries the system's traffic, red
+// when the core cannot be reached, and quiet otherwise.
 func (d *Dashboard) statusColor(t *ui.Theme) ui.Color {
-	switch d.status {
-	case statusConnected:
+	switch {
+	case d.proxying():
 		return t.Success
-	case statusFailed:
+	case d.status == statusFailed:
 		return t.Danger
 	default:
 		return t.TextMuted

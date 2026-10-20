@@ -7,21 +7,34 @@ the REST/WebSocket controller. The README covers features and how to run it;
 this file covers how to change it.
 
 The user's global rules (strict typing, pure functions, explicit errors,
-structured logging, no fallbacks, minimal tests) apply. Below are the rules
-specific to this project.
+structured logging, no fallbacks, minimal tests) apply. Code comments are
+English only: the UI copy is Chinese, and a comment may quote a UI label but is
+never written in Chinese. Below are the rules specific to this project.
 
 ## Safety: never disturb the user's running proxy
 
 The user runs Clash Verge (its own mihomo, in service mode, possibly with TUN)
 on this machine while developing Hop. Hop must never interfere with it.
 
-- Never set or change the system proxy, TUN, DNS, routes or network settings.
-  System proxy support does not exist yet; adding it needs the user's explicit
-  go-ahead, off by default.
+- Never set or change TUN, DNS, routes or network settings. The system proxy
+  is the one exception, and only through `service.SystemProxyService`: it
+  changes it only when the user turns it on in Settings (off by default),
+  refuses when another app already holds it, and clears only a proxy that
+  points at Hop itself (at quit and when the core gives up). Never run
+  `networksetup` or touch the proxy registry keys anywhere else, and never
+  turn the real system proxy on in a test or experiment.
 - Never read, write, stop or signal Clash Verge's processes or files
   (`~/.config/mihomo`, `/Library/Application Support/clash-verge-service`,
   `~/Library/Application Support/io.github.clash-verge-rev.*`, mihomo-party).
-  Executing its bundled core binary (`HOP_MIHOMO_BINARY`) is fine.
+- Hop runs its own core, fetched by `scripts/fetch-mihomo.sh` — the core
+  into `resources/<os>-<arch>/bin` with its LICENSE beside it, the geodata
+  the generated configs can need into `resources/geodata` — all pinned in
+  `mihomo.version`; never read the
+  core from, or point it at, another client's files. Executing another
+  client's core binary through `HOP_MIHOMO_BINARY` is fine.
+- A leftover core is stopped only through `mihomo.ReapStale`, which acts on
+  the pid in Hop's own `mihomo.pid` and only when that process's command line
+  carries Hop's home directory. Never kill a process by name or by port.
 - Hop listens only on `127.0.0.1:17890` (mixed) and `127.0.0.1:19090`
   (controller); the integration test uses `17891`/`19091`. Check a port is free
   before adding one.
@@ -41,19 +54,43 @@ handler → service → repository, interfaces defined where they are used.
 - `internal/repository/mihomo` — core process (`process.go`), REST + WebSocket
   client (`client.go`, `monitor.go`). All controller calls go through
   `Client.do` with a per-request timeout; WebSocket streams go through
-  `Client.stream` (read limit raised, the default 32 KiB is too small).
+  `Client.stream` (read limit raised, the default 32 KiB is too small). A
+  core that exits on its own is restarted by the runner's supervisor with
+  bounded backoff (`supervise.go`); `Stop` and `Restart` never trigger it,
+  and after five crashes in a row it gives up and tells the UI through
+  `Runner.OnRestart`. Geodata that ships with the app is seeded into the
+  core's home dir before the first start (`geodata.go`).
+- `internal/repository/corerelease` and `corestore` — finding, downloading
+  (SHA-256 checked against the digest GitHub publishes) and keeping upgraded
+  cores under `<AppDir>/core`. The bundled core is never modified; an upgrade
+  is a pointer file (`current.json`) to a downloaded one. `config.Load` runs
+  `HOP_MIHOMO_BINARY` first, then the upgraded core, then the bundled one.
+  `service.CoreService.Upgrade` checks a candidate with `mihomo -v` and `-t`
+  on the running config before `mihomo.Runner.Restart`, and puts the old core
+  back when the new one does not come up. Core downloads go through Hop's own
+  loopback proxy, never the system's or another client's.
 - `internal/repository/subscription` — downloads, retries with warnings,
   keeps the `subscription-userinfo` header.
 - `internal/repository/profile` — atomic file store for subscription, meta,
-  outbound mode.
+  outbound mode and settings (`settings.json`).
 - `internal/service` — business logic. View building (`view.go`) is pure:
   node-name parsing, region grouping, group kinds, route resolution. Keep new
-  derivations pure and here, not in handlers.
+  derivations pure and here, not in handlers. Providers name groups and
+  nodes their own way, so anything read from a name (`ParseNode`, `ServiceOf`)
+  is a keyword rule with a safe default, never an assumption about one
+  provider; a tile or row must stay whole for any content.
 - `internal/handler` — native UI. `Dashboard` holds UI state; background work
   runs in goroutines started in `Start` and hands results back through
   `Updater.Update` (UI thread only touches state). `MenuBar` is the Updater in
-  production so the menu bar panel redraws with the window.
-- `config` — startup settings; `main.go` wires everything.
+  production so the menu bar panel redraws with the window. Closing the
+  window hides it and the Dock icon (activation policy accessory) and Hop
+  keeps running; started at login (`mygo.App.WasOpenedAtLogin`) it starts
+  that way. The login item itself lives in the system (`mygo.App`
+  `OpenAtLogin`), not in Hop's settings; never turn it on for a dev build.
+- `config` — startup settings; `main.go` wires everything. User settings
+  (`service/settings.go`: appearance, delay test timeout) load before the UI
+  and are validated against the offered choices; the dashboard's theme is
+  `d.theme(c)`, which applies the chosen appearance over the system's.
 
 WebSocket is `github.com/coder/websocket`, chosen over faster server-oriented
 libraries such as gws: Hop only reads three loopback streams at about one
@@ -78,7 +115,9 @@ for font sizes, weights, gaps or radii in views.
   only on the mark and wordmark.
 - Buttons: always `button(...)` / `iconButton(...)` from `buttons.go` with
   `primaryButton`, `softButton` or `dangerButton`; never `ui.Button`,
-  `ui.PrimaryButton` or `ui.Segmented`. Switches are `slidingSwitch`.
+  `ui.PrimaryButton` or `ui.Segmented`. Switches are `slidingSwitch`; on/off
+  and exclusive choices that steer traffic (outbound mode, system proxy) are
+  `togglePill` (`pill.go`), at the foot of the route card and in the flyout.
 - Icons: 24-unit SVG strokes in `icons.go`, tinted by text colour.
 - CJK text in small controls sits ~1px low: apply `Translate(0, -opticalLift)`.
 - UI copy is Chinese, sentence-short, in the user's terms. No ALL-CAPS labels,
@@ -127,6 +166,16 @@ scattered fade-ins.
 Do not add unit tests by default. The one integration test
 (`internal/integration`) covers import, the whitelist, reload, usage header,
 token redaction and restart from the store; extend it when those paths change.
+
+## Distribution
+
+Hop is for the user and colleagues for now, shipped ad hoc signed without an
+Apple Developer ID. Colleagues install through a `curl -fsSL .../install.sh |
+sh` script (curl sets no quarantine attribute, so Gatekeeper lets the app
+open); the script and its GitHub release upload belong to the release work.
+Never use shared or third-party signing certificates. A Developer ID with
+notarization (MyGo's `macos.signingIdentity` and `notarize`) waits for a
+public release, auto-update or a privileged TUN helper.
 
 ## Git
 

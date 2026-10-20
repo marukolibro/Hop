@@ -2,6 +2,15 @@ package handler
 
 import "github.com/egoist/mygo/ui"
 
+// dialogScrim dims the window under a dialog; dialogShadow lifts the dialog's
+// panel, and the pickers' popups, off it.
+var (
+	dialogScrim  = ui.RGBA(0, 0, 0, 0.4)
+	dialogShadow = ui.RGBA(0, 0, 0, 0.3)
+	// popupShadow keeps selection menus lighter than modal dialogs.
+	popupShadow = ui.RGBA(0, 0, 0, 0.14)
+)
+
 // hopTheme returns Hop's palette and control metrics for the system's
 // current appearance.
 //
