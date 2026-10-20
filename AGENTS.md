@@ -55,6 +55,11 @@ handler → service → repository, interfaces defined where they are used.
   production so the menu bar panel redraws with the window.
 - `config` — startup settings; `main.go` wires everything.
 
+WebSocket is `github.com/coder/websocket`, chosen over faster server-oriented
+libraries such as gws: Hop only reads three loopback streams at about one
+message a second, and `Read(ctx)` gives the clean shutdown on cancel. Do not
+swap it for throughput.
+
 Verify any mihomo API shape against the running core before relying on it
 (`curl` with the secret from Hop's own `config.yaml`); do not code from memory.
 
