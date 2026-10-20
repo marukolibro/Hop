@@ -1,6 +1,6 @@
 {
-  "name": "hop",
-  "identifier": "com.example.hop",
+  "name": "Hop",
+  "identifier": "io.github.marukolibro.hop",
   "version": "0.1.0",
   "out": "build"
 }
