@@ -1,0 +1,6 @@
+{
+  "name": "hop",
+  "identifier": "com.example.hop",
+  "version": "0.1.0",
+  "out": "build"
+}
