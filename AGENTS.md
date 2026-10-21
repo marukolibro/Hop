@@ -194,6 +194,9 @@ scattered fade-ins.
 Do not add unit tests by default. The one integration test
 (`internal/integration`) covers import, the whitelist, reload, usage header,
 token redaction and restart from the store; extend it when those paths change.
+`TestWindowsTunEndToEnd` installs the helper service and takes the routes
+over, so it runs only with `HOP_WINDOWS_TUN_E2E=1`, which only the Windows
+CI job (a disposable runner) sets; never set it on a machine someone uses.
 
 ## Distribution
 
