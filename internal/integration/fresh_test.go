@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -28,19 +29,23 @@ func TestFreshInstallStartup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load the config on a fresh install: %v", err)
 	}
-	info, err := os.Stat(cfg.AppDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if perm := info.Mode().Perm(); perm != 0o700 {
-		t.Errorf("app dir mode %o, want 700: it holds the subscriptions and the controller secret", perm)
-	}
 	secret, err := os.Stat(filepath.Join(cfg.AppDir, "controller-secret"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if perm := secret.Mode().Perm(); perm != 0o600 {
-		t.Errorf("controller secret mode %o, want 600", perm)
+	// Windows has no Unix modes: the user's profile directory keeps the app
+	// data private there.
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(cfg.AppDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if perm := info.Mode().Perm(); perm != 0o700 {
+			t.Errorf("app dir mode %o, want 700: it holds the subscriptions and the controller secret", perm)
+		}
+		if perm := secret.Mode().Perm(); perm != 0o600 {
+			t.Errorf("controller secret mode %o, want 600", perm)
+		}
 	}
 
 	store, err := profile.NewStore(cfg.AppDir)
