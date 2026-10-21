@@ -198,8 +198,8 @@ token redaction and restart from the store; extend it when those paths change.
 ## Distribution
 
 Hop is for the user and colleagues for now, shipped ad hoc signed without an
-Apple Developer ID, and Apple silicon only (there is no pinned darwin-amd64
-core). Colleagues install with `curl -fsSL
+Apple Developer ID, as one universal app for Apple silicon and Intel (mygo
+combines the two pinned cores and helpers). Colleagues install with `curl -fsSL
 https://raw.githubusercontent.com/marukolibro/Hop/main/install.sh | sh`
 (curl sets no quarantine attribute, so Gatekeeper lets the app open). The
 script refuses while Hop Dev is running, quits a running release Hop, verifies
@@ -213,12 +213,17 @@ updater verifies the signature of every later update. The private key must
 stay outside the repository and out of output; `mygo.json` only points at
 its path.
 
-Publish with `scripts/release.sh --dry-run` (build and list) or
+Releases are built by `.github/workflows/release.yml` when a `v<version>`
+tag is pushed: it checks the tag against `mygo.json` and `CHANGELOG.md`,
+builds and signs with the `MYGO_UPDATER_PRIVATE_KEY` repository secret, and
+uploads to a draft release that a person publishes. `ci.yml` runs the checks of
+"Verify every change" on every push and pull request. Locally, `scripts/release.sh` does the
+same: `--dry-run` (build and list) or
 `--publish` (build with `mygo build -upload`, which creates a draft release;
 the script then prints the `gh release edit v<version> --draft=false` command
 for the user to run after review). It refuses a dirty tree, a changelog
 without the version, an existing tag, and a build without the signing key.
-Only `darwin/arm64` is built. Never use shared or third-party signing
+Only `darwin/universal` is built. Never use shared or third-party signing
 certificates. A Developer ID with notarization (MyGo's
 `macos.signingIdentity` and `notarize`) waits for a public release.
 

@@ -1,0 +1,50 @@
+name: Bug report
+description: Something in Hop does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Never paste your subscription link, node addresses or passwords** — they are credentials. Remove them from logs and screenshots first.
+        请不要贴出订阅链接、节点地址或密码，日志和截图里也请先去掉。
+  - type: input
+    id: version
+    attributes:
+      label: Hop version
+      description: Settings → 版本
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and Mac
+      placeholder: "macOS 26.1, MacBook Air M2"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: How traffic goes through Hop
+      options:
+        - System proxy / 系统代理
+        - Enhanced mode (TUN) / 增强模式
+        - Neither, apps use 127.0.0.1:17890 directly
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: From the 日志 page, with links and addresses removed.
+      render: text

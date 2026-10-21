@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check
+    # Apple silicon, like the only platform Hop ships for; the integration
+    # tests run the bundled core on loopback ports 17891 and 19091.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Fetch the pinned core and geodata
+        run: scripts/fetch-mihomo.sh darwin-arm64
+      - name: Build the TUN helper
+        run: scripts/build-helper.sh darwin-arm64
+      - name: Format
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: Vet
+        run: |
+          go vet ./...
+          GOOS=windows GOARCH=amd64 go vet ./...
+          go tool mygo vet .
+      - name: Build for Windows
+        run: GOOS=windows GOARCH=amd64 go build ./...
+      - name: Check the shell scripts
+        run: for f in install.sh scripts/*.sh; do sh -n "$f"; done
+      - name: Test
+        run: go test ./...
+        env:
+          HOP_MIHOMO_BINARY: ${{ github.workspace }}/resources/darwin-arm64/bin/mihomo

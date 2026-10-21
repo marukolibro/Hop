@@ -1,0 +1,80 @@
+name: Release
+
+# Pushing a tag v<version> builds the signed app and uploads it to a draft
+# release of that version. Publishing the draft, after a look, is a person's
+# step: installed copies of Hop update to it.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # the draft release and its uploads
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  draft:
+    name: Draft release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check the tag, version and changelog agree
+        run: |
+          version=$(jq -r .version mygo.json)
+          test "$GITHUB_REF_NAME" = "v$version" || {
+            echo "::error::tag $GITHUB_REF_NAME does not match mygo.json version $version"
+            exit 1
+          }
+          grep -Fqx "## $version" CHANGELOG.md || {
+            echo "::error::CHANGELOG.md has no \"## $version\" section"
+            exit 1
+          }
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --draft --verify-tag --title "Hop ${GITHUB_REF_NAME#v}" --generate-notes
+          fi
+
+  macos:
+    name: macOS
+    needs: draft
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Fetch the pinned cores and geodata
+        run: |
+          scripts/fetch-mihomo.sh darwin-arm64
+          scripts/fetch-mihomo.sh darwin-amd64
+      - name: Build the TUN helpers
+        run: |
+          scripts/build-helper.sh darwin-arm64
+          scripts/build-helper.sh darwin-amd64
+      - name: Test
+        run: go test ./...
+        env:
+          HOP_MIHOMO_BINARY: ${{ github.workspace }}/resources/darwin-arm64/bin/mihomo
+      - name: Check the signing key is set
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: |
+          test -n "$MYGO_UPDATER_PRIVATE_KEY" || {
+            echo "::error::the MYGO_UPDATER_PRIVATE_KEY secret is not set; installed apps would not accept this release"
+            exit 1
+          }
+      - name: Build, sign and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: go tool mygo build -platform darwin/universal -upload
+      - name: Check the update manifest is signed
+        run: |
+          manifest=build/darwin-universal/update-darwin-universal.json
+          test "$(jq -r .version "$manifest")" = "${GITHUB_REF_NAME#v}"
+          test -n "$(jq -r '.signature // empty' "$manifest")"
