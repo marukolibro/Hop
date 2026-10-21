@@ -56,10 +56,12 @@ on this machine while developing Hop. Hop must never interfere with it.
   `sub-rules` pass through. Hop owns every other key. Never widen this list
   without a dry run of the generated config first. The one narrow exception
   is `service/node_dns.go`: `hosts` entries whose name is one of the
-  subscription's own node servers, and its encrypted `dns.nameserver`
-  resolvers used only for the names those entries point at. Providers use
-  them to send nodes through their nearest entry (measured 24-28 ms against
-  77-111 ms through public DNS); nothing else from `hosts` or `dns` is taken. A subscription may instead
+  subscription's own node servers, its encrypted `dns.nameserver`
+  resolvers used only for the names those entries point at, and its
+  encrypted `dns.proxy-server-nameserver` resolvers used only for node
+  servers. Providers use them to send nodes through their nearest entry
+  (measured 24-28 ms against 77-111 ms through public DNS); nothing else from
+  `hosts` or `dns` is taken, and plain or local resolvers never are. A subscription may instead
   run with Hop's own template (`service/hop_rules.go`, rule source
   `hop`): then only its nodes (`proxies`, `proxy-providers`)
   are taken. A body that is not a Clash profile is read as node links with

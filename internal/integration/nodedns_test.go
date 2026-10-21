@@ -96,3 +96,64 @@ func TestNodeEntriesLimitedToNodes(t *testing.T) {
 		}
 	}
 }
+
+// profileWithServerResolvers names its own encrypted resolver for its node
+// servers' names and no hosts, besides plain and local resolvers Hop must
+// not take.
+const profileWithServerResolvers = `
+proxies:
+  - {name: "HK 01", type: ss, server: hk.node.example, port: 8388, cipher: aes-128-gcm, password: x}
+proxy-groups:
+  - {name: Proxy, type: select, proxies: ["HK 01"]}
+dns:
+  proxy-server-nameserver:
+    - https://doh.provider.example/dns-query
+    - 114.114.114.114
+    - udp://127.0.0.1:7874
+rules:
+  - MATCH,Proxy
+`
+
+// TestProviderServerResolvers checks the other way providers reach their
+// near entries: node servers resolve through the provider's own encrypted
+// resolver, directly, with no listener and nothing pinned.
+func TestProviderServerResolvers(t *testing.T) {
+	binary := os.Getenv("HOP_MIHOMO_BINARY")
+	if binary == "" {
+		t.Skip("HOP_MIHOMO_BINARY is not set")
+	}
+	validateDir := t.TempDir()
+	if err := mihomo.SeedGeodata(filepath.Join("..", "..", "resources", "geodata"), validateDir); err != nil {
+		t.Fatal(err)
+	}
+	validator := mihomo.NewConfigValidator(binary, validateDir, 30*time.Second)
+	for _, tun := range []bool{false, true} {
+		config, err := service.RuntimeConfig([]byte(profileWithServerResolvers), model.RulesHop, nil, service.RuntimeSettings{
+			MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
+			BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop",
+			Mode: model.ModeRule, Tun: tun, NodeDNSListen: "127.0.0.1:17854",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got struct {
+			Hosts map[string]string `yaml:"hosts"`
+			DNS   struct {
+				Listen                string   `yaml:"listen"`
+				ProxyServerNameserver []string `yaml:"proxy-server-nameserver"`
+			} `yaml:"dns"`
+		}
+		if err := yaml.Unmarshal(config, &got); err != nil {
+			t.Fatal(err)
+		}
+		if want := []string{"https://doh.provider.example/dns-query"}; !slices.Equal(got.DNS.ProxyServerNameserver, want) {
+			t.Errorf("tun=%v: node servers resolve through %v, want only the provider's encrypted resolver", tun, got.DNS.ProxyServerNameserver)
+		}
+		if got.DNS.Listen != "" || len(got.Hosts) != 0 {
+			t.Errorf("tun=%v: listen %q and hosts %v, want neither without hosts aliases", tun, got.DNS.Listen, got.Hosts)
+		}
+		if err := validator.Validate(context.Background(), config); err != nil {
+			t.Errorf("tun=%v: the core rejected the config: %v", tun, err)
+		}
+	}
+}

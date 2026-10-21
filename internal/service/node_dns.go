@@ -12,11 +12,13 @@ import (
 )
 
 // nodeEntries is how a subscription sends its nodes through the provider's
-// nearest entry points, which public DNS does not return: hosts entries
-// that point a node's server at another name (or at addresses), and the
-// provider's own encrypted resolvers, the only ones that answer those
-// names with the near entries. Measured on one provider, the same nodes
-// were 24-28 ms away this way and 77-111 ms through public DNS.
+// nearest entry points, which public DNS does not return. Providers do it
+// two ways: hosts entries that point a node's server at another name (or at
+// addresses), with their own encrypted resolvers the only ones that answer
+// those names with the near entries; or their own encrypted resolvers as
+// proxy-server-nameserver, answering the node servers' names themselves.
+// Measured on one provider of the first kind, the same nodes were 24-28 ms
+// away this way and 77-111 ms through public DNS.
 type nodeEntries struct {
 	// hosts maps a node's server to another name or to addresses, as the
 	// subscription wrote it. Only names the subscription's own proxies use
@@ -24,16 +26,47 @@ type nodeEntries struct {
 	hosts map[string]yaml.Node
 	// aliases are the names hosts points at; they resolve through resolvers.
 	aliases []string
-	// resolvers are the subscription's encrypted DNS servers (DoH, DoT,
-	// DoQ), the ones that know the aliases.
+	// resolvers are the subscription's encrypted dns.nameserver servers
+	// (DoH, DoT, DoQ), the ones that know the aliases.
 	resolvers []string
+	// serverResolvers are its encrypted dns.proxy-server-nameserver
+	// servers, which answer its node servers' names.
+	serverResolvers []string
 }
 
-// readNodeEntries reads a Clash profile's node entries. A link list, or a
-// profile without hosts for its nodes, has none.
+// subscriptionDNS is the part of a subscription's dns section Hop reads.
+type subscriptionDNS struct {
+	Nameserver            []string `yaml:"nameserver"`
+	ProxyServerNameserver []string `yaml:"proxy-server-nameserver"`
+}
+
+// readNodeEntries reads a Clash profile's node entries. A link list has
+// none.
 func readNodeEntries(p subscriptionProfile) (nodeEntries, error) {
+	if p.isLinkList() {
+		return nodeEntries{}, nil
+	}
+	var dns subscriptionDNS
+	if node, ok := p.doc["dns"]; ok {
+		if err := node.Decode(&dns); err != nil {
+			return nodeEntries{}, fmt.Errorf("read the subscription's dns: %w", err)
+		}
+	}
+	entries, err := readNodeHosts(p)
+	if err != nil {
+		return nodeEntries{}, err
+	}
+	if len(entries.hosts) > 0 {
+		entries.resolvers = encryptedResolvers(dns.Nameserver)
+	}
+	entries.serverResolvers = encryptedResolvers(dns.ProxyServerNameserver)
+	return entries, nil
+}
+
+// readNodeHosts reads the hosts entries for the profile's own node servers.
+func readNodeHosts(p subscriptionProfile) (nodeEntries, error) {
 	node, ok := p.doc["hosts"]
-	if p.isLinkList() || !ok || p.proxies.IsZero() {
+	if !ok || p.proxies.IsZero() {
 		return nodeEntries{}, nil
 	}
 	var hosts map[string]yaml.Node
@@ -70,25 +103,24 @@ func readNodeEntries(p subscriptionProfile) (nodeEntries, error) {
 	if len(entries.hosts) == 0 {
 		return nodeEntries{}, nil
 	}
-	resolvers, err := encryptedResolvers(p.doc["dns"])
-	if err != nil {
-		return nodeEntries{}, err
-	}
-	entries.resolvers = resolvers
 	return entries, nil
 }
 
 // applyNodeEntries puts entries under cfg. Addresses work through hosts
-// alone; an alias needs the core's DNS server, the only part of the core
+// alone, and the provider's server resolvers replace Hop's for node
+// servers. An alias needs the core's DNS server, the only part of the core
 // that follows a name to another name, so node servers are then looked up
-// through the core's own listener on listen, and the aliases through the
-// provider's resolvers. Under TUN the names must keep real addresses.
+// through the core's own listener on listen, the aliases through the
+// provider's resolvers, and the other node servers through its server
+// resolvers when it has any. Under TUN the names must keep real addresses.
 func applyNodeEntries(cfg *runtimeConfig, entries nodeEntries, servers []string, listen string) error {
-	if len(entries.hosts) == 0 {
-		return nil
+	if len(entries.hosts) > 0 {
+		cfg.Hosts = entries.hosts
 	}
-	cfg.Hosts = entries.hosts
 	if len(entries.aliases) == 0 {
+		if len(entries.serverResolvers) > 0 {
+			cfg.DNS.ProxyServerNameserver = entries.serverResolvers
+		}
 		return nil
 	}
 	if listen == "" {
@@ -96,11 +128,21 @@ func applyNodeEntries(cfg *runtimeConfig, entries nodeEntries, servers []string,
 	}
 	cfg.DNS.Listen = listen
 	cfg.DNS.ProxyServerNameserver = []string{"udp://" + listen}
+	policy := map[string][]string{}
 	if len(entries.resolvers) > 0 {
-		cfg.DNS.NameserverPolicy = make(map[string][]string, len(entries.aliases))
 		for _, alias := range entries.aliases {
-			cfg.DNS.NameserverPolicy[alias] = entries.resolvers
+			policy[alias] = entries.resolvers
 		}
+	}
+	if len(entries.serverResolvers) > 0 {
+		for _, server := range servers {
+			if _, pinned := entries.hosts[server]; !pinned {
+				policy[server] = entries.serverResolvers
+			}
+		}
+	}
+	if len(policy) > 0 {
+		cfg.DNS.NameserverPolicy = policy
 	}
 	if cfg.DNS.EnhancedMode == "fake-ip" {
 		filter := slices.Clone(cfg.DNS.FakeIPFilter)
@@ -173,22 +215,13 @@ func hostsAddresses(value yaml.Node) bool {
 	return true
 }
 
-// encryptedResolvers reads the subscription's dns.nameserver entries that
-// reach a remote server over an encrypted transport. Plain UDP, the system
-// resolver and anything on this machine are left out: the subscription
-// does not choose how Hop's DNS reaches the network.
-func encryptedResolvers(node yaml.Node) ([]string, error) {
-	if node.IsZero() {
-		return nil, nil
-	}
-	var dns struct {
-		Nameserver []string `yaml:"nameserver"`
-	}
-	if err := node.Decode(&dns); err != nil {
-		return nil, fmt.Errorf("read the subscription's dns: %w", err)
-	}
+// encryptedResolvers keeps the servers that reach a remote resolver over an
+// encrypted transport. Plain UDP, the system resolver and anything on this
+// machine or network are left out: the subscription does not choose how
+// Hop's DNS reaches the network.
+func encryptedResolvers(servers []string) []string {
 	var resolvers []string
-	for _, server := range dns.Nameserver {
+	for _, server := range servers {
 		u, err := url.Parse(server)
 		if err != nil || u.Hostname() == "" {
 			continue
@@ -203,5 +236,5 @@ func encryptedResolvers(node yaml.Node) ([]string, error) {
 		}
 		resolvers = append(resolvers, server)
 	}
-	return resolvers, nil
+	return resolvers
 }
