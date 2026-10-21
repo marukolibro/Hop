@@ -23,6 +23,9 @@ const portFreeInterval = 250 * time.Millisecond
 // about; the last error is returned.
 func waitPortsFree(ctx context.Context, cfg config.Config) error {
 	addrs := []string{cfg.ControllerAddr}
+	if cfg.NodeDNSAddr != "" {
+		addrs = append(addrs, cfg.NodeDNSAddr)
+	}
 	if cfg.MixedPort > 0 {
 		addrs = append(addrs, net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.MixedPort)))
 	}

@@ -23,6 +23,9 @@ const (
 	// Hop can run beside them without touching their listeners.
 	mixedPort      = 17890
 	controllerAddr = "127.0.0.1:19090"
+	// nodeDNSAddr is the core's own DNS listener, used only to look up
+	// nodes' servers when a subscription sends them through its hosts.
+	nodeDNSAddr = "127.0.0.1:17853"
 
 	secretBytes = 16
 	appDirName  = "hop"
@@ -50,6 +53,8 @@ type Config struct {
 	MixedPort int
 	// ControllerAddr is host:port of the core's REST controller.
 	ControllerAddr string
+	// NodeDNSAddr is host:port of the core's DNS listener for node servers.
+	NodeDNSAddr string
 	// Secret authenticates controller requests; it is kept between starts so
 	// a core TUN mode left running under the helper still answers after Hop
 	// comes back.
@@ -82,6 +87,7 @@ func Load(userConfigDir string, resourcesDir string) (Config, error) {
 		HomeDir:        filepath.Join(appDir, "mihomo"),
 		MixedPort:      mixedPort,
 		ControllerAddr: controllerAddr,
+		NodeDNSAddr:    nodeDNSAddr,
 		Secret:         secret,
 	}, nil
 }

@@ -27,6 +27,9 @@ type RuntimeSettings struct {
 	// through it, not only the apps that honour a proxy. The core then runs
 	// under Hop's privileged helper, as root, which owns the device.
 	Tun bool
+	// NodeDNSListen is host:port of the core's own DNS listener, opened only
+	// when a subscription points its nodes' servers at other names.
+	NodeDNSListen string
 }
 
 // TunDevice is the interface name Hop's TUN claims. It is fixed, so the
@@ -70,6 +73,8 @@ type runtimeConfig struct {
 	ExternalController string    `yaml:"external-controller"`
 	Secret             string    `yaml:"secret"`
 	DNS                dnsConfig `yaml:"dns"`
+	// Hosts pins the subscription's own node servers, see nodeEntries.
+	Hosts map[string]yaml.Node `yaml:"hosts,omitempty"`
 
 	Proxies        yaml.Node `yaml:"proxies,omitempty"`
 	ProxyGroups    yaml.Node `yaml:"proxy-groups,omitempty"`
@@ -202,6 +207,11 @@ type dnsConfig struct {
 	Nameserver []string `yaml:"nameserver"`
 	// ProxyServerNameserver resolves the nodes' own names.
 	ProxyServerNameserver []string `yaml:"proxy-server-nameserver"`
+	// Listen and NameserverPolicy serve a subscription's node entries:
+	// the listener follows hosts aliases, the policy resolves them through
+	// the provider's resolvers (see applyNodeEntries).
+	Listen           string              `yaml:"listen,omitempty"`
+	NameserverPolicy map[string][]string `yaml:"nameserver-policy,omitempty"`
 }
 
 // hopDNS resolves over DoH at the two largest public resolvers in China,
@@ -282,6 +292,17 @@ func RuntimeConfig(subscription []byte, rules model.RuleSource, custom []model.C
 		return nil, err
 	}
 	cfg := baseConfig(s)
+	entries, err := readNodeEntries(p)
+	if err != nil {
+		return nil, err
+	}
+	servers, err := proxyServers(p)
+	if err != nil {
+		return nil, err
+	}
+	if err := applyNodeEntries(&cfg, entries, servers, s.NodeDNSListen); err != nil {
+		return nil, err
+	}
 	if rules == model.RulesProvider {
 		if p.isLinkList() {
 			return nil, errors.New("a list of node links has no rules of its own; run it with Hop's rules")

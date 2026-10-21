@@ -47,12 +47,19 @@ on this machine while developing Hop. Hop must never interfere with it.
   the pid in Hop's own `mihomo.pid` and only when that process's command line
   carries Hop's home directory. Never kill a process by name or by port.
 - Hop listens only on `127.0.0.1:17890` (mixed) and `127.0.0.1:19090`
-  (controller); the integration test uses `17891`/`19091`. Check a port is free
-  before adding one.
+  (controller), plus `127.0.0.1:17853` (the core's DNS, opened only for a
+  subscription that points its node servers at other names, see below); the
+  integration tests use `17891`/`19091`/`17854`. Check a port is free before
+  adding one.
 - Subscriptions are filtered by a whitelist (`service/runtime_config.go`):
   only `proxies`, `proxy-groups`, `proxy-providers`, `rules`, `rule-providers`,
   `sub-rules` pass through. Hop owns every other key. Never widen this list
-  without a dry run of the generated config first. A subscription may instead
+  without a dry run of the generated config first. The one narrow exception
+  is `service/node_dns.go`: `hosts` entries whose name is one of the
+  subscription's own node servers, and its encrypted `dns.nameserver`
+  resolvers used only for the names those entries point at. Providers use
+  them to send nodes through their nearest entry (measured 24-28 ms against
+  77-111 ms through public DNS); nothing else from `hosts` or `dns` is taken. A subscription may instead
   run with Hop's own template (`service/hop_rules.go`, rule source
   `hop`): then only its nodes (`proxies`, `proxy-providers`)
   are taken. A body that is not a Clash profile is read as node links with

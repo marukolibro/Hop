@@ -103,6 +103,7 @@ func run() error {
 		LogLevel:           coreLogLevel,
 		BootstrapGroupName: bootstrapGroup,
 		Mode:               mode,
+		NodeDNSListen:      cfg.NodeDNSAddr,
 	}
 	client := mihomo.NewClient(cfg.ControllerAddr, cfg.Secret, mihomo.ConfigPath(cfg.HomeDir), &http.Client{}, controllerTimeout)
 	helperClient := helper.NewClient(helper.SocketPath, helperCallTimeout)
