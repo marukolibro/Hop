@@ -42,6 +42,7 @@ var (
 	iconHome        = parseIcon(`<path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10v9h11v-9"/>`)
 	iconTarget      = parseIcon(`<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>`)
 	iconChevron     = parseIcon(`<path d="m6 9 6 6 6-6"/>`)
+	iconFile        = parseIcon(`<path d="M13.5 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13.5 3.5V9H19"/>`)
 )
 
 func parseIcon(paths string) *ui.SVG {

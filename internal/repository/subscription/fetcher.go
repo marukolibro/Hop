@@ -23,7 +23,9 @@ const (
 	// userInfoHeader carries the account's traffic and expiry.
 	userInfoHeader = "Subscription-Userinfo"
 
-	maxSize      = 16 << 20
+	// MaxSize is the largest profile Hop accepts, from a link or from a local
+	// file or pasted text, in bytes.
+	MaxSize      = 16 << 20
 	maxErrorBody = 256
 	// minBareCredentialLen is how long a query value must be before it is
 	// masked wherever it appears alone: shorter ones ("1", "clash") would
@@ -162,12 +164,12 @@ func (f *Fetcher) fetchOnce(ctx context.Context, rawURL string, target string) (
 		// leaving the repository layer.
 		return model.Download{}, &StatusError{Target: target, Status: resp.StatusCode, Body: RedactQuery(strings.TrimSpace(string(snippet)), rawURL)}
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSize+1))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxSize+1))
 	if err != nil {
 		return model.Download{}, fmt.Errorf("read subscription (target=%s): %w", target, err)
 	}
-	if len(body) > maxSize {
-		return model.Download{}, fmt.Errorf("subscription from %s is larger than %d bytes", target, maxSize)
+	if len(body) > MaxSize {
+		return model.Download{}, fmt.Errorf("subscription from %s is larger than %d bytes", target, MaxSize)
 	}
 	return model.Download{Body: body, UserInfo: resp.Header.Get(userInfoHeader)}, nil
 }

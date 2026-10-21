@@ -110,7 +110,7 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 				)
 				settingsGroup(c, t, "订阅",
 					func() {
-						settingRow(c, t, "自动更新", "按间隔刷新已保存的订阅，失败后等下一个间隔再试", func() {
+						settingRow(c, t, "自动更新", "按间隔刷新已保存的订阅，本地配置不刷新；失败后等下一个间隔再试", func() {
 							slidingSwitch(c, "subscription-update", &s.updateIndex, updateLabels, pageSwitchStyle(t, 58), func(i int) {
 								next := s.settings
 								next.SubscriptionUpdateHours = service.SubscriptionUpdateIntervals[i]

@@ -2,12 +2,18 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	neturl "net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
@@ -31,13 +37,13 @@ const (
 	cardDividerAlpha float32 = 0.65
 )
 
-// editorIntent distinguishes adding, renaming and editing a URL.
+// editorIntent distinguishes adding, renaming and editing a profile.
 type editorIntent int
 
 const (
 	editorAdd editorIntent = iota
 	editorRename
-	editorEditURL
+	editorEdit
 )
 
 // controlsLocked says whether a change that touches the core must wait: a
@@ -162,7 +168,12 @@ func (d *Dashboard) loadSource(ctx context.Context, win Updater, id string, seq 
 			e.err = fmt.Sprintf("这个订阅保存的分流规则（%s）无法识别。", input.Rules)
 			return
 		}
-		e.original, e.sourceLoaded, e.rulesIndex = input, true, index
+		sourceIndex := slices.Index(service.ProfileSources, input.Source)
+		if sourceIndex < 0 {
+			e.err = fmt.Sprintf("这个配置保存的来源（%s）无法识别。", input.Source)
+			return
+		}
+		e.original, e.sourceLoaded, e.rulesIndex, e.sourceIndex = input, true, index, sourceIndex
 		// Keep whatever the user typed while the reply was on its way.
 		if e.name == "" {
 			e.name = input.Name
@@ -192,8 +203,8 @@ func (d *Dashboard) openEditorDialog(intent editorIntent, id string) int {
 	s := &d.subscription
 	s.editor = subscriptionEditor{
 		seq: s.editor.seq + 1, editingID: id, intent: intent,
-		// Adding has nothing to wait for; editing fills the address from Source
-		// in the background.
+		// Adding has nothing to wait for; editing fills the source fields from
+		// Source in the background.
 		sourceLoaded: id == "",
 	}
 	s.editorOpen = true
@@ -205,19 +216,39 @@ func (d *Dashboard) openEditorDialog(intent editorIntent, id string) int {
 func (d *Dashboard) beginEditorSubmit() {
 	s := &d.subscription
 	e := &s.editor
-	if e.busy || !e.sourceLoaded || d.controlsLocked() {
+	if e.busy || e.fileBusy || !e.sourceLoaded || d.controlsLocked() {
 		return
 	}
-	if problem := subscriptionURLProblem(strings.TrimSpace(e.url)); problem != "" {
-		e.err = problem
-		return
-	}
+	source := service.ProfileSources[e.sourceIndex]
 	rules := service.RuleSources[e.rulesIndex]
 	if e.intent == editorRename {
 		// Renaming shows no rule choice: the stored one stays.
 		rules = e.original.Rules
+		source = e.original.Source
 	}
-	input := model.SubscriptionInput{Name: strings.TrimSpace(e.name), URL: strings.TrimSpace(e.url), Rules: rules}
+	input := model.SubscriptionInput{Name: strings.TrimSpace(e.name), Source: source, Rules: rules}
+	switch source {
+	case model.SourceLocal:
+		if e.content != "" && strings.TrimSpace(e.content) == "" {
+			e.err = "配置内容不能只有空白。"
+			return
+		}
+		if e.editingID == "" && e.content == "" {
+			e.err = "请粘贴配置内容，或选择一个配置文件。"
+			return
+		}
+		if len(e.content) > service.MaxProfileSize {
+			e.err = fmt.Sprintf("配置文件不能超过 %d MB。", service.MaxProfileSize>>20)
+			return
+		}
+		input.Content = []byte(e.content)
+	default:
+		if problem := subscriptionURLProblem(strings.TrimSpace(e.url)); problem != "" {
+			e.err = problem
+			return
+		}
+		input.URL = strings.TrimSpace(e.url)
+	}
 	e.err, e.busy = "", true
 	if e.editingID == "" {
 		// The first subscription added becomes the one in use; any later one
@@ -231,9 +262,11 @@ func (d *Dashboard) beginEditorSubmit() {
 		return
 	}
 	id := e.editingID
-	// A new address or new rules on the entry in use revalidate and reapply
-	// before they commit; a rename alone downloads and reloads nothing.
-	touchesRuntime := id == s.view.ActiveID && (input.URL != e.original.URL || input.Rules != e.original.Rules)
+	// A new address, new content or new rules on the profile in use revalidate
+	// and reapply before they commit; a rename alone replaces nothing. A local
+	// profile keeps its content when the field is left empty.
+	touchesRuntime := id == s.view.ActiveID &&
+		(input.URL != e.original.URL || len(input.Content) > 0 || input.Rules != e.original.Rules)
 	d.beginSubOp(subOp{
 		a: actionEditSubscription, id: id,
 		reloadAfter:   touchesRuntime,
@@ -344,29 +377,35 @@ func (d *Dashboard) subscriptionBar(c *ui.Context, t *ui.Theme) {
 				d.activeSelect(c, t)
 				ruleChip(c, t, active.Rules)
 				ui.Box(c).Grow(1)
-				mutedText(c, t, updatedText(active.UpdatedAt, now)).NoWrap()
-				label := "刷新订阅"
-				if busy {
-					label = "刷新中"
+				if active.Source == model.SourceRemote {
+					mutedText(c, t, updatedText(active.UpdatedAt, now)).NoWrap()
+					label := "刷新订阅"
+					if busy {
+						label = "刷新中"
+					}
+					button(c, buttonSpec{label: label, icon: iconRefresh, style: softButton(t),
+						disabled: d.controlsLocked(), busy: busy}, func() {
+						d.refreshSubscription(active.ID)
+					})
+				} else {
+					mutedText(c, t, service.LocalProfileName).NoWrap()
 				}
-				button(c, buttonSpec{label: label, icon: iconRefresh, style: softButton(t),
-					disabled: d.controlsLocked(), busy: busy}, func() {
-					d.refreshSubscription(active.ID)
-				})
 				button(c, buttonSpec{label: "管理订阅", icon: iconList, style: softButton(t)}, func() { s.managing = true })
 			})
-			switch {
-			case active.HasUsage:
-				usageLine(c, t, active.Usage, now)
-			case len(d.view.Plan) > 0:
-				// Without the usage header, show what the provider wrote into
-				// the proxy list instead.
-				ui.Row(c).Gap(gapLarge).AlignItems(ui.Center).Children(func() {
-					for _, note := range d.view.Plan {
-						label, value := splitPlanNote(note)
-						planNote(c, t, label, value)
-					}
-				})
+			if active.Source == model.SourceRemote {
+				switch {
+				case active.HasUsage:
+					usageLine(c, t, active.Usage, now)
+				case len(d.view.Plan) > 0:
+					// Without the usage header, show what the provider wrote into
+					// the proxy list instead.
+					ui.Row(c).Gap(gapLarge).AlignItems(ui.Center).Children(func() {
+						for _, note := range d.view.Plan {
+							label, value := splitPlanNote(note)
+							planNote(c, t, label, value)
+						}
+					})
+				}
 			}
 			if active.LastError != "" {
 				warningLine(c, t, active.LastError)
@@ -466,8 +505,11 @@ func (d *Dashboard) managePage(c *ui.Context, t *ui.Theme) {
 			if s.listBusy {
 				label = "刷新中"
 			}
+			refreshable := slices.ContainsFunc(s.view.Items, func(item model.SubscriptionSummary) bool {
+				return item.Source == model.SourceRemote
+			})
 			button(c, buttonSpec{label: label, icon: iconRefresh, style: softButton(t),
-				disabled: s.mutations > 0 || len(s.view.Items) == 0 || d.modeBusy, busy: s.listBusy}, d.refreshAllSubscriptions)
+				disabled: s.mutations > 0 || !refreshable || d.modeBusy, busy: s.listBusy}, d.refreshAllSubscriptions)
 			button(c, buttonSpec{label: "添加订阅", icon: iconPlus, style: primaryButton(t),
 				disabled: d.controlsLocked()}, func() {
 				d.openEditor(editorAdd, "")
@@ -506,13 +548,13 @@ func (d *Dashboard) manageEmpty(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// subscriptionCard is one saved subscription: where it comes from, what the
-// account holds, when it last refreshed, and what to do with it. The card in use
-// differs by a quiet accent tint alone.
+// subscriptionCard is one saved profile: where it comes from, what the account
+// holds, when it last refreshed, and what to do with it. A local profile has
+// no account, refresh or update time. The card in use differs by a quiet
+// accent tint alone.
 func (d *Dashboard) subscriptionCard(c *ui.Context, t *ui.Theme, item model.SubscriptionSummary) {
 	s := &d.subscription
 	isActive := item.ID == s.view.ActiveID
-	busy := s.busy(item.ID)
 	locked := d.controlsLocked()
 	card := ui.Column(c).Key("sub:"+item.ID).Gap(gapMedium).Padding(gapLarge, gapSection).Radius(radiusPanel)
 	switch {
@@ -526,7 +568,7 @@ func (d *Dashboard) subscriptionCard(c *ui.Context, t *ui.Theme, item model.Subs
 	}
 	card.Children(func() {
 		ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-			cardSource(c, t, isActive)
+			cardSource(c, t, isActive, item.Source)
 			ui.Column(c).Grow(1).Basis(0).Gap(gapLine).Children(func() {
 				ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, item.Name).FontSize(fontEmphasis).FontWeight(weightSemibold).MaxLines(1)
@@ -535,20 +577,23 @@ func (d *Dashboard) subscriptionCard(c *ui.Context, t *ui.Theme, item model.Subs
 					}
 					ruleChip(c, t, item.Rules)
 				})
-				ui.Text(c, item.Host).FontSize(fontCaption).TextColor(t.TextMuted).MaxLines(1)
+				ui.Text(c, subscriptionOrigin(item)).FontSize(fontCaption).TextColor(t.TextMuted).MaxLines(1)
 			})
 			if !isActive {
 				button(c, buttonSpec{label: "使用", style: softButton(t), disabled: locked}, func() {
 					d.useSubscription(item.ID)
 				})
 			}
-			label := "刷新"
-			if busy {
-				label = "刷新中"
+			if item.Source == model.SourceRemote {
+				busy := s.busy(item.ID)
+				label := "刷新"
+				if busy {
+					label = "刷新中"
+				}
+				button(c, buttonSpec{label: label, icon: iconRefresh, style: softButton(t), disabled: locked, busy: busy}, func() {
+					d.refreshSubscription(item.ID)
+				})
 			}
-			button(c, buttonSpec{label: label, icon: iconRefresh, style: softButton(t), disabled: locked, busy: busy}, func() {
-				d.refreshSubscription(item.ID)
-			})
 			d.cardMenu(c, t, item, locked)
 		})
 		d.cardMetrics(c, t, item)
@@ -558,17 +603,30 @@ func (d *Dashboard) subscriptionCard(c *ui.Context, t *ui.Theme, item model.Subs
 	})
 }
 
-// cardSource is the source tile: a globe on a soft square, in the accent when
-// the subscription is the one in use.
-func cardSource(c *ui.Context, t *ui.Theme, isActive bool) {
+// subscriptionOrigin names where a profile comes from: the link's host, or the
+// short local label for one stored from a file or paste.
+func subscriptionOrigin(item model.SubscriptionSummary) string {
+	if item.Source == model.SourceLocal {
+		return service.LocalProfileName
+	}
+	return item.Host
+}
+
+// cardSource is the source tile: a globe for a link, a file for a local
+// config, on a soft square in the accent when the profile is the one in use.
+func cardSource(c *ui.Context, t *ui.Theme, isActive bool, source model.SubscriptionSource) {
 	tile := ui.Box(c).Key("来源").Width(cardIconTile).Height(cardIconTile).Radius(radiusControl).Center()
 	ink, wash := t.TextMuted, t.Text.Alpha(0.08)
 	if isActive {
 		ink, wash = t.Accent, t.Accent.Alpha(0.09)
 	}
+	icon := iconGlobe
+	if source == model.SourceLocal {
+		icon = iconFile
+	}
 	tile.Background(wash)
 	tile.Children(func() {
-		ui.Icon(c, iconGlobe).Width(cardIconGlyph).Height(cardIconGlyph).TextColor(ink)
+		ui.Icon(c, icon).Width(cardIconGlyph).Height(cardIconGlyph).TextColor(ink)
 	})
 }
 
@@ -580,16 +638,20 @@ func activeBadge(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// cardMenu holds the actions that fit one card poorly: rename, edit the address,
-// delete.
+// cardMenu holds the actions that fit one card poorly: rename, edit the link
+// or local content, delete.
 func (d *Dashboard) cardMenu(c *ui.Context, t *ui.Theme, item model.SubscriptionSummary, disabled bool) {
 	id := item.ID
+	editLabel := "编辑订阅"
+	if item.Source == model.SourceLocal {
+		editLabel = "编辑配置"
+	}
 	iconMenuButton(c, item.Name+"的更多操作", iconMore, softButton(t), disabled, func(m *ui.Menu) {
 		if m.Item("重命名").Disabled(disabled).Chosen() {
 			d.openEditor(editorRename, id)
 		}
-		if m.Item("编辑订阅").Disabled(disabled).Chosen() {
-			d.openEditor(editorEditURL, id)
+		if m.Item(editLabel).Disabled(disabled).Chosen() {
+			d.openEditor(editorEdit, id)
 		}
 		m.Separator()
 		if m.Item("删除订阅").Disabled(disabled).Chosen() {
@@ -600,8 +662,11 @@ func (d *Dashboard) cardMenu(c *ui.Context, t *ui.Theme, item model.Subscription
 
 // cardMetrics shows what the provider reports: the account's use, its term, and
 // when the subscription last refreshed successfully. Metrics the provider omit
-// are left out rather than shown empty.
+// are left out rather than shown empty. A local profile has none of them.
 func (d *Dashboard) cardMetrics(c *ui.Context, t *ui.Theme, item model.SubscriptionSummary) {
+	if item.Source == model.SourceLocal {
+		return
+	}
 	hasExpiry := item.HasUsage && !item.Usage.Expire.IsZero()
 	ui.Column(c).Key("指标").Gap(gapMedium).Children(func() {
 		ui.Box(c).Height(1).Background(t.Border.Alpha(cardDividerAlpha))
@@ -702,28 +767,39 @@ func (d *Dashboard) editorDialog(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// editorForm is the add/edit dialog's body: an optional name and the
-// subscription address, filled from what is stored when editing.
+// editorForm is the add/edit dialog's body: an optional name and the source
+// fields — a subscription address, or a local file or pasted config — filled
+// from what is stored when editing.
 func (d *Dashboard) editorForm(c *ui.Context, t *ui.Theme) {
 	s := &d.subscription
 	e := &s.editor
+	source := service.ProfileSources[e.sourceIndex]
+	local := source == model.SourceLocal
 	first := len(s.view.Items) == 0
-	title, description, submit := "添加订阅", "保存一个新订阅，不改变当前正在使用的线路。", "添加"
+	title, description, submit := "添加订阅", "保存一个订阅或本地配置，不改变当前正在使用的线路。", "添加"
 	switch e.intent {
 	case editorAdd:
 		if first {
-			description, submit = "添加第一个订阅，并将它设为当前使用。", "添加并使用"
+			description, submit = "添加第一个配置，并将它设为当前使用。", "添加并使用"
 		}
 	case editorRename:
-		title, description, submit = "重命名", "名称可以自由修改。地址保持不变。", "保存修改"
-	case editorEditURL:
-		title, description, submit = "编辑订阅", "可以修改名称、地址和分流规则。新地址校验成功后才替换旧内容。", "保存修改"
+		title, description, submit = "重命名", "名称可以自由修改。内容保持不变。", "保存修改"
+	case editorEdit:
+		if local {
+			title, description, submit = "编辑配置", "可以修改名称、分流规则和配置内容。新内容校验成功后才替换旧内容。", "保存修改"
+		} else {
+			title, description, submit = "编辑订阅", "可以修改名称、地址和分流规则。新地址校验成功后才替换旧内容。", "保存修改"
+		}
 	}
 	hint := "名称留空时使用来源域名。"
+	localHint := "粘贴 Clash 配置或节点链接，也可以从文件读取。内容保存在本机，原文件移动或删除都不影响。"
 	urlPlaceholder := "https://provider.example.com/subscribe"
 	if !e.sourceLoaded {
-		hint = "正在读取已保存的订阅地址…"
+		hint = "正在读取已保存的配置…"
 		urlPlaceholder = "正在读取订阅信息…"
+	}
+	if e.editingID != "" && local {
+		localHint = "留空则保持现有配置；粘贴内容或选择文件会替换全部内容。"
 	}
 	ui.Column(c).Gap(gapSection).Children(func() {
 		ui.Column(c).Gap(gapSmall).Children(func() {
@@ -734,14 +810,44 @@ func (d *Dashboard) editorForm(c *ui.Context, t *ui.Theme) {
 			mutedText(c, t, description)
 		})
 		ui.Column(c).Gap(gapSmall).Children(func() {
-			fieldLabel(c, t, "订阅名称", "选填")
-			ui.TextInput(c, &e.name).Label("订阅名称").Placeholder("例如：备用线路").Disabled(e.busy)
-			fieldLabel(c, t, "订阅地址", "")
-			ui.TextInput(c, &e.url).Label("订阅地址").Placeholder(urlPlaceholder).Disabled(e.busy || !e.sourceLoaded).OnSubmit(d.submitEditor)
-			ui.Text(c, hint).FontSize(fontCaption).TextColor(t.TextMuted)
+			fieldLabel(c, t, "配置名称", "选填")
+			ui.TextInput(c, &e.name).Label("配置名称").Placeholder("例如：备用线路").Disabled(e.busy || e.fileBusy)
 			if e.intent != editorRename {
+				fieldLabel(c, t, "来源", "")
+				ui.Box(c).Disabled(e.busy || e.fileBusy || e.editingID != "" || !e.sourceLoaded).Children(func() {
+					slidingSwitch(c, "source", &e.sourceIndex, sourceLabels, pageSwitchStyle(t, sourceSegmentWidth), func(int) { e.err = "" })
+				})
+				if e.editingID != "" {
+					ui.Text(c, "来源创建后不可更改；需要另一种来源时请新建一个配置。").
+						FontSize(fontCaption).TextColor(t.TextMuted)
+				}
+				if local {
+					nameHint := "选择文件时会自动填入文件名；名称留空时显示为「" + service.LocalProfileName + "」。"
+					ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+						button(c, buttonSpec{label: "选择文件…", icon: iconFile, style: softButton(t),
+							disabled: e.busy || e.fileBusy || !e.sourceLoaded, busy: e.fileBusy}, func() {
+							d.chooseLocalFile(e.seq)
+						})
+						if e.fileName != "" {
+							mutedText(c, t, "已读取 "+e.fileName).MaxLines(1)
+						} else {
+							mutedText(c, t, "支持 .yaml、.yml、.txt、.conf，或任意文件")
+						}
+					})
+					fieldLabel(c, t, "配置内容", fmt.Sprintf("上限 %d MB", service.MaxProfileSize>>20))
+					ui.TextArea(c, &e.content).Label("配置内容").
+						Placeholder("粘贴 Clash 配置或节点链接…").Height(localEditorHeight).
+						Disabled(e.busy || e.fileBusy || !e.sourceLoaded)
+					ui.Text(c, localHint).FontSize(fontCaption).TextColor(t.TextMuted)
+					ui.Text(c, nameHint).FontSize(fontCaption).TextColor(t.TextMuted)
+				} else {
+					fieldLabel(c, t, "订阅地址", "")
+					ui.TextInput(c, &e.url).Label("订阅地址").Placeholder(urlPlaceholder).
+						Disabled(e.busy || e.fileBusy || !e.sourceLoaded).OnSubmit(d.submitEditor)
+					ui.Text(c, hint).FontSize(fontCaption).TextColor(t.TextMuted)
+				}
 				fieldLabel(c, t, "分流规则", "")
-				ui.Box(c).Disabled(e.busy || !e.sourceLoaded).Children(func() {
+				ui.Box(c).Disabled(e.busy || e.fileBusy || !e.sourceLoaded).Children(func() {
 					slidingSwitch(c, "rules", &e.rulesIndex, ruleLabels, pageSwitchStyle(t, ruleSegmentWidth), func(int) {})
 				})
 				ui.Text(c, ruleHints[e.rulesIndex]).FontSize(fontCaption).TextColor(t.TextMuted)
@@ -750,12 +856,105 @@ func (d *Dashboard) editorForm(c *ui.Context, t *ui.Theme) {
 				ui.Text(c, e.err).FontSize(fontSecondary).TextColor(t.Danger)
 			}
 		})
+		submitDisabled := e.busy || e.fileBusy || !e.sourceLoaded
+		if local {
+			submitDisabled = submitDisabled || (e.editingID == "" && strings.TrimSpace(e.content) == "")
+		} else {
+			submitDisabled = submitDisabled || strings.TrimSpace(e.url) == ""
+		}
 		ui.Row(c).Gap(gapSmall).Justify(ui.End).Children(func() {
 			button(c, buttonSpec{label: "取消", style: softButton(t), disabled: e.busy}, func() { s.editorOpen = false })
 			button(c, buttonSpec{label: submit, style: primaryButton(t), busy: e.busy,
-				disabled: e.busy || !e.sourceLoaded || strings.TrimSpace(e.url) == ""}, d.submitEditor)
+				disabled: submitDisabled}, d.submitEditor)
 		})
 	})
+}
+
+// chooseLocalFile opens the system file picker and reads the chosen config
+// into the editor. Only the content and the file's base name are kept: the
+// path is shown while the dialog is open and never stored.
+func (d *Dashboard) chooseLocalFile(seq int) {
+	s := &d.subscription
+	e := &s.editor
+	if e.fileBusy || e.busy || !e.sourceLoaded {
+		return
+	}
+	e.fileBusy, e.err = true, ""
+	go func() {
+		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
+			Title:       "选择配置文件",
+			ButtonLabel: "选择",
+			Filters: []mygo.FileFilter{
+				{Name: "配置文件", Extensions: []string{"yaml", "yml", "txt", "conf"}},
+				{Name: "所有文件", Extensions: []string{"*"}},
+			},
+		})
+		var content []byte
+		var name, problem string
+		switch {
+		case err != nil:
+			problem = "打开文件选择器失败：" + err.Error()
+		case len(paths) > 0:
+			name = filepath.Base(paths[0])
+			content, err = readLocalConfig(paths[0])
+			if err != nil {
+				problem = err.Error()
+			}
+		}
+		d.opWin.Update(func() {
+			s := &d.subscription
+			e := &s.editor
+			if e.seq != seq || !s.editorOpen {
+				return
+			}
+			e.fileBusy = false
+			if problem != "" {
+				e.err = problem
+				return
+			}
+			if name == "" {
+				// The picker was canceled.
+				return
+			}
+			e.content, e.fileName = string(content), name
+			if strings.TrimSpace(e.name) == "" {
+				e.name = strings.TrimSuffix(name, filepath.Ext(name))
+			}
+		})
+	}()
+}
+
+// readLocalConfig reads a config the user chose, held to the same size limit
+// as a download. Errors name the file by its base name only.
+func readLocalConfig(path string) (content []byte, err error) {
+	name := filepath.Base(path)
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("打开「%s」失败：%w", name, fileCause(err))
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("关闭「%s」失败：%w", name, fileCause(closeErr)))
+		}
+	}()
+	content, err = io.ReadAll(io.LimitReader(file, service.MaxProfileSize+1))
+	if err != nil {
+		return nil, fmt.Errorf("读取「%s」失败：%w", name, fileCause(err))
+	}
+	if len(content) > service.MaxProfileSize {
+		return nil, fmt.Errorf("「%s」超过 %d MB，未读取。", name, service.MaxProfileSize>>20)
+	}
+	return content, nil
+}
+
+// fileCause drops the path a file error carries, so a message names the file
+// by its base name only.
+func fileCause(err error) error {
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) {
+		return pathErr.Err
+	}
+	return err
 }
 
 // deleteDialog confirms deleting a subscription, asking for its successor when
@@ -818,6 +1017,9 @@ func (d *Dashboard) deleteForm(c *ui.Context, t *ui.Theme) {
 		})
 	})
 }
+
+// sourceLabels name service.ProfileSources, index for index.
+var sourceLabels = []string{"订阅链接", "本地配置"}
 
 // ruleLabels name service.RuleSources, index for index; ruleHints say what
 // each does, in the same order.

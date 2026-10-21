@@ -63,7 +63,7 @@ func TestHopRulesTemplate(t *testing.T) {
 
 	// A link list has no rules of its own: asked for the provider's, it
 	// runs with Hop's template.
-	if err := h.service.Add(ctx, model.SubscriptionInput{Rules: model.RulesProvider, URL: p.link("/links")}); err != nil {
+	if err := h.service.Add(ctx, model.SubscriptionInput{Source: model.SourceRemote, Rules: model.RulesProvider, URL: p.link("/links")}); err != nil {
 		t.Fatalf("add link list: %v", err)
 	}
 	view, err := h.service.List(ctx)
@@ -110,7 +110,7 @@ func TestHopRulesTemplate(t *testing.T) {
 
 	// A Clash profile switched to Hop's template keeps its nodes and loses
 	// its own groups.
-	if err := h.service.Add(ctx, model.SubscriptionInput{Rules: model.RulesProvider, URL: p.link("/a")}); err != nil {
+	if err := h.service.Add(ctx, model.SubscriptionInput{Source: model.SourceRemote, Rules: model.RulesProvider, URL: p.link("/a")}); err != nil {
 		t.Fatalf("add clash profile: %v", err)
 	}
 	view, err = h.service.List(ctx)

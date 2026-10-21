@@ -5,6 +5,7 @@ package handler
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -197,14 +198,25 @@ type subscriptionEditor struct {
 	// or at once when adding.
 	original     model.SubscriptionInput
 	sourceLoaded bool
+	// sourceIndex is the chosen source, an index of service.ProfileSources.
+	// Editing keeps the stored one: a profile cannot change source.
+	sourceIndex int
 	// name and url are the fields being edited; rulesIndex is the rule
 	// source chosen, an index of service.RuleSources.
 	name       string
 	url        string
 	rulesIndex int
-	// busy is set while Add or Edit runs; err is the form's last error.
-	busy bool
-	err  string
+	// content holds a pasted config or the text read from a file; fileName is
+	// the base name of the file it came from, shown only while the dialog is
+	// open and never stored. Editing a local profile leaves content empty to
+	// keep what is stored.
+	content  string
+	fileName string
+	// fileBusy is set while the file picker or the read runs; busy is set
+	// while Add or Edit runs; err is the form's last error.
+	fileBusy bool
+	busy     bool
+	err      string
 }
 
 // deleteDialogState is the state of the delete confirmation.
@@ -452,8 +464,10 @@ func (d *Dashboard) Start(ctx context.Context, win Updater) {
 		})
 	}
 	d.refreshAllSubscriptions = func() {
-		if d.controlsLocked() || d.subscription.listBusy ||
-			len(d.subscription.view.Items) == 0 {
+		refreshable := slices.ContainsFunc(d.subscription.view.Items, func(item model.SubscriptionSummary) bool {
+			return item.Source == model.SourceRemote
+		})
+		if d.controlsLocked() || d.subscription.listBusy || !refreshable {
 			return
 		}
 		hasActive := d.subscription.view.ActiveID != ""

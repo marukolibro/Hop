@@ -69,9 +69,13 @@ on this machine while developing Hop. Hop must never interfere with it.
   kept at the bundled core's version) and always runs with the template;
   links never go to a third-party conversion service. The template's rules
   use only the shipped geodata, which main seeds into the core's home and
-  into the config checks' directory.
-- The subscription link is a credential. Never log it, print it, put it in
-  errors (use `subscription.Redact` / host only), or paste it into chat.
+  into the config checks' directory. A profile the user adds from a local
+  file or pasted text goes through exactly the same reading, whitelist and
+  core test; Hop keeps a copy (0600, atomic) and never refreshes it, so the
+  original file may move or vanish.
+- The subscription link is a credential, and so is a local profile's content
+  (it carries node passwords). Never log either, print it, put it in errors
+  (use `subscription.Redact` / host or file name only), or paste it into chat.
 - Hop's data lives in `~/Library/Application Support/hop/` (files mode 0600).
 
 ## Architecture

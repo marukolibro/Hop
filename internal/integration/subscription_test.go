@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"maps"
 	"net/http"
@@ -241,7 +242,7 @@ func TestSubscriptionsEndToEnd(t *testing.T) {
 	assertGroups(ctx, t, h.client, map[string]int{"Hop": 2})
 
 	// The first subscription: adding it also runs it.
-	if err := h.service.Add(ctx, model.SubscriptionInput{Rules: model.RulesProvider, URL: p.link("/a")}); err != nil {
+	if err := h.service.Add(ctx, model.SubscriptionInput{Source: model.SourceRemote, Rules: model.RulesProvider, URL: p.link("/a")}); err != nil {
 		t.Fatalf("add first: %v", err)
 	}
 	assertGroups(ctx, t, h.client, map[string]int{"Proxy": 5, "Streaming": 2})
@@ -258,7 +259,7 @@ func TestSubscriptionsEndToEnd(t *testing.T) {
 	aID := view.Items[0].ID
 
 	// A second subscription: stored only, the running line never switches.
-	if err := h.service.Add(ctx, model.SubscriptionInput{Rules: model.RulesProvider, URL: p.link("/b")}); err != nil {
+	if err := h.service.Add(ctx, model.SubscriptionInput{Source: model.SourceRemote, Rules: model.RulesProvider, URL: p.link("/b")}); err != nil {
 		t.Fatalf("add second: %v", err)
 	}
 	assertGroups(ctx, t, h.client, map[string]int{"Proxy": 5, "Streaming": 2})
@@ -270,14 +271,14 @@ func TestSubscriptionsEndToEnd(t *testing.T) {
 
 	// The very same link cannot be added twice; different links on the same host
 	// can (A and B share one).
-	dupErr := h.service.Add(ctx, model.SubscriptionInput{Rules: model.RulesProvider, URL: p.link("/a")})
+	dupErr := h.service.Add(ctx, model.SubscriptionInput{Source: model.SourceRemote, Rules: model.RulesProvider, URL: p.link("/a")})
 	if dupErr == nil {
 		t.Fatal("adding the same link twice succeeded")
 	}
 	if strings.Contains(dupErr.Error(), linkToken) {
 		t.Fatalf("duplicate error leaks the token: %v", dupErr)
 	}
-	badErr := h.service.Add(ctx, model.SubscriptionInput{Rules: model.RulesProvider, URL: p.server.URL + "/missing?token=" + linkToken})
+	badErr := h.service.Add(ctx, model.SubscriptionInput{Source: model.SourceRemote, Rules: model.RulesProvider, URL: p.server.URL + "/missing?token=" + linkToken})
 	if badErr == nil {
 		t.Fatal("adding an unknown subscription succeeded")
 	}
@@ -420,13 +421,227 @@ func TestSubscriptionsEndToEnd(t *testing.T) {
 
 	// A subscription the core's own test rejects is refused at add time, and the
 	// core stays as it is.
-	if err := h.service.Add(ctx, model.SubscriptionInput{Rules: model.RulesProvider, URL: p.link("/broken")}); err == nil {
+	if err := h.service.Add(ctx, model.SubscriptionInput{Source: model.SourceRemote, Rules: model.RulesProvider, URL: p.link("/broken")}); err == nil {
 		t.Fatal("adding a subscription the core rejects succeeded")
 	}
 	if view = listView(ctx, t, h.service); len(view.Items) != 0 {
 		t.Fatalf("view = %+v, the rejected add was stored", view)
 	}
 	assertGroups(ctx, t, h.client, map[string]int{"Hop": 2})
+
+	stopCore()
+	if err := core.Wait(); err != nil {
+		t.Errorf("stop core: %v", err)
+	}
+}
+
+// TestLocalProfilesEndToEnd stores a Clash profile from pasted text and a link
+// list from a paste, runs both, and checks that a local profile is never
+// refreshed, recorded as attempted or given a usage line.
+func TestLocalProfilesEndToEnd(t *testing.T) {
+	h := newHarness(t, t.TempDir())
+	seedGeodata(t, h)
+	p := newProvider(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	coreCtx, stopCore := context.WithCancel(ctx)
+	core := h.startCore(t, coreCtx)
+
+	// A local Clash profile with no name takes the local label and runs at
+	// once, as the first subscription does.
+	if err := h.service.Add(ctx, model.SubscriptionInput{
+		Source: model.SourceLocal, Rules: model.RulesProvider, Content: []byte(profileB),
+	}); err != nil {
+		t.Fatalf("add local clash profile: %v", err)
+	}
+	assertGroups(ctx, t, h.client, map[string]int{"Backup": 3})
+	view := listView(ctx, t, h.service)
+	if len(view.Items) != 1 || view.ActiveID != view.Items[0].ID {
+		t.Fatalf("view = %+v, want the local profile in use", view)
+	}
+	clashID := view.Items[0].ID
+	if got := view.Items[0]; got.Source != model.SourceLocal || got.Host != "" || got.HasUsage || got.Name != service.LocalProfileName {
+		t.Fatalf("local summary = %+v, want local, no host or usage, and the local label", got)
+	}
+	clashEntry, found, err := h.store.Get(clashID)
+	if err != nil || !found {
+		t.Fatalf("get local clash profile: %v, %v", found, err)
+	}
+	if clashEntry.URL != "" || clashEntry.UserInfo != "" || !clashEntry.AttemptedAt.IsZero() || string(clashEntry.Raw) != profileB {
+		t.Fatalf("stored local profile = %+v, want the body, no link, usage or attempt", clashEntry)
+	}
+
+	// A remote subscription beside it is stored only: the running local profile
+	// stays.
+	if err := h.service.Add(ctx, model.SubscriptionInput{Source: model.SourceRemote, Rules: model.RulesProvider, URL: p.link("/a")}); err != nil {
+		t.Fatalf("add remote beside local: %v", err)
+	}
+	view = listView(ctx, t, h.service)
+	if len(view.Items) != 2 || view.ActiveID != clashID {
+		t.Fatalf("view = %+v, want the local profile still in use", view)
+	}
+	remoteID := view.Items[1].ID
+	assertGroups(ctx, t, h.client, map[string]int{"Backup": 3})
+
+	// A pasted link list is stored too; having no rules of its own, it runs
+	// Hop's template.
+	if err := h.service.Add(ctx, model.SubscriptionInput{
+		Source: model.SourceLocal, Name: "粘贴的节点", Rules: model.RulesProvider, Content: []byte(linkListBody),
+	}); err != nil {
+		t.Fatalf("add pasted link list: %v", err)
+	}
+	view = listView(ctx, t, h.service)
+	if len(view.Items) != 3 {
+		t.Fatalf("view = %+v, want three profiles", view)
+	}
+	linksID := view.Items[2].ID
+	if got := summaryByID(view, linksID); got.Source != model.SourceLocal || got.Rules != model.RulesHop || got.Host != "" || got.Name != "粘贴的节点" {
+		t.Fatalf("pasted link list summary = %+v, want local, Hop's rules and its name", got)
+	}
+	assertGroups(ctx, t, h.client, map[string]int{"Backup": 3})
+
+	// Switching to it is offline and runs the template.
+	hitsA := p.hit("/a")
+	if err := h.service.Use(ctx, linksID); err != nil {
+		t.Fatalf("use pasted link list: %v", err)
+	}
+	if counts := groupCounts(ctx, t, h.client); counts["节点选择"] == 0 {
+		t.Fatalf("groups = %v, want Hop's template over the pasted nodes", counts)
+	}
+	if p.hit("/a") != hitsA {
+		t.Fatalf("switching to a local profile downloaded a subscription")
+	}
+
+	// Refreshing a local profile is refused and leaves its record alone.
+	before, found, err := h.store.Get(linksID)
+	if err != nil || !found {
+		t.Fatalf("get pasted link list: %v, %v", found, err)
+	}
+	if err := h.service.Update(ctx, linksID); !errors.Is(err, service.ErrLocalProfile) {
+		t.Fatalf("update local profile = %v, want ErrLocalProfile", err)
+	}
+	after, found, err := h.store.Get(linksID)
+	if err != nil || !found {
+		t.Fatalf("get pasted link list after update: %v, %v", found, err)
+	}
+	if !after.AttemptedAt.IsZero() || !after.UpdatedAt.Equal(before.UpdatedAt) {
+		t.Fatalf("refused local refresh changed its record: %+v -> %+v", before, after)
+	}
+
+	// UpdateAll and AutoUpdate refresh the remote one only and record no
+	// attempt for the local ones.
+	if err := h.service.UpdateAll(ctx); err != nil {
+		t.Fatalf("update all: %v", err)
+	}
+	if p.hit("/a") != hitsA+1 {
+		t.Fatalf("UpdateAll fetched /a %d times, want once", p.hit("/a")-hitsA)
+	}
+	attempted, err := h.service.AutoUpdate(ctx, time.Nanosecond)
+	if err != nil || !attempted {
+		t.Fatalf("AutoUpdate = %v, %v, want the remote profile attempted", attempted, err)
+	}
+	if p.hit("/a") != hitsA+2 {
+		t.Fatalf("AutoUpdate fetched /a %d times, want one more", p.hit("/a")-hitsA-1)
+	}
+	for _, id := range []string{clashID, linksID} {
+		entry, found, err := h.store.Get(id)
+		if err != nil || !found {
+			t.Fatalf("get local profile %s: %v, %v", id, found, err)
+		}
+		if !entry.AttemptedAt.IsZero() {
+			t.Fatalf("local profile %s recorded a refresh attempt at %v", id, entry.AttemptedAt)
+		}
+	}
+
+	// Restart: the local body is all the core needs and no request is made.
+	hitsA = p.hit("/a")
+	stopCore()
+	if err := core.Wait(); err != nil {
+		t.Fatalf("stop core: %v", err)
+	}
+	coreCtx, stopCore = context.WithCancel(ctx)
+	core = h.startCore(t, coreCtx)
+	if counts := groupCounts(ctx, t, h.client); counts["节点选择"] == 0 {
+		t.Fatalf("groups after restart = %v, want the stored local profile", counts)
+	}
+	if p.hit("/a") != hitsA {
+		t.Fatalf("restarting downloaded a subscription")
+	}
+
+	// The local Clash profile runs again, then its content is replaced while it
+	// is in use: the new body is checked, applied and stored with no link.
+	if err := h.service.Use(ctx, clashID); err != nil {
+		t.Fatalf("use local clash profile: %v", err)
+	}
+	assertGroups(ctx, t, h.client, map[string]int{"Backup": 3})
+	source, err := h.service.Source(ctx, clashID)
+	if err != nil {
+		t.Fatalf("source: %v", err)
+	}
+	if source.Source != model.SourceLocal || source.URL != "" || source.Name != service.LocalProfileName || len(source.Content) != 0 {
+		t.Fatalf("Source = %+v, want name and source only", source)
+	}
+	if err := h.service.Edit(ctx, clashID, model.SubscriptionInput{
+		Source: model.SourceLocal, Name: "自己写的配置", Rules: model.RulesProvider, Content: []byte(profileA),
+	}); err != nil {
+		t.Fatalf("replace local content: %v", err)
+	}
+	assertGroups(ctx, t, h.client, map[string]int{"Proxy": 5, "Streaming": 2})
+	edited, found, err := h.store.Get(clashID)
+	if err != nil || !found {
+		t.Fatalf("get edited local profile: %v, %v", found, err)
+	}
+	if string(edited.Raw) != profileA || edited.URL != "" || edited.Source != model.SourceLocal || edited.UserInfo != "" {
+		t.Fatalf("edited local profile = %+v, want the new body and no link or usage", edited)
+	}
+	if got := summaryByID(listView(ctx, t, h.service), clashID); got.Name != "自己写的配置" {
+		t.Fatalf("edited name = %q", got.Name)
+	}
+
+	// A name-only edit keeps the content and the runtime; a rules change
+	// reloads the stored body.
+	if err := h.service.Edit(ctx, clashID, model.SubscriptionInput{
+		Source: model.SourceLocal, Name: "改名后", Rules: model.RulesProvider,
+	}); err != nil {
+		t.Fatalf("rename local profile: %v", err)
+	}
+	assertGroups(ctx, t, h.client, map[string]int{"Proxy": 5, "Streaming": 2})
+	renamed, found, err := h.store.Get(clashID)
+	if err != nil || !found {
+		t.Fatalf("get renamed local profile: %v, %v", found, err)
+	}
+	if string(renamed.Raw) != profileA || renamed.Name != "改名后" {
+		t.Fatalf("renamed local profile = %+v, want the same body and the new name", renamed)
+	}
+	if err := h.service.Edit(ctx, clashID, model.SubscriptionInput{
+		Source: model.SourceLocal, Name: "改名后", Rules: model.RulesHop,
+	}); err != nil {
+		t.Fatalf("switch local rules: %v", err)
+	}
+	if counts := groupCounts(ctx, t, h.client); counts["节点选择"] == 0 {
+		t.Fatalf("groups = %v, want Hop's template after the rule switch", counts)
+	}
+
+	// Empty, blank and broken content is refused, and so is a source change.
+	if err := h.service.Add(ctx, model.SubscriptionInput{Source: model.SourceLocal, Rules: model.RulesProvider}); err == nil {
+		t.Fatal("adding an empty local config succeeded")
+	}
+	if err := h.service.Add(ctx, model.SubscriptionInput{Source: model.SourceLocal, Rules: model.RulesProvider, Content: []byte(" \n ")}); err == nil {
+		t.Fatal("adding a blank local config succeeded")
+	}
+	sizeErr := h.service.Add(ctx, model.SubscriptionInput{Source: model.SourceLocal, Rules: model.RulesProvider, Content: make([]byte, service.MaxProfileSize+1)})
+	if sizeErr == nil || !strings.Contains(sizeErr.Error(), "larger than") {
+		t.Fatalf("adding an over-limit local config = %v, want the size limit", sizeErr)
+	}
+	if err := h.service.Add(ctx, model.SubscriptionInput{Source: model.SourceLocal, Rules: model.RulesProvider, Content: []byte(profileBroken)}); err == nil {
+		t.Fatal("adding a local config the core rejects succeeded")
+	}
+	if err := h.service.Edit(ctx, clashID, model.SubscriptionInput{Source: model.SourceRemote, Name: "x", Rules: model.RulesProvider, URL: p.link("/b")}); err == nil {
+		t.Fatal("changing a profile's source succeeded")
+	}
+	if got := summaryByID(listView(ctx, t, h.service), remoteID); got.Source != model.SourceRemote || got.Host == "" || !got.HasUsage {
+		t.Fatalf("remote summary = %+v, want its host and usage still", got)
+	}
 
 	stopCore()
 	if err := core.Wait(); err != nil {
@@ -458,8 +673,8 @@ func TestLegacyStoreMigration(t *testing.T) {
 	if len(entries) != 1 || activeID != entries[0].ID {
 		t.Fatalf("entries = %+v active %q, want the legacy one in use", entries, activeID)
 	}
-	if entries[0].URL != link || entries[0].Name != strings.TrimPrefix(dead.URL, "http://") {
-		t.Fatalf("migrated entry = %+v, want the legacy link and its host as name", entries[0])
+	if entries[0].Source != model.SourceRemote || entries[0].URL != link || entries[0].Name != strings.TrimPrefix(dead.URL, "http://") {
+		t.Fatalf("migrated entry = %+v, want the legacy link, its host as name and a remote source", entries[0])
 	}
 	migrated, found, err := h.store.Get(activeID)
 	if err != nil || !found {
@@ -475,6 +690,41 @@ func TestLegacyStoreMigration(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(appDir, "subscription.yaml")); !os.IsNotExist(err) {
 		t.Fatalf("legacy file survived migration: %v", err)
+	}
+
+	// An index written before local profiles existed has no source field:
+	// every entry in it is a downloaded subscription.
+	indexPath := filepath.Join(appDir, "subscriptions", "index.json")
+	rawIndex, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("read index: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(rawIndex, &doc); err != nil {
+		t.Fatalf("decode index: %v", err)
+	}
+	stored, ok := doc["entries"].([]any)
+	if !ok || len(stored) != 1 {
+		t.Fatalf("index entries = %v, want one", doc["entries"])
+	}
+	storedEntry, ok := stored[0].(map[string]any)
+	if !ok {
+		t.Fatalf("index entry = %v, want an object", stored[0])
+	}
+	delete(storedEntry, "source")
+	rawIndex, err = json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("encode index: %v", err)
+	}
+	if err := os.WriteFile(indexPath, rawIndex, 0o600); err != nil {
+		t.Fatalf("write index without source: %v", err)
+	}
+	entries, activeID, err = h.store.Entries()
+	if err != nil {
+		t.Fatalf("entries without source: %v", err)
+	}
+	if len(entries) != 1 || activeID != entries[0].ID || entries[0].Source != model.SourceRemote {
+		t.Fatalf("entries = %+v active %q, want the old entry as remote", entries, activeID)
 	}
 
 	// Restart does not re-download: the link's host is dead, the core runs the

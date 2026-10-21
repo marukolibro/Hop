@@ -41,7 +41,9 @@ touching its settings, ports or files.
 - **Subscriptions.** Keep several, switch between them, refresh on a schedule.
   Shows usage and expiry. Accepts Clash profiles and plain node-link lists
   (ss, vmess, vless, trojan, hysteria2, tuic, anytls, ...), converted locally
-  with the core's own converter, never by a third-party service.
+  with the core's own converter, never by a third-party service. A profile can
+  also come from a local Clash file or pasted text; Hop keeps a copy, so it
+  needs no refresh and the original file can move or vanish.
 - **Smart rules.** Per subscription, use the provider's rules or Hop's: AI,
   streaming, Telegram, Google, Apple and Microsoft groups, region groups, and
   China-direct routing from bundled geodata that updates weekly. Add your own

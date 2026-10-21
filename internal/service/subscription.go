@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"errors"
@@ -24,6 +25,22 @@ const rollbackTimeout = 10 * time.Second
 // ErrNoSubscription is returned when an update is asked for before any
 // subscription was added.
 var ErrNoSubscription = errors.New("no subscription has been added yet")
+
+// ErrLocalProfile is returned when a refresh is asked of a profile the user
+// added from a file or pasted text: it has no link to download.
+var ErrLocalProfile = errors.New("a local profile has no link to refresh")
+
+// LocalProfileName names a local profile the user left unnamed and did not
+// read from a file.
+const LocalProfileName = "本地配置"
+
+// MaxProfileSize is the largest profile Hop accepts, from a link or from a
+// local file or pasted text, in bytes.
+const MaxProfileSize = subscription.MaxSize
+
+// ProfileSources are where a profile can come from, in the order the editor
+// shows them.
+var ProfileSources = []model.SubscriptionSource{model.SourceRemote, model.SourceLocal}
 
 // Downloader fetches the profile behind a subscription link.
 type Downloader interface {
@@ -116,9 +133,10 @@ func (s *SubscriptionService) List(ctx context.Context) (model.SubscriptionsView
 	return model.SubscriptionsView{Items: items, ActiveID: activeID}, nil
 }
 
-// Source returns what the edit dialog starts from: the row's name, link and
-// rule source. The link is a credential, so it goes only to the dialog that
-// edits it.
+// Source returns what the edit dialog starts from: the row's name, source and
+// rule source, and a remote profile's link. The link is a credential, so it
+// goes only to the dialog that edits it. A local profile's content stays in
+// the store: the dialog replaces it with what the user pastes or picks.
 func (s *SubscriptionService) Source(ctx context.Context, id string) (model.SubscriptionInput, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -130,12 +148,18 @@ func (s *SubscriptionService) Source(ctx context.Context, id string) (model.Subs
 	if index < 0 {
 		return model.SubscriptionInput{}, unknownSubscription(id)
 	}
-	return model.SubscriptionInput{Name: entries[index].Name, URL: entries[index].URL, Rules: entries[index].Rules}, nil
+	entry := entries[index]
+	input := model.SubscriptionInput{Name: entry.Name, Source: entry.Source, Rules: entry.Rules}
+	if entry.Source == model.SourceRemote {
+		input.URL = entry.URL
+	}
+	return input, nil
 }
 
-// Add stores a new subscription downloaded from input's link. The first one also
-// becomes the line the core runs; after that, adding only stores — it never
-// switches the running subscription.
+// Add stores a new profile: a subscription downloaded from input's link, or a
+// config the user read from a local file or pasted. The first one also becomes
+// the line the core runs; after that, adding only stores — it never switches
+// the running profile.
 func (s *SubscriptionService) Add(ctx context.Context, input model.SubscriptionInput) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -147,14 +171,23 @@ func (s *SubscriptionService) Add(ctx context.Context, input model.SubscriptionI
 	if err != nil {
 		return err
 	}
+	if normalized.Source == model.SourceLocal {
+		return s.addLocal(ctx, normalized, entries, activeID)
+	}
+	return s.addRemote(ctx, normalized, entries, activeID)
+}
+
+// addRemote downloads input's link and stores it. The first profile also
+// becomes the one the core runs.
+func (s *SubscriptionService) addRemote(ctx context.Context, input model.SubscriptionInput, entries []model.Subscription, activeID string) error {
 	for _, entry := range entries {
-		if entry.URL == normalized.URL {
+		if entry.URL == input.URL {
 			return fmt.Errorf("the subscription from %s is already added", hostOf(entry.URL))
 		}
 	}
-	download, err := s.downloader.Fetch(ctx, normalized.URL)
+	download, err := s.downloader.Fetch(ctx, input.URL)
 	if err != nil {
-		return redactedError(err, normalized.URL)
+		return redactedError(err, input.URL)
 	}
 	if err := checkUsage(download.UserInfo); err != nil {
 		return err
@@ -163,15 +196,44 @@ func (s *SubscriptionService) Add(ctx context.Context, input model.SubscriptionI
 	if err != nil {
 		return err
 	}
-	rules, err := RulesFor(download.Body, normalized.Rules)
+	rules, err := RulesFor(download.Body, input.Rules)
 	if err != nil {
 		return err
 	}
 	now := time.Now()
 	entry := model.Subscription{
-		ID: id, Name: normalized.Name, URL: normalized.URL,
+		ID: id, Name: input.Name, Source: model.SourceRemote, URL: input.URL,
 		Raw: download.Body, UserInfo: download.UserInfo, UpdatedAt: now, AttemptedAt: now, Rules: rules,
 	}
+	return s.importProfile(ctx, entry, entries, activeID)
+}
+
+// addLocal stores a config the user read from a file or pasted. It goes
+// through the same reading, filter and core test as a download; nothing is
+// fetched afterwards.
+func (s *SubscriptionService) addLocal(ctx context.Context, input model.SubscriptionInput, entries []model.Subscription, activeID string) error {
+	if err := checkLocalContent(input.Content); err != nil {
+		return err
+	}
+	id, err := profile.NewID()
+	if err != nil {
+		return err
+	}
+	rules, err := RulesFor(input.Content, input.Rules)
+	if err != nil {
+		return err
+	}
+	entry := model.Subscription{
+		ID: id, Name: input.Name, Source: model.SourceLocal,
+		Raw: input.Content, UpdatedAt: time.Now(), Rules: rules,
+	}
+	return s.importProfile(ctx, entry, entries, activeID)
+}
+
+// importProfile checks a new entry against the core and stores it, making it
+// the one the core runs when nothing is stored yet. The caller holds the
+// service lock.
+func (s *SubscriptionService) importProfile(ctx context.Context, entry model.Subscription, entries []model.Subscription, activeID string) error {
 	settings, err := s.liveSettings(ctx)
 	if err != nil {
 		return err
@@ -185,7 +247,7 @@ func (s *SubscriptionService) Add(ctx context.Context, input model.SubscriptionI
 	}
 	updated := append(entries, entry)
 	if activeID != "" {
-		// A subscription is already running: store the new one, the core keeps
+		// A profile is already running: store the new one, the core keeps
 		// running what it runs.
 		return s.commit(updated, activeID, entry.ID, entry.Raw)
 	}
@@ -196,9 +258,23 @@ func (s *SubscriptionService) Add(ctx context.Context, input model.SubscriptionI
 	return s.switchCore(ctx, config, previous, updated, entry.ID, entry.ID, entry.Raw)
 }
 
-// Edit changes what a stored subscription is called and where it is downloaded
-// from. A new link is fetched and checked like a fresh add before anything is
-// replaced; a name alone downloads nothing and never touches the core.
+// checkLocalContent checks content the user added by hand: it must not be
+// empty and is held to the same size limit as a download.
+func checkLocalContent(content []byte) error {
+	if len(bytes.TrimSpace(content)) == 0 {
+		return errors.New("the local config is empty")
+	}
+	if len(content) > MaxProfileSize {
+		return fmt.Errorf("the local config is larger than %d bytes", MaxProfileSize)
+	}
+	return nil
+}
+
+// Edit changes a stored profile's name and rules; a remote profile's link, or
+// a local profile's content, can be replaced too. A replacement is read,
+// filtered and checked like a fresh add before anything is replaced; a name or
+// rule change alone replaces nothing. A profile's source cannot change: the
+// editor offers no switch, and this refuses one.
 func (s *SubscriptionService) Edit(ctx context.Context, id string, input model.SubscriptionInput) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -215,6 +291,12 @@ func (s *SubscriptionService) Edit(ctx context.Context, id string, input model.S
 		return unknownSubscription(id)
 	}
 	entry := entries[index]
+	if entry.Source != normalized.Source {
+		return fmt.Errorf("a profile's source cannot change from %q to %q: remove it and add it again", entry.Source, normalized.Source)
+	}
+	if entry.Source == model.SourceLocal {
+		return s.editLocal(ctx, entries, index, activeID, normalized)
+	}
 
 	if entry.URL == normalized.URL {
 		return s.editStored(ctx, entries, index, activeID, normalized)
@@ -249,7 +331,7 @@ func (s *SubscriptionService) Edit(ctx context.Context, id string, input model.S
 	}
 	now := time.Now()
 	fresh := model.Subscription{
-		ID: entry.ID, Name: normalized.Name, URL: normalized.URL,
+		ID: entry.ID, Name: normalized.Name, Source: model.SourceRemote, URL: normalized.URL,
 		Raw: download.Body, UserInfo: download.UserInfo, UpdatedAt: now, AttemptedAt: now, Rules: rules,
 	}
 	if fresh.ID != activeID {
@@ -317,6 +399,70 @@ func (s *SubscriptionService) editStored(ctx context.Context, entries []model.Su
 	return s.switchCore(ctx, config, previous, entries, activeID, "", nil)
 }
 
+// editLocal applies an edit that keeps the profile local: a new name, new
+// rules, new content, or any of them together. Empty content keeps the stored
+// one, so renaming reads and applies nothing; a rule or content change of the
+// profile the core runs reloads it.
+func (s *SubscriptionService) editLocal(ctx context.Context, entries []model.Subscription, index int, activeID string, input model.SubscriptionInput) error {
+	entry := entries[index]
+	stored, found, err := s.store.Get(entry.ID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return unknownSubscription(entry.ID)
+	}
+	raw, replaced := stored.Raw, false
+	if len(input.Content) > 0 && !bytes.Equal(input.Content, stored.Raw) {
+		if err := checkLocalContent(input.Content); err != nil {
+			return err
+		}
+		raw, replaced = input.Content, true
+	}
+	rules, err := RulesFor(raw, input.Rules)
+	if err != nil {
+		return err
+	}
+	if entry.Name == input.Name && entry.Rules == rules && !replaced {
+		return nil
+	}
+	previousRules := entry.Rules
+	entry.Name, entry.Rules, entry.Source = input.Name, rules, model.SourceLocal
+	if replaced {
+		entry.Raw = raw
+		entry.UpdatedAt = time.Now()
+	}
+	entries[index] = entry
+	if entry.ID != activeID {
+		if replaced {
+			return s.commit(entries, activeID, entry.ID, entry.Raw)
+		}
+		return s.store.Commit(entries, activeID)
+	}
+	if previousRules == rules && !replaced {
+		return s.store.Commit(entries, activeID)
+	}
+	settings, err := s.liveSettings(ctx)
+	if err != nil {
+		return err
+	}
+	config, err := s.runtimeConfig(raw, rules, settings)
+	if err != nil {
+		return err
+	}
+	if err := s.validate(ctx, config); err != nil {
+		return err
+	}
+	previous, err := s.runtimeConfig(stored.Raw, previousRules, settings)
+	if err != nil {
+		return err
+	}
+	if !replaced {
+		return s.switchCore(ctx, config, previous, entries, activeID, "", nil)
+	}
+	return s.switchCore(ctx, config, previous, entries, activeID, entry.ID, entry.Raw)
+}
+
 // Use makes the core run the stored subscription id. Switching is offline: it
 // runs exactly the body that was kept.
 func (s *SubscriptionService) Use(ctx context.Context, id string) error {
@@ -369,7 +515,8 @@ func (s *SubscriptionService) Use(ctx context.Context, id string) error {
 }
 
 // Update downloads the subscription id's link again. When any step fails, the
-// row keeps its last successful body and time, with the failure noted on it.
+// row keeps its last successful body and time, with the failure noted on it. A
+// local profile has no link: it returns ErrLocalProfile and is left untouched.
 func (s *SubscriptionService) Update(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -378,7 +525,7 @@ func (s *SubscriptionService) Update(ctx context.Context, id string) error {
 
 // UpdateAll refreshes every stored subscription. One failing does not stop the
 // others: its row keeps its last success and notes the cause, and every failure
-// is returned joined.
+// is returned joined. A local profile has no link and is skipped, untouched.
 func (s *SubscriptionService) UpdateAll(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -391,6 +538,9 @@ func (s *SubscriptionService) UpdateAll(ctx context.Context) error {
 	}
 	var failures []error
 	for _, entry := range entries {
+		if entry.Source == model.SourceLocal {
+			continue
+		}
 		if err := s.refresh(ctx, entry.ID); err != nil {
 			failures = append(failures, fmt.Errorf("refresh %s: %w", entry.Name, err))
 		}
@@ -399,7 +549,8 @@ func (s *SubscriptionService) UpdateAll(ctx context.Context) error {
 }
 
 // AutoUpdate refreshes every stored subscription that is due, by the times
-// the store keeps: the last success and the last attempt. A failed refresh
+// the store keeps: the last success and the last attempt. A local profile is
+// never due: it has no link, and no attempt is recorded for it. A failed refresh
 // moves the attempt time, so it is retried after a whole interval rather than
 // at every check, and a Mac waking from sleep catches up at the first check
 // after the interval, not a full ticker period later. interval <= 0 turns the
@@ -423,6 +574,10 @@ func (s *SubscriptionService) AutoUpdate(ctx context.Context, interval time.Dura
 	for _, entry := range entries {
 		if ctx.Err() != nil {
 			break
+		}
+		if entry.Source == model.SourceLocal {
+			// No link, no refresh: a local profile never takes an attempt.
+			continue
 		}
 		last := entry.UpdatedAt
 		if entry.AttemptedAt.After(last) {
@@ -651,6 +806,9 @@ func (s *SubscriptionService) refresh(ctx context.Context, id string) error {
 	if !found {
 		return unknownSubscription(id)
 	}
+	if entry.Source == model.SourceLocal {
+		return ErrLocalProfile
+	}
 	download, err := s.downloader.Fetch(ctx, entry.URL)
 	if err != nil {
 		return s.recordFailure(id, entry.URL, redactedError(err, entry.URL))
@@ -797,17 +955,22 @@ func (s *SubscriptionService) validate(ctx context.Context, config []byte) error
 	return nil
 }
 
-// summarize turns one stored record into its page summary. Only the link's host
-// is shown: the rest of it is a credential.
+// summarize turns one stored record into its page summary. Only a remote
+// profile's host is shown: the rest of the link is a credential. A local one
+// has no host, usage or expiry.
 func summarize(entry model.Subscription) (model.SubscriptionSummary, error) {
+	summary := model.SubscriptionSummary{
+		ID: entry.ID, Name: entry.Name, Source: entry.Source,
+		UpdatedAt: entry.UpdatedAt, LastError: entry.LastError, Rules: entry.Rules,
+	}
+	if entry.Source == model.SourceLocal {
+		return summary, nil
+	}
 	u, err := url.Parse(entry.URL)
 	if err != nil {
 		return model.SubscriptionSummary{}, fmt.Errorf("stored subscription link is not a valid URL: %w", errors.Unwrap(err))
 	}
-	summary := model.SubscriptionSummary{
-		ID: entry.ID, Name: entry.Name, Host: u.Host,
-		UpdatedAt: entry.UpdatedAt, LastError: entry.LastError, Rules: entry.Rules,
-	}
+	summary.Host = u.Host
 	if entry.UserInfo != "" {
 		usage, err := ParseUsage(entry.UserInfo)
 		if err != nil {
@@ -818,9 +981,27 @@ func summarize(entry model.Subscription) (model.SubscriptionSummary, error) {
 	return summary, nil
 }
 
-// normalizeInput trims what the user typed, checks the link is one Hop can
-// download and fills an empty name with the link's host.
+// normalizeInput trims what the user typed and fills an empty name: a remote
+// profile takes its link's host, a local one the short local label. A remote
+// link is checked as one Hop can download; a local content is held to the
+// download size limit and read for its format later, like any other body.
 func normalizeInput(input model.SubscriptionInput) (model.SubscriptionInput, error) {
+	if !slices.Contains(ProfileSources, input.Source) {
+		return model.SubscriptionInput{}, fmt.Errorf("unknown profile source %q", input.Source)
+	}
+	if !slices.Contains(RuleSources, input.Rules) {
+		return model.SubscriptionInput{}, fmt.Errorf("unknown rule source %q", input.Rules)
+	}
+	name := strings.TrimSpace(input.Name)
+	if input.Source == model.SourceLocal {
+		if len(input.Content) > MaxProfileSize {
+			return model.SubscriptionInput{}, fmt.Errorf("the local config is larger than %d bytes", MaxProfileSize)
+		}
+		return model.SubscriptionInput{
+			Name: cmp.Or(name, LocalProfileName), Source: model.SourceLocal,
+			Content: input.Content, Rules: input.Rules,
+		}, nil
+	}
 	rawURL := strings.TrimSpace(input.URL)
 	if rawURL == "" {
 		return model.SubscriptionInput{}, errors.New("subscription link is empty")
@@ -832,10 +1013,9 @@ func normalizeInput(input model.SubscriptionInput) (model.SubscriptionInput, err
 	if err != nil {
 		return model.SubscriptionInput{}, fmt.Errorf("subscription link is not a valid URL: %w", errors.Unwrap(err))
 	}
-	if !slices.Contains(RuleSources, input.Rules) {
-		return model.SubscriptionInput{}, fmt.Errorf("unknown rule source %q", input.Rules)
-	}
-	return model.SubscriptionInput{Name: cmp.Or(strings.TrimSpace(input.Name), u.Host), URL: rawURL, Rules: input.Rules}, nil
+	return model.SubscriptionInput{
+		Name: cmp.Or(name, u.Host), Source: model.SourceRemote, URL: rawURL, Rules: input.Rules,
+	}, nil
 }
 
 // checkUsage validates the provider's usage header: a non-empty one must parse,

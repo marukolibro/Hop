@@ -52,11 +52,14 @@ type indexFile struct {
 	Entries  []entryFile `json:"entries"`
 }
 
-// entryFile is one record of the index; Body names the file the raw Clash YAML
-// is kept in.
+// entryFile is one record of the index; Body names the file the raw profile
+// (Clash YAML or node links) is kept in.
 type entryFile struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Source is "" in an index written before profiles could come from a
+	// local file or pasted text: every entry in it was downloaded from a link.
+	Source      string    `json:"source,omitempty"`
 	URL         string    `json:"url"`
 	UserInfo    string    `json:"userInfo"`
 	UpdatedAt   time.Time `json:"updatedAt"`
@@ -166,7 +169,7 @@ func (s *Store) migrateLegacy() error {
 		Version:  indexVersion,
 		ActiveID: id,
 		Entries: []entryFile{{
-			ID: id, Name: u.Host, URL: storedURL,
+			ID: id, Name: u.Host, Source: string(model.SourceRemote), URL: storedURL,
 			UserInfo: meta.UserInfo, UpdatedAt: meta.UpdatedAt, Body: body,
 		}},
 	}
@@ -216,8 +219,12 @@ func (s *Store) Entries() ([]model.Subscription, string, error) {
 	}
 	entries := make([]model.Subscription, 0, len(index.Entries))
 	for _, file := range index.Entries {
+		source, err := sourceKind(file.Source)
+		if err != nil {
+			return nil, "", err
+		}
 		entries = append(entries, model.Subscription{
-			ID: file.ID, Name: file.Name, URL: file.URL,
+			ID: file.ID, Name: file.Name, Source: source, URL: file.URL,
 			UserInfo: file.UserInfo, UpdatedAt: file.UpdatedAt, AttemptedAt: file.AttemptedAt,
 			LastError: file.LastError, Rules: ruleSource(file.Rules),
 		})
@@ -236,12 +243,16 @@ func (s *Store) Get(id string) (model.Subscription, bool, error) {
 		if file.ID != id {
 			continue
 		}
+		source, err := sourceKind(file.Source)
+		if err != nil {
+			return model.Subscription{}, false, err
+		}
 		raw, err := os.ReadFile(filepath.Join(s.subsDir(), file.Body))
 		if err != nil {
 			return model.Subscription{}, false, fmt.Errorf("read subscription %q body (path=%q): %w", id, file.Body, err)
 		}
 		return model.Subscription{
-			ID: file.ID, Name: file.Name, URL: file.URL, Raw: raw,
+			ID: file.ID, Name: file.Name, Source: source, URL: file.URL, Raw: raw,
 			UserInfo: file.UserInfo, UpdatedAt: file.UpdatedAt, AttemptedAt: file.AttemptedAt,
 			LastError: file.LastError, Rules: ruleSource(file.Rules),
 		}, true, nil
@@ -296,6 +307,9 @@ func (s *Store) Commit(entries []model.Subscription, activeID string) error {
 			return fmt.Errorf("subscription %q appears twice in the entries to store", entry.ID)
 		}
 		seen[entry.ID] = true
+		if err := checkSource(entry.Source, entry.URL); err != nil {
+			return fmt.Errorf("subscription %q: %w", entry.ID, err)
+		}
 		body, kept := committed[entry.ID]
 		if len(entry.Raw) > 0 {
 			body = bodyName(entry.ID, entry.Raw)
@@ -306,7 +320,7 @@ func (s *Store) Commit(entries []model.Subscription, activeID string) error {
 			return fmt.Errorf("subscription %q has no body to keep", entry.ID)
 		}
 		index.Entries = append(index.Entries, entryFile{
-			ID: entry.ID, Name: entry.Name, URL: entry.URL,
+			ID: entry.ID, Name: entry.Name, Source: string(entry.Source), URL: entry.URL,
 			UserInfo: entry.UserInfo, UpdatedAt: entry.UpdatedAt, AttemptedAt: entry.AttemptedAt,
 			LastError: entry.LastError, Body: body, Rules: string(entry.Rules),
 		})
@@ -369,8 +383,12 @@ func (s *Store) readIndex() (indexFile, bool, error) {
 			return indexFile{}, false, fmt.Errorf("subscription index (path=%q) lists %q twice", path, entry.ID)
 		}
 		ids[entry.ID] = true
-		if entry.URL == "" {
-			return indexFile{}, false, fmt.Errorf("subscription %q in the index (path=%q) has no link", entry.ID, path)
+		source, err := sourceKind(entry.Source)
+		if err != nil {
+			return indexFile{}, false, fmt.Errorf("subscription %q in the index (path=%q): %w", entry.ID, path, err)
+		}
+		if err := checkSource(source, entry.URL); err != nil {
+			return indexFile{}, false, fmt.Errorf("subscription %q in the index (path=%q): %w", entry.ID, path, err)
 		}
 		body := filepath.Join(s.subsDir(), entry.Body)
 		if _, err := os.Stat(body); err != nil {
@@ -462,6 +480,38 @@ func hasID(entries []model.Subscription, id string) bool {
 		}
 	}
 	return false
+}
+
+// sourceKind reads an entry's stored source. An index written before profiles
+// could come from a local file or pasted text has none, and every entry in it
+// was a subscription downloaded from a link.
+func sourceKind(stored string) (model.SubscriptionSource, error) {
+	switch model.SubscriptionSource(stored) {
+	case "":
+		return model.SourceRemote, nil
+	case model.SourceRemote, model.SourceLocal:
+		return model.SubscriptionSource(stored), nil
+	default:
+		return "", fmt.Errorf("unknown profile source %q", stored)
+	}
+}
+
+// checkSource keeps an entry's source and link consistent: a remote profile is
+// downloaded from its link, a local one has none.
+func checkSource(source model.SubscriptionSource, rawURL string) error {
+	switch source {
+	case model.SourceRemote:
+		if rawURL == "" {
+			return errors.New("a remote profile has no link")
+		}
+	case model.SourceLocal:
+		if rawURL != "" {
+			return errors.New("a local profile carries a link")
+		}
+	default:
+		return fmt.Errorf("unknown profile source %q", source)
+	}
+	return nil
 }
 
 // ruleSource reads an entry's stored rule source. An index written before

@@ -53,13 +53,17 @@ const (
 	cardUsageBarWidth  float32 = 260
 	cardUsageBarHeight float32 = 4
 
-	// dialogWidth is the subscription dialogs' width; selectMinWidth keeps the
-	// picker readable; pickerPadX pads the picker trigger and its options,
-	// pickerItemHeight is one option's height.
-	dialogWidth      float32 = 440
-	selectMinWidth   float32 = 180
-	pickerPadX       float32 = 10
-	pickerItemHeight float32 = 32
+	// dialogWidth is the subscription dialogs' width; localEditorHeight keeps
+	// a pasted config to a fixed, scrollable box; sourceSegmentWidth fits the
+	// two source labels; selectMinWidth keeps the picker readable; pickerPadX
+	// pads the picker trigger and its options, pickerItemHeight is one option's
+	// height.
+	dialogWidth        float32 = 440
+	localEditorHeight  float32 = 168
+	sourceSegmentWidth float32 = 88
+	selectMinWidth     float32 = 180
+	pickerPadX         float32 = 10
+	pickerItemHeight   float32 = 32
 	// pickerPopupInset evenly insets the menu options.
 	pickerPopupInset float32 = 4
 

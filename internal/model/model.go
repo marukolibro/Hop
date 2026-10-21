@@ -109,12 +109,29 @@ type Download struct {
 	UserInfo string
 }
 
-// SubscriptionInput is what the user typed about a subscription: the name to
-// show for it and the link it is downloaded from.
+// SubscriptionSource is where a profile's content comes from: a provider's
+// link, which refreshes, or a file or pasted text the user added, which does
+// not.
+type SubscriptionSource string
+
+const (
+	// SourceRemote is a subscription downloaded from a provider's link.
+	SourceRemote SubscriptionSource = "remote"
+	// SourceLocal is a config the user added from a file or pasted text. Hop
+	// keeps a copy, so the file may move or vanish.
+	SourceLocal SubscriptionSource = "local"
+)
+
+// SubscriptionInput is what the user typed about a profile: where it comes
+// from, the name to show for it, the link it is downloaded from or the content
+// read from a local file or pasted text, and whose rules it runs with. Content
+// is empty when a stored local profile keeps its content.
 type SubscriptionInput struct {
-	Name  string
-	URL   string
-	Rules RuleSource
+	Source  SubscriptionSource
+	Name    string
+	URL     string
+	Content []byte
+	Rules   RuleSource
 }
 
 // RuleSource is where a subscription's policy groups and rules come from:
@@ -131,13 +148,15 @@ const (
 	RulesHop RuleSource = "hop"
 )
 
-// Subscription is a profile downloaded from a provider: its stable identity and
-// name, where it came from, the Clash YAML it returned as received, its usage
-// header, when it was downloaded, and why its last refresh failed ("" when it
-// worked).
+// Subscription is a stored profile: its stable identity and name, where it
+// came from, the Clash YAML or node links it holds as received, its usage
+// header (a provider's, empty for a local profile), when it was downloaded,
+// and why its last refresh failed ("" when it worked, always "" for a local
+// profile, which never refreshes).
 type Subscription struct {
 	ID        string
 	Name      string
+	Source    SubscriptionSource
 	URL       string
 	Raw       []byte
 	UserInfo  string
@@ -162,10 +181,13 @@ type Usage struct {
 }
 
 // SubscriptionSummary is what the subscriptions page shows of one stored
-// subscription. The link itself is not part of it: a link is a credential.
+// profile. Neither a remote profile's link nor a local profile's content is
+// part of it: both are credentials.
 type SubscriptionSummary struct {
-	ID        string
-	Name      string
+	ID     string
+	Name   string
+	Source SubscriptionSource
+	// Host is the link's host for a remote profile, "" for a local one.
 	Host      string
 	UpdatedAt time.Time
 	Usage     Usage
