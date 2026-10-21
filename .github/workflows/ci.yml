@@ -64,3 +64,11 @@ jobs:
         run: go test ./...
         env:
           HOP_MIHOMO_BINARY: ${{ github.workspace }}\resources\windows-amd64\bin\mihomo.exe
+      - name: Enhanced mode (TUN) end to end
+        # The runner is a disposable administrator machine: the test installs
+        # the helper service and lets TUN take the routes over, then removes
+        # both. Direct mode, so no real node is needed.
+        run: go test ./internal/integration -run TestWindowsTunEndToEnd -count=1 -v
+        env:
+          HOP_WINDOWS_TUN_E2E: "1"
+          HOP_MIHOMO_BINARY: ${{ github.workspace }}\resources\windows-amd64\bin\mihomo.exe
