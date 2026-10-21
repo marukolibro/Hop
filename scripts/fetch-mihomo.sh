@@ -2,12 +2,12 @@
 # Downloads what Hop ships of the mihomo core into resources/: the core for
 # one platform into resources/<platform>/bin, where `mygo dev` and
 # `mygo build` pick it up, the geodata databases the generated configs can
-# need into resources/geodata, and the core's MIT license beside the binary.
+# need into resources/geodata, and the core's license (GPL-3.0) beside the binary.
 # Versions and hashes are pinned in mihomo.version. It only downloads and
 # unpacks: it never starts the core and touches nothing outside this
 # repository.
 #
-# usage: scripts/fetch-mihomo.sh darwin-arm64 | windows-amd64
+# usage: scripts/fetch-mihomo.sh darwin-arm64 | darwin-amd64 | windows-amd64
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -15,7 +15,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 . "$root/mihomo.version"
 
 if [ "$#" -ne 1 ]; then
-	echo "usage: $0 darwin-arm64 | windows-amd64" >&2
+	echo "usage: $0 darwin-arm64 | darwin-amd64 | windows-amd64" >&2
 	exit 2
 fi
 platform=$1
@@ -26,13 +26,18 @@ darwin-arm64)
 	want=$MIHOMO_SHA256_DARWIN_ARM64
 	binary=mihomo
 	;;
+darwin-amd64)
+	asset="mihomo-darwin-amd64-compatible-$MIHOMO_VERSION.gz"
+	want=$MIHOMO_SHA256_DARWIN_AMD64
+	binary=mihomo
+	;;
 windows-amd64)
 	asset="mihomo-windows-amd64-compatible-$MIHOMO_VERSION.zip"
 	want=$MIHOMO_SHA256_WINDOWS_AMD64
 	binary=mihomo.exe
 	;;
 *)
-	echo "unsupported platform: $platform (want darwin-arm64 or windows-amd64)" >&2
+	echo "unsupported platform: $platform (want darwin-arm64, darwin-amd64 or windows-amd64)" >&2
 	exit 2
 	;;
 esac

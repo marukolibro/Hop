@@ -6,7 +6,8 @@
 # or from the path in mygo.json's updates.privateKey. The key never appears
 # in the repository or this output.
 #
-# Only darwin/arm64 is built: mihomo has no pinned darwin-amd64 build here.
+# It builds one universal app: mygo combines the arm64 and amd64 cores and
+# helpers, both fetched and built here.
 #
 # usage: scripts/release.sh --dry-run | --publish
 set -eu
@@ -68,19 +69,21 @@ fi
 
 # The key signs the archive and manifest; mygo needs it to make the update.
 scripts/fetch-mihomo.sh darwin-arm64
+scripts/fetch-mihomo.sh darwin-amd64
 scripts/build-helper.sh darwin-arm64
+scripts/build-helper.sh darwin-amd64
 
 if [ "$mode" = --dry-run ]; then
-	go tool mygo build -platform darwin/arm64
+	go tool mygo build -platform darwin/universal
 else
-	go tool mygo build -platform darwin/arm64 -upload
+	go tool mygo build -platform darwin/universal -upload
 fi
 
 out=$(jq -r '.out // "build"' mygo.json)
-dir="$root/$out/darwin-arm64"
+dir="$root/$out/darwin-universal"
 app="$dir/Hop.app"
 archive=$(find "$dir" -maxdepth 1 -name '*.tar.gz' -print -quit)
-manifest="$dir/update-darwin-arm64.json"
+manifest="$dir/update-darwin-universal.json"
 dmg=$(find "$dir" -maxdepth 1 -name '*.dmg' -print -quit)
 [ -d "$app" ] || die "the build made no Hop.app"
 [ -n "$archive" ] || die "the build made no update archive"

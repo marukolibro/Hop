@@ -3,6 +3,9 @@
 # differs, so upgrading means changing the version and every hash together.
 MIHOMO_VERSION=v1.19.32
 MIHOMO_SHA256_DARWIN_ARM64=3312a6780652c622890fd4357c6a853bbf865464fd047ac7b7f52dab8de18652
+# Intel Macs get the "compatible" build too, which runs on CPUs without AVX2;
+# mygo build combines it with the arm64 core into the universal app.
+MIHOMO_SHA256_DARWIN_AMD64=18b382df77bded2ad0fb3db27db5636cb15b20729d5ba995a357eeb9b46bf507
 # The "compatible" build runs on CPUs without AVX2.
 MIHOMO_SHA256_WINDOWS_AMD64=974a4d7ad69aed27aa2e8f91d61113573c14dadb14562c63e58effabf59816f0
 

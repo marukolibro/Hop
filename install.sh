@@ -1,5 +1,6 @@
 #!/bin/sh
-# Installs or updates Hop from the latest signed release on Apple silicon.
+# Installs or updates Hop from the latest signed release: one universal app
+# for Apple silicon and Intel Macs.
 # The manifest carries the archive's size and an Ed25519 signature, but no
 # SHA-256. Verifying Ed25519 in POSIX sh is not practical, so this script
 # checks the size and relies on HTTPS for the download; the app's own updater
@@ -7,7 +8,7 @@
 # app's version and code signature before replacing anything.
 #
 # Testing on a local build: HOP_UPDATE_BASE points at a directory (or URL)
-# holding update-darwin-arm64.json and its archive; HOP_INSTALL_DIR changes
+# holding update-darwin-universal.json and its archive; HOP_INSTALL_DIR changes
 # where Hop.app is installed.
 #
 # usage: curl -fsSL https://raw.githubusercontent.com/marukolibro/Hop/main/install.sh | sh
@@ -27,10 +28,9 @@ say() {
 	echo "$*"
 }
 
-case "$(uname -m)" in
-arm64) ;;
-x86_64) die "暂时只支持 Apple 芯片(M1 及以后);Intel Mac 尚无安装包" ;;
-*) die "Hop 只支持 Apple 芯片的 Mac" ;;
+case "$(uname -s)" in
+Darwin) ;;
+*) die "Hop 只支持 macOS" ;;
 esac
 
 command -v curl >/dev/null 2>&1 || die "curl is required"
@@ -51,7 +51,7 @@ trap 'rm -rf "$work"' EXIT
 umask 077
 
 manifest="$work/manifest.json"
-curl -fsSL "$base/update-darwin-arm64.json" -o "$manifest" 2>/dev/null \
+curl -fsSL "$base/update-darwin-universal.json" -o "$manifest" 2>/dev/null \
 	|| die "could not read the latest update manifest"
 
 version=$(plutil -extract version raw -o - "$manifest" 2>/dev/null) || die "the update manifest is not valid JSON"
