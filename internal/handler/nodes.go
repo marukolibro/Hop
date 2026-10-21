@@ -242,6 +242,9 @@ func tileChips(t *ui.Theme, node model.NodeView) []tileChip {
 	return chips
 }
 
+// barCeiling is the delay at which a latency bar is at its shortest.
+const barCeiling = 600
+
 // speedScore is how full a latency bar is: nearly full for an instant
 // answer, short near barCeiling, empty before a test or after a failure.
 func speedScore(delay model.Delay) float32 {

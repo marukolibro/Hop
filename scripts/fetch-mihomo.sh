@@ -59,6 +59,7 @@ fetch_pinned() {
 }
 
 dest="$root/resources/$platform/bin"
+mkdir -p "$dest"
 fetch_pinned \
 	"https://github.com/MetaCubeX/mihomo/releases/download/$MIHOMO_VERSION/$asset" \
 	"$want" "$work/core-archive"

@@ -119,7 +119,7 @@ func tunTestSettings(tun bool) RuntimeSettings {
 // writes when TUN is on, and that a config without TUN carries no tun key at
 // all, exactly as before.
 func TestRuntimeConfigTun(t *testing.T) {
-	plain, err := RuntimeConfig([]byte(tunTestSubscription), model.RulesProvider, tunTestSettings(false))
+	plain, err := RuntimeConfig([]byte(tunTestSubscription), model.RulesProvider, nil, tunTestSettings(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestRuntimeConfigTun(t *testing.T) {
 		t.Errorf("config with TUN off sets a DNS enhanced-mode:\n%s", plain)
 	}
 
-	withTun, err := RuntimeConfig([]byte(tunTestSubscription), model.RulesProvider, tunTestSettings(true))
+	withTun, err := RuntimeConfig([]byte(tunTestSubscription), model.RulesProvider, nil, tunTestSettings(true))
 	if err != nil {
 		t.Fatal(err)
 	}

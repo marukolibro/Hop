@@ -335,6 +335,23 @@ func resolveRoute(groups []model.ProxyGroup, byName map[string]model.ProxyGroup,
 	return route
 }
 
+// QuickRoutes are the choices of group the menu bar panel offers: the
+// groups it lists, such as 自动选择 and the regions of Hop's template, or,
+// for a profile whose main group lists nodes only, its n fastest nodes.
+// DIRECT and REJECT are left out: the outbound mode covers going direct.
+func QuickRoutes(group model.GroupView, n int) []model.NodeView {
+	var routes []model.NodeView
+	for _, option := range group.Others {
+		if option.Name != "DIRECT" && option.Name != "REJECT" {
+			routes = append(routes, option)
+		}
+	}
+	if len(routes) > 0 {
+		return routes
+	}
+	return FastestNodes(group, n)
+}
+
 // FastestNodes returns up to n of group's nodes that answered their last
 // delay test, fastest first. Account-detail entries are left out.
 func FastestNodes(group model.GroupView, n int) []model.NodeView {

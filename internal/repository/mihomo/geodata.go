@@ -3,6 +3,7 @@ package mihomo
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -14,7 +15,10 @@ import (
 // the core runs with because Hop never turns on geodata-mode, and
 // GeoSite.dat serves GEOSITE ones. Without them the core downloads each
 // through the network on first use, which is slow and can fail.
-var geodataFiles = []string{"GeoSite.dat", "geoip.metadb"}
+var geodataFiles = []string{GeoSiteFile, "geoip.metadb"}
+
+// GeoSiteFile is the GEOSITE database's name in a core's home dir.
+const GeoSiteFile = "GeoSite.dat"
 
 // SeedGeodata copies the geodata that ships with the app (srcDir,
 // resources/geodata) into the core's home dir, for the files that are
@@ -46,6 +50,59 @@ func SeedGeodata(srcDir string, homeDir string) error {
 			return fmt.Errorf("seed geodata into the core's home (path=%q): %w", dst, err)
 		}
 		slog.Info("seeded geodata for the core", "file", name, "bytes", len(data))
+	}
+	return nil
+}
+
+// ReplaceGeodata copies both geodata files from srcDir over dir, each through
+// a temporary file and a rename, so an interrupted replacement never leaves
+// half a database in place. Unlike SeedGeodata it overwrites what is there:
+// the caller has verified the new files and wants the core to read them. perm
+// is their mode: owner-only in Hop's own directories, readable by the root
+// core under the helper.
+func ReplaceGeodata(srcDir string, dir string, perm os.FileMode) error {
+	if err := os.MkdirAll(dir, homeDirPerm); err != nil {
+		return fmt.Errorf("create geodata dir (path=%q): %w", dir, err)
+	}
+	for _, name := range geodataFiles {
+		data, err := os.ReadFile(filepath.Join(srcDir, name))
+		if err != nil {
+			return fmt.Errorf("read geodata to replace (path=%q): %w", filepath.Join(srcDir, name), err)
+		}
+		if err := writeFileAtomic(filepath.Join(dir, name), data, perm); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeFileAtomic writes data through a temporary file in the target's
+// directory and renames it into place.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) (err error) {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return fmt.Errorf("stage file (path=%q): %w", path, err)
+	}
+	name := tmp.Name()
+	defer func() {
+		if err == nil {
+			return
+		}
+		if removeErr := os.Remove(name); removeErr != nil && !errors.Is(removeErr, fs.ErrNotExist) {
+			err = errors.Join(err, fmt.Errorf("remove staged file (path=%q): %w", name, removeErr))
+		}
+	}()
+	if _, writeErr := tmp.Write(data); writeErr != nil {
+		return errors.Join(fmt.Errorf("write staged file (path=%q): %w", name, writeErr), tmp.Close())
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		return errors.Join(fmt.Errorf("set staged file's mode (path=%q): %w", name, err), tmp.Close())
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close staged file (path=%q): %w", name, err)
+	}
+	if err := os.Rename(name, path); err != nil {
+		return fmt.Errorf("put file in place (from=%q to=%q): %w", name, path, err)
 	}
 	return nil
 }

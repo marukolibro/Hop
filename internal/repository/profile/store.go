@@ -55,13 +55,14 @@ type indexFile struct {
 // entryFile is one record of the index; Body names the file the raw Clash YAML
 // is kept in.
 type entryFile struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	URL       string    `json:"url"`
-	UserInfo  string    `json:"userInfo"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	LastError string    `json:"lastError"`
-	Body      string    `json:"body"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	URL         string    `json:"url"`
+	UserInfo    string    `json:"userInfo"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+	AttemptedAt time.Time `json:"attemptedAt"`
+	LastError   string    `json:"lastError"`
+	Body        string    `json:"body"`
 	// Rules is "" in an index written before subscriptions had a choice of
 	// rules: every one of those was a Clash profile run with its own.
 	Rules string `json:"rules,omitempty"`
@@ -217,8 +218,8 @@ func (s *Store) Entries() ([]model.Subscription, string, error) {
 	for _, file := range index.Entries {
 		entries = append(entries, model.Subscription{
 			ID: file.ID, Name: file.Name, URL: file.URL,
-			UserInfo: file.UserInfo, UpdatedAt: file.UpdatedAt, LastError: file.LastError,
-			Rules: ruleSource(file.Rules),
+			UserInfo: file.UserInfo, UpdatedAt: file.UpdatedAt, AttemptedAt: file.AttemptedAt,
+			LastError: file.LastError, Rules: ruleSource(file.Rules),
 		})
 	}
 	return entries, index.ActiveID, nil
@@ -241,8 +242,8 @@ func (s *Store) Get(id string) (model.Subscription, bool, error) {
 		}
 		return model.Subscription{
 			ID: file.ID, Name: file.Name, URL: file.URL, Raw: raw,
-			UserInfo: file.UserInfo, UpdatedAt: file.UpdatedAt, LastError: file.LastError,
-			Rules: ruleSource(file.Rules),
+			UserInfo: file.UserInfo, UpdatedAt: file.UpdatedAt, AttemptedAt: file.AttemptedAt,
+			LastError: file.LastError, Rules: ruleSource(file.Rules),
 		}, true, nil
 	}
 	return model.Subscription{}, false, nil
@@ -306,8 +307,8 @@ func (s *Store) Commit(entries []model.Subscription, activeID string) error {
 		}
 		index.Entries = append(index.Entries, entryFile{
 			ID: entry.ID, Name: entry.Name, URL: entry.URL,
-			UserInfo: entry.UserInfo, UpdatedAt: entry.UpdatedAt, LastError: entry.LastError, Body: body,
-			Rules: string(entry.Rules),
+			UserInfo: entry.UserInfo, UpdatedAt: entry.UpdatedAt, AttemptedAt: entry.AttemptedAt,
+			LastError: entry.LastError, Body: body, Rules: string(entry.Rules),
 		})
 	}
 	if err := s.writeIndex(index); err != nil {

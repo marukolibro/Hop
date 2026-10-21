@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"slices"
 	"strings"
@@ -67,12 +68,13 @@ type ModeReader interface {
 // SubscriptionService keeps the downloaded subscriptions and decides which
 // one the core runs.
 type SubscriptionService struct {
-	downloader Downloader
-	store      SubscriptionStore
-	applier    ConfigApplier
-	validator  ConfigValidator
-	core       ModeReader
-	settings   RuntimeSettings
+	downloader  Downloader
+	store       SubscriptionStore
+	customRules CustomRuleStore
+	applier     ConfigApplier
+	validator   ConfigValidator
+	core        ModeReader
+	settings    RuntimeSettings
 	// tun says whether TUN is on: every config built while a core runs keeps
 	// the tun section, or a reload would quietly drop TUN.
 	tun *TunFlag
@@ -84,12 +86,13 @@ type SubscriptionService struct {
 
 // NewSubscriptionService returns a service that builds every config under
 // settings, validates it with validator, applies it through applier and
-// reads the mode the core runs in through core. tun is the flag saying
-// whether TUN is on.
-func NewSubscriptionService(downloader Downloader, store SubscriptionStore, applier ConfigApplier, validator ConfigValidator, core ModeReader, settings RuntimeSettings, tun *TunFlag) *SubscriptionService {
+// reads the mode the core runs in through core. customRules are matched
+// ahead of every profile's own rules. tun is the flag saying whether TUN is
+// on.
+func NewSubscriptionService(downloader Downloader, store SubscriptionStore, customRules CustomRuleStore, applier ConfigApplier, validator ConfigValidator, core ModeReader, settings RuntimeSettings, tun *TunFlag) *SubscriptionService {
 	return &SubscriptionService{
-		downloader: downloader, store: store, applier: applier,
-		validator: validator, core: core, settings: settings, tun: tun,
+		downloader: downloader, store: store, customRules: customRules,
+		applier: applier, validator: validator, core: core, settings: settings, tun: tun,
 	}
 }
 
@@ -164,15 +167,16 @@ func (s *SubscriptionService) Add(ctx context.Context, input model.SubscriptionI
 	if err != nil {
 		return err
 	}
+	now := time.Now()
 	entry := model.Subscription{
 		ID: id, Name: normalized.Name, URL: normalized.URL,
-		Raw: download.Body, UserInfo: download.UserInfo, UpdatedAt: time.Now(), Rules: rules,
+		Raw: download.Body, UserInfo: download.UserInfo, UpdatedAt: now, AttemptedAt: now, Rules: rules,
 	}
 	settings, err := s.liveSettings(ctx)
 	if err != nil {
 		return err
 	}
-	config, err := RuntimeConfig(entry.Raw, entry.Rules, settings)
+	config, err := s.runtimeConfig(entry.Raw, entry.Rules, settings)
 	if err != nil {
 		return err
 	}
@@ -236,16 +240,17 @@ func (s *SubscriptionService) Edit(ctx context.Context, id string, input model.S
 	if err != nil {
 		return s.recordFailure(id, normalized.URL, err)
 	}
-	config, err := RuntimeConfig(download.Body, rules, settings)
+	config, err := s.runtimeConfig(download.Body, rules, settings)
 	if err != nil {
 		return s.recordFailure(id, normalized.URL, err)
 	}
 	if err := s.validate(ctx, config); err != nil {
 		return s.recordFailure(id, normalized.URL, err)
 	}
+	now := time.Now()
 	fresh := model.Subscription{
 		ID: entry.ID, Name: normalized.Name, URL: normalized.URL,
-		Raw: download.Body, UserInfo: download.UserInfo, UpdatedAt: time.Now(), Rules: rules,
+		Raw: download.Body, UserInfo: download.UserInfo, UpdatedAt: now, AttemptedAt: now, Rules: rules,
 	}
 	if fresh.ID != activeID {
 		entries[index] = fresh
@@ -258,7 +263,7 @@ func (s *SubscriptionService) Edit(ctx context.Context, id string, input model.S
 	if !found {
 		return unknownSubscription(id)
 	}
-	previous, err := RuntimeConfig(running.Raw, running.Rules, settings)
+	previous, err := s.runtimeConfig(running.Raw, running.Rules, settings)
 	if err != nil {
 		return s.recordFailure(id, normalized.URL, err)
 	}
@@ -298,14 +303,14 @@ func (s *SubscriptionService) editStored(ctx context.Context, entries []model.Su
 	if err != nil {
 		return err
 	}
-	config, err := RuntimeConfig(stored.Raw, rules, settings)
+	config, err := s.runtimeConfig(stored.Raw, rules, settings)
 	if err != nil {
 		return err
 	}
 	if err := s.validate(ctx, config); err != nil {
 		return err
 	}
-	previous, err := RuntimeConfig(stored.Raw, previousRules, settings)
+	previous, err := s.runtimeConfig(stored.Raw, previousRules, settings)
 	if err != nil {
 		return err
 	}
@@ -339,7 +344,7 @@ func (s *SubscriptionService) Use(ctx context.Context, id string) error {
 	if !found {
 		return unknownSubscription(id)
 	}
-	config, err := RuntimeConfig(target.Raw, target.Rules, settings)
+	config, err := s.runtimeConfig(target.Raw, target.Rules, settings)
 	if err != nil {
 		return err
 	}
@@ -356,7 +361,7 @@ func (s *SubscriptionService) Use(ctx context.Context, id string) error {
 		if !found {
 			return unknownSubscription(activeID)
 		}
-		if previous, err = RuntimeConfig(running.Raw, running.Rules, settings); err != nil {
+		if previous, err = s.runtimeConfig(running.Raw, running.Rules, settings); err != nil {
 			return err
 		}
 	}
@@ -393,6 +398,51 @@ func (s *SubscriptionService) UpdateAll(ctx context.Context) error {
 	return errors.Join(failures...)
 }
 
+// AutoUpdate refreshes every stored subscription that is due, by the times
+// the store keeps: the last success and the last attempt. A failed refresh
+// moves the attempt time, so it is retried after a whole interval rather than
+// at every check, and a Mac waking from sleep catches up at the first check
+// after the interval, not a full ticker period later. interval <= 0 turns the
+// automatic refresh off. The whole pass holds the service lock, so it never
+// runs beside a manual refresh or an apply. Each failure is logged with the
+// link's host only and noted on its row, as a manual refresh does. It returns
+// whether any row was attempted, and the failures joined.
+func (s *SubscriptionService) AutoUpdate(ctx context.Context, interval time.Duration) (bool, error) {
+	if interval <= 0 {
+		return false, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries, _, err := s.store.Entries()
+	if err != nil {
+		return false, err
+	}
+	now := time.Now()
+	attempted := false
+	var failures []error
+	for _, entry := range entries {
+		if ctx.Err() != nil {
+			break
+		}
+		last := entry.UpdatedAt
+		if entry.AttemptedAt.After(last) {
+			last = entry.AttemptedAt
+		}
+		if !last.IsZero() && now.Sub(last) < interval {
+			continue
+		}
+		attempted = true
+		if err := s.refresh(ctx, entry.ID); err != nil {
+			// The name is user text and may be anything; the ID and host
+			// say which row failed without risking the link.
+			slog.Warn("automatic subscription refresh failed",
+				"subscription", entry.ID, "host", hostOf(entry.URL), "error", err)
+			failures = append(failures, fmt.Errorf("refresh %s: %w", entry.ID, err))
+		}
+	}
+	return attempted, errors.Join(failures...)
+}
+
 // Delete removes a stored subscription. Deleting one the core does not run
 // changes nothing at runtime; deleting the running one first makes the core run
 // replacementID — or the built-in bootstrap profile when it was the last — and
@@ -424,7 +474,7 @@ func (s *SubscriptionService) Delete(ctx context.Context, id string, replacement
 	if !found {
 		return unknownSubscription(id)
 	}
-	previous, err := RuntimeConfig(running.Raw, running.Rules, settings)
+	previous, err := s.runtimeConfig(running.Raw, running.Rules, settings)
 	if err != nil {
 		return err
 	}
@@ -455,7 +505,7 @@ func (s *SubscriptionService) Delete(ctx context.Context, id string, replacement
 	if !found {
 		return fmt.Errorf("replacement subscription %q is not stored", replacementID)
 	}
-	config, err := RuntimeConfig(target.Raw, target.Rules, settings)
+	config, err := s.runtimeConfig(target.Raw, target.Rules, settings)
 	if err != nil {
 		return err
 	}
@@ -515,8 +565,70 @@ func (s *SubscriptionService) startupConfigWith(settings RuntimeSettings) ([]byt
 	if !found {
 		return nil, unknownSubscription(activeID)
 	}
-	return RuntimeConfig(active.Raw, active.Rules, settings)
+	return s.runtimeConfig(active.Raw, active.Rules, settings)
 }
+
+// CurrentConfig returns the config the core runs now: the active
+// subscription with the live mode and TUN state, or the bootstrap profile.
+// Geodata validation checks a new download against exactly this.
+func (s *SubscriptionService) CurrentConfig(ctx context.Context) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings, err := s.liveSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.startupConfigWith(settings)
+}
+
+// ReloadRuntime rebuilds the running config on the current store and applies
+// it. It is how a change of the custom rules reaches the core: the list is
+// already saved, so no subscription entry changes and nothing is committed.
+// With no subscription in use there is nothing to rebuild.
+func (s *SubscriptionService) ReloadRuntime(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries, activeID, err := s.store.Entries()
+	if err != nil {
+		return err
+	}
+	if activeID == "" {
+		return nil
+	}
+	if entryIndex(entries, activeID) < 0 {
+		return unknownSubscription(activeID)
+	}
+	active, found, err := s.store.Get(activeID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return unknownSubscription(activeID)
+	}
+	settings, err := s.liveSettings(ctx)
+	if err != nil {
+		return err
+	}
+	config, err := s.runtimeConfig(active.Raw, active.Rules, settings)
+	if err != nil {
+		return err
+	}
+	if err := s.validate(ctx, config); err != nil {
+		return err
+	}
+	if err := s.applier.ApplyConfig(ctx, config); err != nil {
+		return fmt.Errorf("the core did not accept the config: %w", err)
+	}
+	return nil
+}
+
+// LockRuntime keeps a change of the core's own data, such as replacing the
+// geodata it loads at start, from racing a subscription apply: the geodata
+// service holds this lock while it replaces files and restarts the core.
+func (s *SubscriptionService) LockRuntime() { s.mu.Lock() }
+
+// UnlockRuntime releases what LockRuntime took.
+func (s *SubscriptionService) UnlockRuntime() { s.mu.Unlock() }
 
 // refresh downloads the subscription id's link again and records the outcome: a
 // success swaps in the new body and time, a failure keeps the last success and
@@ -556,16 +668,17 @@ func (s *SubscriptionService) refresh(ctx context.Context, id string) error {
 	if err != nil {
 		return s.recordFailure(id, entry.URL, err)
 	}
-	config, err := RuntimeConfig(download.Body, rules, settings)
+	config, err := s.runtimeConfig(download.Body, rules, settings)
 	if err != nil {
 		return s.recordFailure(id, entry.URL, err)
 	}
 	if err := s.validate(ctx, config); err != nil {
 		return s.recordFailure(id, entry.URL, err)
 	}
+	now := time.Now()
 	fresh := entry
 	fresh.Raw, fresh.UserInfo = download.Body, download.UserInfo
-	fresh.UpdatedAt, fresh.LastError, fresh.Rules = time.Now(), "", rules
+	fresh.UpdatedAt, fresh.AttemptedAt, fresh.LastError, fresh.Rules = now, now, "", rules
 	entries[index] = fresh
 	if id != activeID {
 		// Not the one running: the refresh writes the store only.
@@ -574,7 +687,7 @@ func (s *SubscriptionService) refresh(ctx context.Context, id string) error {
 		}
 		return s.store.Commit(entries, activeID)
 	}
-	previous, err := RuntimeConfig(entry.Raw, entry.Rules, settings)
+	previous, err := s.runtimeConfig(entry.Raw, entry.Rules, settings)
 	if err != nil {
 		return s.recordFailure(id, entry.URL, err)
 	}
@@ -599,6 +712,7 @@ func (s *SubscriptionService) recordFailure(id string, attemptURL string, cause 
 	}
 	failed := entries[index]
 	failed.LastError = redactNote(cause.Error(), entries, attemptURL)
+	failed.AttemptedAt = time.Now()
 	entries[index] = failed
 	if err := s.store.Commit(entries, activeID); err != nil {
 		return errors.Join(cause, fmt.Errorf("note the failed refresh in the store: %w", err))
@@ -657,6 +771,21 @@ func (s *SubscriptionService) liveSettings(ctx context.Context) (RuntimeSettings
 	settings.Mode = mode
 	settings.Tun = s.tun.On()
 	return settings, nil
+}
+
+// runtimeConfig builds a config with the stored custom rules ahead of the
+// profile's own. The rules are checked every time: a hand-edited file never
+// reaches the core unchecked.
+func (s *SubscriptionService) runtimeConfig(subscription []byte, rules model.RuleSource, settings RuntimeSettings) ([]byte, error) {
+	custom, err := s.customRules.LoadCustomRules()
+	if err != nil {
+		return nil, fmt.Errorf("read the custom rules: %w", err)
+	}
+	custom, err = NormalizeCustomRules(custom)
+	if err != nil {
+		return nil, fmt.Errorf("stored custom rules: %w", err)
+	}
+	return RuntimeConfig(subscription, rules, custom, settings)
 }
 
 // validate has the core check the config itself; validation is never silently

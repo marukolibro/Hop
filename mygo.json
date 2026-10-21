@@ -2,5 +2,10 @@
   "name": "Hop",
   "identifier": "io.github.marukolibro.hop",
   "version": "0.1.0",
-  "out": "build"
+  "out": "build",
+  "updates": {
+    "publicKey": "qIKeKUovG7mr/iygM3lK+eFJU9DIyyFkHYAbV73GcVU=",
+    "github": "marukolibro/Hop",
+    "privateKey": "~/Library/Application Support/mygo/update-keys/mygo-update.key"
+  }
 }

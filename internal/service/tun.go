@@ -30,6 +30,7 @@ type HelperControl interface {
 	Version(ctx context.Context) (string, error)
 	Status(ctx context.Context) (helper.Status, error)
 	InstallCore(ctx context.Context, path string, geodataDir string) error
+	InstallGeodata(ctx context.Context, geodataDir string) error
 	StartCore(ctx context.Context, config []byte) error
 	StopCore(ctx context.Context) error
 }
@@ -227,6 +228,12 @@ func (s *TunService) switchCore(ctx context.Context, config []byte, rollbackConf
 	}
 	if err := s.helper.InstallCore(ctx, s.binary, s.geodata); err != nil {
 		return fmt.Errorf("refresh the core in the helper: %w", err)
+	}
+	// InstallCore seeds only the files the helper is missing; an app update
+	// may have replaced Hop's copy while TUN was off. Overwrite the helper's
+	// databases with the current ones before its core reads them.
+	if err := s.helper.InstallGeodata(ctx, s.geodata); err != nil {
+		return fmt.Errorf("refresh the geodata in the helper: %w", err)
 	}
 	if err := s.runner.Stop(); err != nil {
 		return fmt.Errorf("stop Hop's own core: %w", err)

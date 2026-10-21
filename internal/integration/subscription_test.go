@@ -199,6 +199,7 @@ func newHarness(t *testing.T, appDir string) *harness {
 		service: service.NewSubscriptionService(
 			subscription.NewFetcher(&http.Client{Timeout: 10 * time.Second}),
 			store,
+			store,
 			client,
 			mihomo.NewConfigValidator(binary, filepath.Join(appDir, "validate"), validateTimeout),
 			client,
@@ -502,11 +503,11 @@ func TestConfigValidator(t *testing.T) {
 		MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
 		BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop", Mode: model.ModeRule,
 	}
-	valid, err := service.RuntimeConfig([]byte(profileA), model.RulesProvider, settings)
+	valid, err := service.RuntimeConfig([]byte(profileA), model.RulesProvider, nil, settings)
 	if err != nil {
 		t.Fatalf("build runtime config: %v", err)
 	}
-	broken, err := service.RuntimeConfig([]byte(profileBroken), model.RulesProvider, settings)
+	broken, err := service.RuntimeConfig([]byte(profileBroken), model.RulesProvider, nil, settings)
 	if err != nil {
 		t.Fatalf("build broken runtime config: %v", err)
 	}

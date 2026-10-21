@@ -84,6 +84,17 @@ func (r *Runner) Restart(ctx context.Context, binary string) error {
 	return r.launchAndWait(ctx, binary)
 }
 
+// RestartCurrent replaces the core with the same binary on the config it was
+// running, returning once the new core's controller answers. It is how data
+// the core reads once at start, such as geodata, is made current without
+// changing anything else. With no core running it starts one.
+func (r *Runner) RestartCurrent(ctx context.Context) error {
+	r.mu.Lock()
+	binary := r.binary
+	r.mu.Unlock()
+	return r.Restart(ctx, binary)
+}
+
 // Binary is the executable the running core was started from.
 func (r *Runner) Binary() string {
 	r.mu.Lock()

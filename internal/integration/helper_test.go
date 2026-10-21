@@ -202,6 +202,38 @@ func TestHelperServesItsCore(t *testing.T) {
 		t.Errorf("mode after the refused applies = %q (err %v), want %q", mode, err, model.ModeGlobal)
 	}
 
+	// New geodata replaces the helper's copies and restarts the running core
+	// on them, because the core reads the databases once, at start. The
+	// controller answers again afterwards and the config it ran stays.
+	geodataDir := filepath.Join(dir, "geodata")
+	if err := os.MkdirAll(geodataDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{"GeoSite.dat": "new-site", "geoip.metadb": "new-ip"} {
+		if err := os.WriteFile(filepath.Join(geodataDir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	geodataClient := helper.NewClient(sock, 60*time.Second)
+	if err := geodataClient.InstallGeodata(ctx, geodataDir); err != nil {
+		t.Fatalf("install geodata through the helper: %v", err)
+	}
+	for name, want := range map[string]string{"GeoSite.dat": "new-site", "geoip.metadb": "new-ip"} {
+		got, err := os.ReadFile(filepath.Join(home, name))
+		if err != nil {
+			t.Fatalf("the helper did not copy %s: %v", name, err)
+		}
+		if string(got) != want {
+			t.Errorf("the helper's %s = %q, want %q", name, got, want)
+		}
+	}
+	if _, err := coreClient.Version(ctx); err != nil {
+		t.Fatalf("the helper's core does not answer after the geodata restart: %v", err)
+	}
+	if mode, err := coreClient.Mode(ctx); err != nil || mode != model.ModeGlobal {
+		t.Errorf("mode after the geodata restart = %q (err %v), want %q", mode, err, model.ModeGlobal)
+	}
+
 	if err := client.StopCore(ctx); err != nil {
 		t.Fatalf("stop the helper's core: %v", err)
 	}
@@ -261,11 +293,17 @@ rules:
 		BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop",
 		Mode: "rule", Tun: true,
 	}
-	config, err := service.RuntimeConfig(subscription, model.RulesProvider, settings)
+	config, err := service.RuntimeConfig(subscription, model.RulesProvider, nil, settings)
 	if err != nil {
 		t.Fatal(err)
 	}
-	validator := mihomo.NewConfigValidator(binary, t.TempDir(), 30*time.Second)
+	validateDir := t.TempDir()
+	// The config test loads GEOIP's database, as the running core would; the
+	// validator refuses to download one, so seed what the app ships.
+	if err := mihomo.SeedGeodata(filepath.Join("..", "..", "resources", "geodata"), validateDir); err != nil {
+		t.Fatal(err)
+	}
+	validator := mihomo.NewConfigValidator(binary, validateDir, 30*time.Second)
 	if err := validator.Validate(ctx, config); err != nil {
 		t.Fatalf("the core rejected the TUN config: %v", err)
 	}

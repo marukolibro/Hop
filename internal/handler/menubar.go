@@ -114,6 +114,7 @@ func (m *MenuBar) togglePanel() {
 		}),
 	})
 	m.panel.OnClosed(func() { m.panel = nil })
+	m.d.testQuickRoutes()
 }
 
 // popUpMenu is the right click's plain menu, for when the panel is not

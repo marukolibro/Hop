@@ -7,6 +7,8 @@ import (
 	"unicode"
 
 	"go.yaml.in/yaml/v3"
+
+	"hop/internal/model"
 )
 
 // Hop's template: the groups and rules a subscription runs with when the
@@ -187,14 +189,32 @@ var hopRules = []string{
 // applyHopTemplate puts the template's groups and rules under cfg, over the
 // profile's nodes; the provider's own groups, rules and rule providers are
 // left out.
-func applyHopTemplate(cfg *runtimeConfig, p subscriptionProfile) error {
+func applyHopTemplate(cfg *runtimeConfig, p subscriptionProfile, custom []model.CustomRule) error {
 	cfg.Proxies, cfg.ProxyProviders = p.proxies, p.providers
 	if err := cfg.ProxyGroups.Encode(hopGroups(p.nodeNames, p.providerNames)); err != nil {
 		return fmt.Errorf("build the template's proxy groups: %w", err)
 	}
-	if err := cfg.Rules.Encode(hopRules); err != nil {
+	lines, err := customRuleLines(custom, groupSelect)
+	if err != nil {
+		return err
+	}
+	if err := cfg.Rules.Encode(hopRulesWithCustom(lines)); err != nil {
 		return fmt.Errorf("build the template's rules: %w", err)
 	}
 	cfg.RuleProviders, cfg.SubRules = yaml.Node{}, yaml.Node{}
 	return nil
+}
+
+// hopRulesWithCustom puts the user's rules after the two private-network
+// rules and before everything else: the LAN keeps its direct path whatever
+// the user adds, so a custom rule never sends the local network or the
+// router's own DNS through a node.
+func hopRulesWithCustom(lines []string) []string {
+	if len(lines) == 0 {
+		return hopRules
+	}
+	out := make([]string, 0, len(hopRules)+len(lines))
+	out = append(out, hopRules[:2]...)
+	out = append(out, lines...)
+	return append(out, hopRules[2:]...)
 }

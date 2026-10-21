@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -19,6 +20,7 @@ import (
 	"hop/internal/handler"
 	"hop/internal/repository/corerelease"
 	"hop/internal/repository/corestore"
+	"hop/internal/repository/geodata"
 	"hop/internal/repository/helper"
 	"hop/internal/repository/mihomo"
 	"hop/internal/repository/profile"
@@ -34,15 +36,21 @@ const (
 	// validationTimeout bounds one config check: the first may have to download
 	// geodata.
 	validationTimeout = 30 * time.Second
+	// geodataDownloadTimeout bounds the two rule databases, which are a few
+	// megabytes through Hop's own proxy.
+	geodataDownloadTimeout = 2 * time.Minute
 	// quitReleaseTimeout bounds clearing the system proxy and stopping the
 	// helper's core at quit.
 	quitReleaseTimeout = 10 * time.Second
 	// helperCallTimeout bounds one request to the privileged helper; a
 	// start waits for the core's controller, which can take seconds.
 	helperCallTimeout = 20 * time.Second
-	bindAddress       = "127.0.0.1"
-	coreLogLevel      = "info"
-	bootstrapGroup    = "Hop"
+	// geodataHelperTimeout bounds giving the helper new geodata, which
+	// restarts its core once the ports are free again.
+	geodataHelperTimeout = 90 * time.Second
+	bindAddress          = "127.0.0.1"
+	coreLogLevel         = "info"
+	bootstrapGroup       = "Hop"
 
 	// trafficLightX and trafficLightY place the close button's top-left
 	// corner so the traffic lights centre on the header's 60 DIP row.
@@ -63,6 +71,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// appGeodataDir is Hop's own copy of the geo databases: updates write
+	// there, never into the app bundle, and the helper is seeded from it.
+	appGeodataDir := filepath.Join(cfg.AppDir, "geodata")
+	validateDir := filepath.Join(cfg.AppDir, "validate")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -71,6 +83,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// The version in mygo.json, which mygo's updater compares with the
+	// release and the settings row shows.
+	appVersion := mygo.App.Version()
 	mode, err := service.StartupMode(store)
 	if err != nil {
 		return err
@@ -90,11 +105,13 @@ func run() error {
 	profiles := service.NewSubscriptionService(
 		subscription.NewFetcher(&http.Client{Timeout: downloadTimeout}),
 		store,
+		// The custom rules go ahead of every config the service builds.
+		store,
 		// Configs go to whichever core serves the controller: the helper's
 		// while TUN is on, Hop's own otherwise.
 		service.NewCoreApplier(client, helperClient, tunFlag),
 		// Config checks borrow the core's own -t, in an isolated directory.
-		mihomo.NewConfigValidator(cfg.MihomoBinary, filepath.Join(cfg.AppDir, "validate"), validationTimeout),
+		mihomo.NewConfigValidator(cfg.MihomoBinary, validateDir, validationTimeout),
 		client,
 		settings,
 		tunFlag,
@@ -106,12 +123,17 @@ func run() error {
 	}
 	// The core would download geodata through the network on first use,
 	// which is slow and can fail where GitHub cannot be reached; what ships
-	// with the app is seeded in first, and only when missing.
+	// with the app is seeded in first, and only when missing. Hop keeps its
+	// own copy under the app dir: updates write there, never into the app
+	// bundle, and the helper is seeded from it too.
 	// The config checks run the core in a directory of their own, and a
 	// config with GEOSITE or GEOIP rules (Hop's rule template has both) makes
 	// even -t load the databases: seed that directory too.
-	for _, dir := range []string{cfg.HomeDir, filepath.Join(cfg.AppDir, "validate")} {
-		if err := mihomo.SeedGeodata(filepath.Join(resourcesDir, "geodata"), dir); err != nil {
+	if err := mihomo.SeedGeodata(filepath.Join(resourcesDir, "geodata"), appGeodataDir); err != nil {
+		return err
+	}
+	for _, dir := range []string{cfg.HomeDir, validateDir} {
+		if err := mihomo.SeedGeodata(appGeodataDir, dir); err != nil {
 			return err
 		}
 	}
@@ -122,7 +144,7 @@ func run() error {
 		corerelease.NewSource(coreDownloadClient(cfg.MixedPort), corerelease.ReleaseAPI),
 		corestore.New(cfg.AppDir),
 		runner,
-		mihomo.NewCoreChecker(mihomo.ConfigPath(cfg.HomeDir), filepath.Join(cfg.AppDir, "validate"), validationTimeout),
+		mihomo.NewCoreChecker(mihomo.ConfigPath(cfg.HomeDir), validateDir, validationTimeout),
 		cfg.MihomoBinary,
 		cfg.BundledBinary,
 		cfg.CoreOrigin,
@@ -134,6 +156,21 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	appUpdateService := service.NewAppUpdateService()
+	customRulesService := service.NewCustomRulesService(store, profiles)
+	geodataService := service.NewGeodataService(
+		geodata.NewSource(geodataDownloadClient(cfg.MixedPort), geodata.DefaultBaseURL),
+		mihomo.NewConfigValidator(cfg.MihomoBinary, validateDir, validationTimeout),
+		profiles,
+		store,
+		helper.NewClient(helper.SocketPath, geodataHelperTimeout),
+		runner,
+		tunFlag,
+		profiles,
+		appGeodataDir,
+		cfg.HomeDir,
+		validateDir,
+	)
 	systemProxy := service.NewSystemProxyService(sysproxy.New(), bindAddress, cfg.MixedPort)
 	helperTool, toolErr := helper.BundledToolPath(resourcesDir)
 	if toolErr != nil {
@@ -147,13 +184,37 @@ func run() error {
 		routetable.Reader{},
 		runner,
 		profiles,
-		mihomo.NewConfigValidator(cfg.MihomoBinary, filepath.Join(cfg.AppDir, "validate"), validationTimeout),
+		mihomo.NewConfigValidator(cfg.MihomoBinary, validateDir, validationTimeout),
 		cfg.MihomoBinary,
-		filepath.Join(resourcesDir, "geodata"),
+		appGeodataDir,
 		helperTool,
 		tunFlag,
 		client,
 	)
+	// Apps must not be left sending traffic to a core that is gone. This runs
+	// in OnQuit, which mygo fires before it starts a Relaunch: App.Run returns
+	// only after finish, so the old core and proxy must be released here for
+	// the new instance to find their ports free. The defer covers a Run that
+	// returns without finish (and an early error after a helper core started).
+	var releaseOnce sync.Once
+	release := func() {
+		releaseOnce.Do(func() {
+			releaseCtx, releaseDone := context.WithTimeout(context.Background(), quitReleaseTimeout)
+			if err := systemProxy.Disable(releaseCtx); err != nil {
+				slog.Error("could not clear the system proxy at quit", "error", err)
+			}
+			if err := tun.Release(releaseCtx); err != nil {
+				slog.Error("could not stop the helper's core at quit", "error", err)
+			}
+			releaseDone()
+			cancel()
+			if err := runner.Stop(); err != nil {
+				slog.Warn("mihomo did not exit cleanly", "error", err)
+			}
+		})
+	}
+	mygo.App.OnQuit(release)
+	defer release()
 	// TUN settles before Hop's own core starts, whatever the setting says:
 	// a helper core a crashed Hop left running is adopted (TUN on) or
 	// stopped (TUN off) — left alone it would hold the ports Hop's own core
@@ -169,10 +230,13 @@ func run() error {
 		Monitor:       service.NewMonitorService(client),
 		Core:          coreService,
 		Settings:      settingsService,
+		Geodata:       geodataService,
+		Rules:         customRulesService,
+		AppUpdate:     appUpdateService,
 		SystemProxy:   systemProxy,
 		Tun:           tun,
 		LoginItem:     mygo.App,
-	}, net.JoinHostPort(bindAddress, strconv.Itoa(cfg.MixedPort)), userSettings, mygo.App.Version())
+	}, net.JoinHostPort(bindAddress, strconv.Itoa(cfg.MixedPort)), userSettings, appVersion)
 	// The dashboard hears what supervision does after a crash before the
 	// core starts, so the first crash cannot go unreported.
 	runner.OnRestart(dashboard.ReportCoreRestart)
@@ -218,21 +282,7 @@ func run() error {
 	if readyErr != nil {
 		runErr = readyErr
 	}
-
-	// Apps must not be left sending traffic to a core that is gone. The
-	// app's context is about to end, so the releases get their own.
-	releaseCtx, releaseDone := context.WithTimeout(context.Background(), quitReleaseTimeout)
-	if err := systemProxy.Disable(releaseCtx); err != nil {
-		slog.Error("could not clear the system proxy at quit", "error", err)
-	}
-	if err := tun.Release(releaseCtx); err != nil {
-		slog.Error("could not stop the helper's core at quit", "error", err)
-	}
-	releaseDone()
-	cancel()
-	if err := runner.Stop(); err != nil {
-		slog.Warn("mihomo did not exit cleanly", "error", err)
-	}
+	// The defer and OnQuit listener above have released the proxy and core.
 	return runErr
 }
 
@@ -242,6 +292,15 @@ func run() error {
 func coreDownloadClient(mixedPort int) *http.Client {
 	proxy := &url.URL{Scheme: "http", Host: net.JoinHostPort(bindAddress, strconv.Itoa(mixedPort))}
 	return &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxy)}}
+}
+
+// geodataDownloadClient reaches the databases through the same proxy, with
+// an overall timeout: a stuck connection must not hold the update lock
+// forever.
+func geodataDownloadClient(mixedPort int) *http.Client {
+	client := coreDownloadClient(mixedPort)
+	client.Timeout = geodataDownloadTimeout
+	return client
 }
 
 func main() {

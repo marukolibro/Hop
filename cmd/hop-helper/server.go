@@ -182,6 +182,8 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.status())
 	case r.Method == http.MethodPost && r.URL.Path == "/core/install":
 		s.handleInstall(w, r)
+	case r.Method == http.MethodPost && r.URL.Path == "/geodata/install":
+		s.handleGeodataInstall(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/core/start":
 		s.handleStart(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/core/apply":
@@ -256,6 +258,45 @@ func (s *server) handleInstall(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	slog.Info("installed a core into the helper", "source", req.Path, "core", s.opts.core, "geodata", req.Geodata)
+}
+
+// handleGeodataInstall replaces the helper's geo databases with those in the
+// request's directory, which Hop checked before sending, and restarts a
+// running core so it reads them. The core loads geodata once, at start, so a
+// reload would keep the old data. A restart that fails leaves no core: the
+// routes are gone with it, so the system DNS goes back to the user's servers
+// rather than staying pointed at Hop's resolvers.
+func (s *server) handleGeodataInstall(w http.ResponseWriter, r *http.Request) {
+	var req helper.GeodataInstallRequest
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.Path == "" {
+		writeError(w, http.StatusBadRequest, errors.New("path is required"))
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := mihomo.ReplaceGeodata(req.Path, s.opts.home, 0o644); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	running := s.runner != nil
+	if running {
+		if err := s.runner.Restart(r.Context(), s.opts.core); err != nil {
+			s.clearCore()
+			restoreCtx, restoreDone := context.WithTimeout(context.Background(), dnsOpTimeout)
+			defer restoreDone()
+			restoreErr := s.restoreDNS(restoreCtx)
+			writeError(w, http.StatusInternalServerError, errors.Join(
+				fmt.Errorf("restart the core on the new geodata: %w", err),
+				restoreErr,
+			))
+			return
+		}
+	}
+	slog.Info("replaced the helper's geodata", "source", req.Path, "restarted", running)
+	w.WriteHeader(http.StatusOK)
 }
 
 // handleStart writes the request's config as the core's config and starts

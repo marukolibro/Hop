@@ -12,20 +12,20 @@ import (
 
 const (
 	flyoutWidth   = 340
-	flyoutHeight  = 576
+	flyoutHeight  = 640
 	flyoutPadding = gapLarge
 	fastestCount  = 5
 	quickRowH     = 32
-	barWidth      = 64
-	// barCeiling is the delay at which a latency bar is at its shortest.
-	barCeiling = 600
+	// quickTestEvery keeps opening the panel again and again from testing
+	// every time.
+	quickTestEvery = 2 * time.Minute
 	// compactSpeedWidth holds "999 KB/s" so the line does not shift as
 	// numbers change.
 	compactSpeedWidth = 88
 )
 
 // flyoutView is the menu bar panel: where traffic goes and how fast, the
-// mode, and the fastest nodes to switch to, without opening the window.
+// mode, and the routes to switch to, without opening the window.
 // Its sections rise into place one after another as it opens.
 func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func()) {
 	c.SetTheme(d.theme(c))
@@ -39,6 +39,13 @@ func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func()) {
 		entrance(ui.Row(c).Key("top").Gap(gapSmall).AlignItems(ui.Center), 0).Children(func() {
 			brandLockup(c, t, 20)
 			ui.Box(c).Grow(1)
+			if d.appUpdate.update.Available && d.appUpdate.enabled {
+				// Labelled: a bare arrow here would read as the upload rate.
+				button(c, buttonSpec{label: "新版本", icon: iconUpgrade, style: softButton(t)}, func() {
+					d.page = pageSettings
+					openWindow()
+				})
+			}
 			statusDot(c, d.statusColor(t), d.proxying())
 			mutedText(c, t, d.statusText())
 		})
@@ -69,9 +76,9 @@ func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func()) {
 				mutedText(c, t, note).MaxLines(1).AlignSelf(ui.End)
 			}
 		})
-		entrance(ui.Column(c).Key("fastest"), 4).Gap(2).Grow(1).Clip().
+		entrance(ui.Column(c).Key("routes"), 4).Gap(2).Grow(1).Basis(0).MinHeight(0).
 			Disabled(d.controlsLocked()).Children(func() {
-			d.fastestNodes(c, t)
+			d.quickRoutes(c, t)
 		})
 		entrance(ui.Row(c).Key("footer"), 5).Gap(gapSmall).Children(func() {
 			button(c, buttonSpec{label: "打开主窗口", icon: iconWindow, style: softButton(t)}, openWindow).Grow(1)
@@ -127,31 +134,47 @@ func (d *Dashboard) quickGroup() (model.GroupView, bool) {
 	return model.GroupView{}, false
 }
 
-// fastestNodes lists the quickest nodes of the main group with a bar for
-// each latency; a click switches to one, and testing again regrows the
-// bars.
-func (d *Dashboard) fastestNodes(c *ui.Context, t *ui.Theme) {
+// testQuickRoutes measures the panel's routes as it opens, so their delays
+// are fresh without a click; a test that ran in the last quickTestEvery is
+// recent enough.
+func (d *Dashboard) testQuickRoutes() {
+	group, ok := d.quickGroup()
+	if !ok || d.testDelay == nil || d.testing != "" || time.Since(d.quickTestedAt) < quickTestEvery {
+		return
+	}
+	d.quickTestedAt = time.Now()
+	d.testDelay(group.Name)
+}
+
+// quickRoutes lists the main group's routes with their delays; a click
+// switches to one.
+func (d *Dashboard) quickRoutes(c *ui.Context, t *ui.Theme) {
 	group, ok := d.quickGroup()
 	if !ok {
 		return
 	}
-	nodes := service.FastestNodes(group, fastestCount)
+	routes := service.QuickRoutes(group, fastestCount)
 	ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Height(26).Children(func() {
-		sectionTitle(c, "最快节点")
-		mutedText(c, t, group.Label)
+		sectionTitle(c, "线路")
+		mutedText(c, t, shownName(group.Label))
 		ui.Box(c).Grow(1)
 		d.testButton(c, t, group.Name)
 	})
-	if len(nodes) == 0 {
+	if len(routes) == 0 {
 		mutedText(c, t, "还没有测速结果。点「测速」看看哪个节点最快。")
 		return
 	}
-	for i, node := range nodes {
-		d.quickRow(c, t, group, node, i)
-	}
+	ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
+		ui.Column(c).Gap(2).Children(func() {
+			for _, route := range routes {
+				d.quickRow(c, t, group, route)
+			}
+		})
+	})
 }
 
-func (d *Dashboard) quickRow(c *ui.Context, t *ui.Theme, group model.GroupView, node model.NodeView, rank int) {
+// quickRow is one route: a group with the node it picks now, or a node.
+func (d *Dashboard) quickRow(c *ui.Context, t *ui.Theme, group model.GroupView, node model.NodeView) {
 	isActive := node.Name == group.Selected
 	groupName, nodeName := group.Name, node.Name
 	row := ui.Row(c).Key(node.Name).Height(quickRowH).Gap(10).AlignItems(ui.Center).Padding(0, 10).Radius(radiusControl).Cursor(ui.CursorPointer)
@@ -169,25 +192,21 @@ func (d *Dashboard) quickRow(c *ui.Context, t *ui.Theme, group model.GroupView, 
 		}
 	})
 	row.Children(func() {
-		label := ui.Text(c, strings.TrimSpace(shownFlag(node.Flag)+" "+node.Region+" "+node.Title)).FontSize(fontBody).MaxLines(1).Grow(1)
+		name := strings.TrimSpace(shownFlag(node.Flag) + " " + node.Region + " " + node.Title)
+		if node.Via != "" {
+			name = shownName(node.Name)
+		}
+		label := ui.Text(c, name).FontSize(fontBody).MaxLines(1).Shrink(0)
 		if isActive {
 			label.FontWeight(weightSemibold)
 		}
-		latencyBar(c, t, node.Delay, rank)
+		ui.Row(c).Grow(1).Justify(ui.End).MinWidth(0).Children(func() {
+			if node.Via != "" {
+				mutedText(c, t, shownName(node.Via)).MaxLines(1)
+			}
+		})
 		ui.Row(c).Width(56).Justify(ui.End).Children(func() {
 			delayLabel(c, t, node.Delay, fontSecondary)
 		})
-	})
-}
-
-// latencyBar grows to show how fast a node is: full for an instant answer,
-// short near barCeiling. Bars grow one after another when results arrive.
-func latencyBar(c *ui.Context, t *ui.Theme, delay model.Delay, rank int) {
-	score := float32(1) - float32(min(delay.Millis, barCeiling))/barCeiling
-	target := max(0.08, score) * barWidth
-	track := ui.Box(c).Width(barWidth).Height(4).Radius(2).Background(t.Border)
-	width := track.AnimateTo("bar", target, ui.Animation{Spring: ui.Snappy.Spring, Delay: time.Duration(rank) * entranceStep})
-	track.Children(func() {
-		ui.Box(c).Width(width).Height(4).Radius(2).Background(delayColor(t, delay))
 	})
 }

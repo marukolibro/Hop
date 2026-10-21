@@ -273,9 +273,10 @@ func BootstrapConfig(s RuntimeSettings) ([]byte, error) {
 
 // RuntimeConfig builds the config for the core from a subscription under
 // Hop's own settings: its nodes always, and the groups and rules its rule
-// source names — the provider's own, or Hop's template. A list of node links
-// carries no groups or rules, so it runs only with Hop's.
-func RuntimeConfig(subscription []byte, rules model.RuleSource, s RuntimeSettings) ([]byte, error) {
+// source names — the provider's own, or Hop's template — with the user's
+// custom rules matched before either. A list of node links carries no groups
+// or rules, so it runs only with Hop's.
+func RuntimeConfig(subscription []byte, rules model.RuleSource, custom []model.CustomRule, s RuntimeSettings) ([]byte, error) {
 	p, err := readProfile(subscription)
 	if err != nil {
 		return nil, err
@@ -289,18 +290,74 @@ func RuntimeConfig(subscription []byte, rules model.RuleSource, s RuntimeSetting
 		cfg.Proxies = p.doc["proxies"]
 		cfg.ProxyGroups = p.doc["proxy-groups"]
 		cfg.ProxyProviders = p.doc["proxy-providers"]
-		cfg.Rules = p.doc["rules"]
 		cfg.RuleProviders = p.doc["rule-providers"]
 		cfg.SubRules = p.doc["sub-rules"]
+		mainGroup, err := providerMainGroup(p, custom)
+		if err != nil {
+			return nil, err
+		}
+		lines, err := customRuleLines(custom, mainGroup)
+		if err != nil {
+			return nil, err
+		}
+		cfg.Rules, err = prependRuleLines(p.doc["rules"], lines)
+		if err != nil {
+			return nil, err
+		}
 		return marshalConfig(cfg)
 	}
 	if rules != model.RulesHop {
 		return nil, fmt.Errorf("unknown rule source %q", rules)
 	}
-	if err := applyHopTemplate(&cfg, p); err != nil {
+	if err := applyHopTemplate(&cfg, p, custom); err != nil {
 		return nil, err
 	}
 	return marshalConfig(cfg)
+}
+
+// providerMainGroup names the group the dashboard treats as the main route:
+// the first proxy group the profile declares, in the order the dashboard
+// reads them from the core (view.go's groupKind calls index 0 the main
+// group). It is asked for only when a custom rule targets 代理; a profile
+// without such a group is an error, never a guess.
+func providerMainGroup(p subscriptionProfile, custom []model.CustomRule) (string, error) {
+	if !slices.ContainsFunc(custom, func(rule model.CustomRule) bool { return rule.Target == model.CustomRuleProxy }) {
+		return "", nil
+	}
+	var groups []struct {
+		Name string `yaml:"name"`
+	}
+	node := p.doc["proxy-groups"]
+	if err := node.Decode(&groups); err != nil {
+		return "", fmt.Errorf("read the subscription's proxy groups for custom rules: %w", err)
+	}
+	if len(groups) == 0 || groups[0].Name == "" {
+		return "", errors.New("a custom rule targets 代理, but the subscription declares no proxy group to send it through")
+	}
+	return groups[0].Name, nil
+}
+
+// prependRuleLines puts lines ahead of a profile's own rules. A profile
+// without rules gets a list of just the custom ones.
+func prependRuleLines(node yaml.Node, lines []string) (yaml.Node, error) {
+	if len(lines) == 0 {
+		return node, nil
+	}
+	if node.Kind == yaml.AliasNode && node.Alias != nil {
+		node = *node.Alias
+	}
+	out := node
+	if out.IsZero() {
+		out = yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	} else if out.Kind != yaml.SequenceNode {
+		return yaml.Node{}, errors.New("the subscription's rules are not a list")
+	}
+	custom := make([]*yaml.Node, 0, len(lines))
+	for _, line := range lines {
+		custom = append(custom, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: line})
+	}
+	out.Content = append(custom, out.Content...)
+	return out, nil
 }
 
 // RulesFor is the rule source a subscription runs with: the one chosen,

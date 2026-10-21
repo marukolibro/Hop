@@ -107,9 +107,18 @@ handler → service → repository, interfaces defined where they are used.
   that way. The login item itself lives in the system (`mygo.App`
   `OpenAtLogin`), not in Hop's settings; never turn it on for a dev build.
 - `config` — startup settings; `main.go` wires everything. User settings
-  (`service/settings.go`: appearance, delay test timeout) load before the UI
-  and are validated against the offered choices; the dashboard's theme is
-  `d.theme(c)`, which applies the chosen appearance over the system's.
+  (`service/settings.go`: appearance, delay test timeout, subscription
+  interval, geodata updates) load before the UI and are validated against
+  the offered choices; the dashboard's theme is `d.theme(c)`, which applies
+  the chosen appearance over the system's.
+- `mygo.json` — the update public key and the `updates.privateKey` path.
+  `service/updates.go` wraps `mygo.Updater`: the settings 版本 row checks; the
+  row and the flyout download and install, then `mygo.App.Relaunch`. mygo fetches
+  GitHub with `http.DefaultClient` directly, not Hop's loopback proxy; never
+  change `http.DefaultTransport`/`DefaultClient` globally to route it. The
+  quit releases (system proxy, helper core) run in `mygo.App.OnQuit`, which
+  fires before a Relaunch's new instance starts; `App.Run` returns only after
+  finish, so the releases must not move back below it.
 
 WebSocket is `github.com/coder/websocket`, chosen over faster server-oriented
 libraries such as gws: Hop only reads three loopback streams at about one
@@ -189,12 +198,29 @@ token redaction and restart from the store; extend it when those paths change.
 ## Distribution
 
 Hop is for the user and colleagues for now, shipped ad hoc signed without an
-Apple Developer ID. Colleagues install through a `curl -fsSL .../install.sh |
-sh` script (curl sets no quarantine attribute, so Gatekeeper lets the app
-open); the script and its GitHub release upload belong to the release work.
-Never use shared or third-party signing certificates. A Developer ID with
-notarization (MyGo's `macos.signingIdentity` and `notarize`) waits for a
-public release, auto-update or a privileged TUN helper.
+Apple Developer ID, and Apple silicon only (there is no pinned darwin-amd64
+core). Colleagues install with `curl -fsSL
+https://raw.githubusercontent.com/marukolibro/Hop/main/install.sh | sh`
+(curl sets no quarantine attribute, so Gatekeeper lets the app open). The
+script refuses while Hop Dev is running, quits a running release Hop, verifies
+the archive size and the extracted app's version and ad-hoc code signature,
+and installs it
+user-owned to `/Applications` when the user can write there, else
+`~/Applications`; it removes quarantine only from the installed `Hop.app`
+and never uses sudo. MyGo's manifest carries no SHA-256 and POSIX sh does
+not verify Ed25519, so the bootstrap download relies on HTTPS; the app's own
+updater verifies the signature of every later update. The private key must
+stay outside the repository and out of output; `mygo.json` only points at
+its path.
+
+Publish with `scripts/release.sh --dry-run` (build and list) or
+`--publish` (build with `mygo build -upload`, which creates a draft release;
+the script then prints the `gh release edit v<version> --draft=false` command
+for the user to run after review). It refuses a dirty tree, a changelog
+without the version, an existing tag, and a build without the signing key.
+Only `darwin/arm64` is built. Never use shared or third-party signing
+certificates. A Developer ID with notarization (MyGo's
+`macos.signingIdentity` and `notarize`) waits for a public release.
 
 ## Git
 

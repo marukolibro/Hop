@@ -20,10 +20,19 @@ var Appearances = []model.Appearance{model.AppearanceSystem, model.AppearanceLig
 // DelayTimeouts are the delay test timeouts the settings offer, in seconds.
 var DelayTimeouts = []int{2, 3, 5}
 
+// SubscriptionUpdateIntervals are the automatic refresh intervals the
+// settings offer, in hours; 0 turns the automatic refresh off.
+var SubscriptionUpdateIntervals = []int{0, 6, 12, 24}
+
 // DefaultSettings are the settings before the user changed any: the system's
-// look, and a timeout most nodes answer well within.
+// look, a timeout most nodes answer well within, and a subscription refresh
+// twice a day.
 func DefaultSettings() model.Settings {
-	return model.Settings{Appearance: model.AppearanceSystem, DelayTimeoutSeconds: 3}
+	return model.Settings{
+		Appearance:              model.AppearanceSystem,
+		DelayTimeoutSeconds:     3,
+		SubscriptionUpdateHours: model.DefaultSubscriptionUpdateHours,
+	}
 }
 
 // SettingsService loads and keeps the user's settings.
@@ -66,6 +75,9 @@ func validateSettings(settings model.Settings) error {
 	}
 	if !slices.Contains(DelayTimeouts, settings.DelayTimeoutSeconds) {
 		return fmt.Errorf("unsupported delay test timeout %ds (want one of %v)", settings.DelayTimeoutSeconds, DelayTimeouts)
+	}
+	if !slices.Contains(SubscriptionUpdateIntervals, settings.SubscriptionUpdateHours) {
+		return fmt.Errorf("unsupported subscription update interval %dh (want one of %v)", settings.SubscriptionUpdateHours, SubscriptionUpdateIntervals)
 	}
 	return nil
 }

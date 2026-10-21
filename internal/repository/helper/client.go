@@ -71,6 +71,13 @@ func (c *Client) InstallCore(ctx context.Context, path string, geodataDir string
 	return c.call(ctx, http.MethodPost, "/core/install", InstallRequest{Path: path, Geodata: geodataDir}, nil)
 }
 
+// InstallGeodata replaces the geodata databases in the helper's home with
+// those in geodataDir and, when its core runs, restarts it on them: the core
+// reads the databases once, at start.
+func (c *Client) InstallGeodata(ctx context.Context, geodataDir string) error {
+	return c.call(ctx, http.MethodPost, "/geodata/install", GeodataInstallRequest{Path: geodataDir}, nil)
+}
+
 // StartCore makes the helper write config as its core's config and start the
 // core on it, returning once the core's controller answers.
 func (c *Client) StartCore(ctx context.Context, config []byte) error {

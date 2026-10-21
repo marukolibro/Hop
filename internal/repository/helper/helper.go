@@ -13,9 +13,9 @@ import (
 )
 
 // Version is the helper's own version, what GET /version reports. It moves
-// only when the socket protocol changes; version 2 added the DNS takeover
-// and the dashboards' dnsManaged.
-const Version = "5"
+// only when the socket protocol changes; version 6 added /geodata/install,
+// which replaces the helper's geo databases and restarts its core.
+const Version = "6"
 
 // Production paths, as the LaunchDaemon runs the helper. Every one of them
 // reaches the helper as a flag, so tests can run it unprivileged in temp
@@ -78,6 +78,12 @@ type VersionResponse struct {
 type InstallRequest struct {
 	Path    string `json:"path"`
 	Geodata string `json:"geodata"`
+}
+
+// GeodataInstallRequest is POST /geodata/install's body: Path is the
+// directory the helper copies the two geo databases from, over its own.
+type GeodataInstallRequest struct {
+	Path string `json:"path"`
 }
 
 // StartRequest is POST /core/start's body: the whole runtime config as YAML.

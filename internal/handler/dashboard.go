@@ -65,6 +65,9 @@ type SubscriptionService interface {
 	Use(ctx context.Context, id string) error
 	Update(ctx context.Context, id string) error
 	UpdateAll(ctx context.Context) error
+	// AutoUpdate refreshes what the stored times say is due; interval 0
+	// turns it off.
+	AutoUpdate(ctx context.Context, interval time.Duration) (bool, error)
 	Delete(ctx context.Context, id string, replacementID string) error
 }
 
@@ -91,7 +94,36 @@ type CoreService interface {
 
 // SettingsService keeps the user's settings.
 type SettingsService interface {
+	Load() (model.Settings, error)
 	Save(settings model.Settings) error
+}
+
+// GeodataService keeps the rule databases current.
+type GeodataService interface {
+	Status() (model.GeodataStatus, error)
+	Update(ctx context.Context) error
+	// Due says whether an automatic update is due, before the streams are
+	// ended for the restart it causes.
+	Due() (bool, error)
+	// AutoUpdate updates the databases when the stored last success is old
+	// enough; it reports whether one was applied.
+	AutoUpdate(ctx context.Context) (bool, error)
+}
+
+// CustomRulesService keeps the rules the user puts ahead of every profile's.
+type CustomRulesService interface {
+	List() ([]model.CustomRule, error)
+	Save(ctx context.Context, rules []model.CustomRule) error
+}
+
+// AppUpdateService checks for and installs a newer Hop through mygo's signed
+// updater.
+type AppUpdateService interface {
+	Enabled() bool
+	DisabledReason() string
+	Due() (bool, error)
+	Check(ctx context.Context) (model.AppUpdate, error)
+	Install(ctx context.Context, version string, progress func(downloaded int64, total int64)) error
 }
 
 // SystemProxyService points the system proxy at Hop and back, never over
@@ -125,6 +157,9 @@ type Services struct {
 	Monitor       MonitorService
 	Core          CoreService
 	Settings      SettingsService
+	Geodata       GeodataService
+	Rules         CustomRulesService
+	AppUpdate     AppUpdateService
 	SystemProxy   SystemProxyService
 	Tun           TunService
 	LoginItem     LoginItem
@@ -227,7 +262,7 @@ type Dashboard struct {
 	services Services
 	// proxyAddress is where apps send traffic to use Hop, as host:port.
 	proxyAddress string
-	// appVersion is Hop's own version, as the about section shows it.
+	// appVersion is Hop's own version, as the settings row shows it.
 	appVersion string
 
 	page         int
@@ -236,8 +271,17 @@ type Dashboard struct {
 	subscription subscriptionsState
 	core         coreState
 	settings     settingsState
+	geodata      geodataState
+	rules        customRulesState
+	appUpdate    appUpdateState
 	sysProxy     sysProxyState
 	tun          tunState
+	// autoBusy is set while the background check refreshes what is due; it
+	// locks the controls like any other mutation.
+	autoBusy bool
+	// quickTestedAt is when opening the menu bar panel last tested its
+	// routes.
+	quickTestedAt time.Time
 	// openAtLogin is whether Hop starts at login, as the system says.
 	openAtLogin bool
 	// watchCancel ends the streams from the core, which restart with it.
@@ -307,6 +351,10 @@ func NewDashboard(services Services, proxyAddress string, settings model.Setting
 		coreRestarts: make(chan model.CoreRestart, 8),
 	}
 	d.subscription.busyIDs = map[string]struct{}{}
+	if services.AppUpdate != nil {
+		d.appUpdate.enabled = services.AppUpdate.Enabled()
+		d.appUpdate.disabledReason = services.AppUpdate.DisabledReason()
+	}
 	d.logs.list.FollowEnd = true
 	d.connections.list.Key = func(row int) any { return d.visibleConnections()[row].ID }
 	return d
@@ -430,6 +478,8 @@ func (d *Dashboard) Start(ctx context.Context, win Updater) {
 	d.closeConnection = func(id string) { go d.runClose(ctx, win, id) }
 	d.closeAll = func() { go d.runCloseAll(ctx, win) }
 	go d.loadSubscriptions(ctx, win)
+	go d.loadRules(ctx, win)
+	go d.loadGeodata(ctx, win)
 	go d.startupTest(ctx, win, d.viewGen)
 	go d.loadCore(ctx, win)
 	go d.startSystemProxy(ctx, win, d.settings.settings.SystemProxy)
@@ -438,6 +488,7 @@ func (d *Dashboard) Start(ctx context.Context, win Updater) {
 	d.openAtLogin = d.services.LoginItem.OpenAtLogin()
 	d.startWatchers(ctx, win)
 	go d.watchCoreRestarts(ctx, win)
+	go d.runUpdateScheduler(ctx, win)
 }
 
 // nextViewGen starts work that publishes a new view and supersedes older views
@@ -660,6 +711,12 @@ const (
 	actionCoreRestarted       action = "内核意外退出,已自动重启"
 	actionCoreGaveUp          action = "内核反复退出,已停止自动重启"
 	actionSaveSettings        action = "保存设置失败"
+	actionReadRules           action = "读取自定义规则失败"
+	actionSaveRules           action = "保存自定义规则失败"
+	actionReadGeodata         action = "读取规则数据状态失败"
+	actionUpdateGeodata       action = "更新规则数据失败"
+	actionCheckAppUpdate      action = "检查应用更新失败"
+	actionInstallAppUpdate    action = "安装应用更新失败"
 	actionReadSystemProxy     action = "读取系统代理失败"
 	actionSystemProxyOn       action = "打开系统代理失败"
 	actionSystemProxyOff      action = "关闭系统代理失败"
@@ -700,10 +757,11 @@ func (d *Dashboard) View(c *ui.Context) {
 			d.nodesPage(c, t)
 		}
 	})
-	// The subscription dialogs sit over whatever page shows.
+	// The subscription and settings dialogs sit over whatever page shows.
 	d.editorDialog(c, t)
 	d.deleteDialog(c, t)
 	d.tunDialog(c, t)
+	d.customRuleDialog(c, t)
 }
 
 // header holds what applies to every page: the page switch and whether the

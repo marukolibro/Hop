@@ -97,6 +97,10 @@ type Subscription struct {
 	UpdatedAt time.Time
 	// LastError is why the last refresh failed, cleared by a success.
 	LastError string
+	// AttemptedAt is when a refresh was last tried, successful or not: the
+	// automatic refresh is due by this and UpdatedAt, so a failure waits a
+	// full interval instead of retrying at every check.
+	AttemptedAt time.Time
 	// Rules says whose groups and rules the core runs this subscription with.
 	Rules RuleSource
 }
@@ -301,6 +305,15 @@ type CoreRelease struct {
 	SHA256    string
 }
 
+// AppUpdate is what checking for a newer Hop found with mygo's signed
+// updater: whether one is newer than the running version, its version and
+// release notes.
+type AppUpdate struct {
+	Available bool
+	Version   string
+	Notes     string
+}
+
 // CoreStage is a step of a core upgrade.
 type CoreStage string
 
@@ -357,11 +370,19 @@ const (
 	AppearanceDark   Appearance = "dark"
 )
 
+// DefaultSubscriptionUpdateHours is how often subscriptions refresh on their
+// own before the user chooses another interval. A value of 0 turns the
+// automatic refresh off.
+const DefaultSubscriptionUpdateHours = 12
+
 // Settings are the user's preferences, kept between starts.
 type Settings struct {
 	Appearance Appearance
 	// DelayTimeoutSeconds is how long a delay test waits for one node.
 	DelayTimeoutSeconds int
+	// SubscriptionUpdateHours is how often stored subscriptions refresh on
+	// their own; 0 leaves them to the manual refresh.
+	SubscriptionUpdateHours int
 	// SystemProxy says the user wants the system proxy pointed at Hop; Hop
 	// applies it at start unless another app holds the system proxy.
 	SystemProxy bool
@@ -369,6 +390,37 @@ type Settings struct {
 	// TUN on; Hop applies it at start unless another TUN holds the default
 	// routes.
 	Tun bool
+}
+
+// Custom rule types, as the config file writes them.
+const (
+	CustomRuleDomainSuffix  = "DOMAIN-SUFFIX"
+	CustomRuleDomain        = "DOMAIN"
+	CustomRuleDomainKeyword = "DOMAIN-KEYWORD"
+	CustomRuleIPCIDR        = "IP-CIDR"
+	CustomRuleProcessName   = "PROCESS-NAME"
+)
+
+// Custom rule targets. CustomRuleProxy is a placeholder: the config writes
+// the dashboard's main proxy group there.
+const (
+	CustomRuleDirect = "DIRECT"
+	CustomRuleProxy  = "PROXY"
+	CustomRuleReject = "REJECT"
+)
+
+// CustomRule is one rule the user puts ahead of a profile's own rules.
+type CustomRule struct {
+	Type   string
+	Value  string
+	Target string
+}
+
+// GeodataStatus is what the settings page shows of the geo databases the
+// core's rules load. UpdatedAt is zero while they are the ones the app
+// ships.
+type GeodataStatus struct {
+	UpdatedAt time.Time
 }
 
 // TunStatus is what the dashboard shows of TUN mode: whether the privileged

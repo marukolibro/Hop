@@ -15,12 +15,16 @@ var appearanceLabels = []string{"跟随系统", "浅色", "深色"}
 // timeoutLabels name service.DelayTimeouts, index for index.
 var timeoutLabels = []string{"2 秒", "3 秒", "5 秒"}
 
+// updateLabels name service.SubscriptionUpdateIntervals, index for index.
+var updateLabels = []string{"关闭", "6 小时", "12 小时", "24 小时"}
+
 // settingsState is what the settings page shows and edits. The indexes are
 // what its switches hold, kept in step with settings.
 type settingsState struct {
 	settings        model.Settings
 	appearanceIndex int
 	timeoutIndex    int
+	updateIndex     int
 }
 
 // newSettingsState is the state showing settings.
@@ -29,6 +33,7 @@ func newSettingsState(settings model.Settings) settingsState {
 		settings:        settings,
 		appearanceIndex: slices.Index(service.Appearances, settings.Appearance),
 		timeoutIndex:    slices.Index(service.DelayTimeouts, settings.DelayTimeoutSeconds),
+		updateIndex:     slices.Index(service.SubscriptionUpdateIntervals, settings.SubscriptionUpdateHours),
 	}
 }
 
@@ -101,11 +106,25 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 							})
 						})
 					},
+					d.appVersionRow(c, t),
 				)
+				settingsGroup(c, t, "订阅",
+					func() {
+						settingRow(c, t, "自动更新", "按间隔刷新已保存的订阅，失败后等下一个间隔再试", func() {
+							slidingSwitch(c, "subscription-update", &s.updateIndex, updateLabels, pageSwitchStyle(t, 58), func(i int) {
+								next := s.settings
+								next.SubscriptionUpdateHours = service.SubscriptionUpdateIntervals[i]
+								d.saveSettings(next)
+							})
+						})
+					},
+				)
+				settingsGroup(c, t, "规则", d.geodataRow(c, t))
+				settingsGroup(c, t, "自定义规则", d.customRulesRows(c, t)...)
 				if d.core.loaded {
 					settingsGroup(c, t, "内核", append(d.coreRows(c, t), d.helperRows(c, t)...)...)
 				}
-				mutedText(c, t, "Hop "+d.appVersion+" 以 GPL-3.0 许可发布,内置的 mihomo 内核同为 GPL-3.0。").AlignSelf(ui.Center)
+				mutedText(c, t, "以 GPL-3.0 许可发布,内置的 mihomo 内核同为 GPL-3.0。").AlignSelf(ui.Center)
 			})
 		})
 	})

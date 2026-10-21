@@ -41,9 +41,11 @@ const (
 )
 
 // controlsLocked says whether a change that touches the core must wait: a
-// core change, a subscription mutation, a mode change or a TUN swap runs.
+// core change, a subscription mutation, a mode change, a TUN swap, a rules or
+// geodata update, an app update, or the automatic check runs.
 func (d *Dashboard) controlsLocked() bool {
-	return d.modeBusy || d.subscription.mutations > 0 || d.core.busy || d.tun.busy
+	return d.modeBusy || d.subscription.mutations > 0 || d.core.busy || d.tun.busy ||
+		d.geodata.busy || d.rules.busy || d.appUpdate.updating || d.autoBusy
 }
 
 // busy reports whether an operation runs on the subscription id.
