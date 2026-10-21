@@ -166,10 +166,10 @@ func (d *Dashboard) tunHint() string {
 // updated instead, and the copy says so.
 func (d *Dashboard) tunDialog(c *ui.Context, t *ui.Theme) {
 	s := &d.tun
-	description := "增强模式会接管全部流量,需要先安装 Hop 的增强组件。系统会请求一次管理员密码,之后可随时在设置里卸载。"
+	description := "增强模式会接管全部流量,需要先安装 Hop 的增强组件。" + tunPrivilegePrompt + ",之后可随时在设置里卸载。"
 	submit := "安装并开启"
 	if s.helperOutdated {
-		description = "增强模式会接管全部流量,需要更新 Hop 的增强组件。系统会请求一次管理员密码,之后可随时在设置里卸载。"
+		description = "增强模式会接管全部流量,需要更新 Hop 的增强组件。" + tunPrivilegePrompt + ",之后可随时在设置里卸载。"
 		submit = "更新并开启"
 	}
 	ui.DialogBase(c, &s.installOpen, func(backdrop, panel ui.Element) {
@@ -209,7 +209,7 @@ func (d *Dashboard) helperRows(c *ui.Context, t *ui.Theme) []func() {
 	case s.helper && s.helperOutdated:
 		note = "需要更新。下次开启增强模式时会请求更新。"
 	case s.helper:
-		note = "已安装,增强模式下的内核由它以管理员运行"
+		note = "已安装,增强模式下的内核由它以系统权限运行"
 	}
 	return []func(){func() {
 		ui.Row(c).Key("helper").Gap(gapMedium).AlignItems(ui.Center).Children(func() {

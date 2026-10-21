@@ -1,4 +1,4 @@
-//go:build !darwin
+//go:build !darwin && !windows
 
 package routetable
 
@@ -12,11 +12,12 @@ import (
 type Reader struct{}
 
 // Read always fails on a platform Hop's TUN mode does not run on.
-func (Reader) Read(ctx context.Context) (string, error) {
+func (Reader) Read(ctx context.Context) (Table, error) {
 	return IPv4(ctx)
 }
 
-// IPv4 is a stub everywhere but darwin: Hop's TUN mode runs there only.
-func IPv4(context.Context) (string, error) {
-	return "", fmt.Errorf("reading the routing table is not supported on %s", runtime.GOOS)
+// IPv4 is a stub everywhere but darwin and windows: Hop's TUN mode runs
+// there only.
+func IPv4(context.Context) (Table, error) {
+	return nil, fmt.Errorf("reading the routing table is not supported on %s", runtime.GOOS)
 }

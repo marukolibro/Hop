@@ -10,12 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 )
-
-// versionProbeTimeout bounds the version probe InstalledVersion makes; the
-// osascript prompt itself waits for the user as long as it must.
-const versionProbeTimeout = 3 * time.Second
 
 // Installer installs and removes the helper's LaunchDaemon. Creating it is a
 // function call so the service layer can depend on an interface it

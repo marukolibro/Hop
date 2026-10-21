@@ -1,6 +1,5 @@
-// Package routetable reads the system's routing table, the read-only
-// `netstat -rn` macOS prints, so Hop can tell whose TUN holds the default
-// routes without touching the table itself.
+//go:build darwin
+
 package routetable
 
 import (
@@ -14,15 +13,15 @@ import (
 type Reader struct{}
 
 // Read returns the Internet routing table.
-func (Reader) Read(ctx context.Context) (string, error) {
+func (Reader) Read(ctx context.Context) (Table, error) {
 	return IPv4(ctx)
 }
 
 // IPv4 reads the Internet routing table.
-func IPv4(ctx context.Context) (string, error) {
+func IPv4(ctx context.Context) (Table, error) {
 	out, err := exec.CommandContext(ctx, "netstat", "-rn", "-f", "inet").Output()
 	if err != nil {
-		return "", fmt.Errorf("read the routing table (netstat -rn -f inet): %w", err)
+		return nil, fmt.Errorf("read the routing table (netstat -rn -f inet): %w", err)
 	}
-	return string(out), nil
+	return ParseNetstat(string(out)), nil
 }

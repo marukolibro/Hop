@@ -4,26 +4,27 @@
 # mygo build ship and sign it with the app. TUN mode needs it: an app built
 # without one turns TUN on only as far as saying what is missing.
 #
-# usage: scripts/build-helper.sh darwin-arm64 | darwin-amd64
+# usage: scripts/build-helper.sh darwin-arm64 | darwin-amd64 | windows-amd64
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 
 if [ "$#" -ne 1 ]; then
-	echo "usage: $0 darwin-arm64 | darwin-amd64" >&2
+	echo "usage: $0 darwin-arm64 | darwin-amd64 | windows-amd64" >&2
 	exit 2
 fi
 platform=$1
 
 case "$platform" in
-darwin-arm64) goos=darwin; goarch=arm64 ;;
-darwin-amd64) goos=darwin; goarch=amd64 ;;
+darwin-arm64) goos=darwin; goarch=arm64; name=hop-helper ;;
+darwin-amd64) goos=darwin; goarch=amd64; name=hop-helper ;;
+windows-amd64) goos=windows; goarch=amd64; name=hop-helper.exe ;;
 *)
-	echo "usage: $0 darwin-arm64 | darwin-amd64" >&2
+	echo "usage: $0 darwin-arm64 | darwin-amd64 | windows-amd64" >&2
 	exit 2
 	;;
 esac
 
-out=$root/resources/$platform/bin/hop-helper
+out=$root/resources/$platform/bin/$name
 GOOS=$goos GOARCH=$goarch go build -trimpath -o "$out" ./cmd/hop-helper
 echo "built $out"

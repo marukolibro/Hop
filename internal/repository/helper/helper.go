@@ -1,6 +1,6 @@
 // Package helper talks to Hop's privileged helper (cmd/hop-helper): the
 // root-run process that owns the TUN core, over a unix socket, and installs
-// and removes its LaunchDaemon.
+// and removes its LaunchDaemon on macOS or its service on Windows.
 package helper
 
 import (
@@ -8,42 +8,32 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"hop/internal/model"
 )
 
 // Version is the helper's own version, what GET /version reports. It moves
-// only when the socket protocol changes; version 6 added /geodata/install,
-// which replaces the helper's geo databases and restarts its core.
-const Version = "6"
+// only when the socket protocol or the platform setup changes; version 7
+// runs the same protocol as 6 on Windows too, as a service.
+const Version = "7"
 
-// Production paths, as the LaunchDaemon runs the helper. Every one of them
-// reaches the helper as a flag, so tests can run it unprivileged in temp
-// dirs instead.
-const (
-	// SocketPath is the unix socket Hop talks to the helper on.
-	SocketPath = "/var/run/io.github.marukolibro.hop.helper.sock"
-	// HomeDir holds the helper's own files: the core's config, pid file and
-	// geodata.
-	HomeDir = "/Library/Application Support/io.github.marukolibro.hop.helper"
-	// CorePath is the mihomo binary the helper starts.
-	CorePath = HomeDir + "/mihomo"
-	// ToolPath is where the helper binary itself is installed.
-	ToolPath = "/Library/PrivilegedHelperTools/io.github.marukolibro.hop.helper"
-	// Label is the LaunchDaemon's job label.
-	Label = "io.github.marukolibro.hop.helper"
-	// PlistPath is the LaunchDaemon's definition.
-	PlistPath = "/Library/LaunchDaemons/io.github.marukolibro.hop.helper.plist"
-)
+// versionProbeTimeout bounds the version probe InstalledVersion makes; on
+// macOS the osascript prompt itself waits for the user as long as it must.
+const versionProbeTimeout = 3 * time.Second
 
 // BundledToolPath locates the helper binary that ships with the app: in the
 // packaged resources' bin, or in the platform directory of the source tree
 // (scripts/build-helper.sh puts it there). An app built without one has no
 // TUN: enabling it then fails, naming what is missing.
 func BundledToolPath(resourcesDir string) (string, error) {
+	name := "hop-helper"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
 	candidates := []string{
-		filepath.Join(resourcesDir, "bin", "hop-helper"),
-		filepath.Join(resourcesDir, runtime.GOOS+"-"+runtime.GOARCH, "bin", "hop-helper"),
+		filepath.Join(resourcesDir, "bin", name),
+		filepath.Join(resourcesDir, runtime.GOOS+"-"+runtime.GOARCH, "bin", name),
 	}
 	for _, path := range candidates {
 		if _, err := os.Stat(path); err == nil {

@@ -11,13 +11,10 @@ import (
 	"hop/config"
 )
 
-// The wait covers macOS's TIME_WAIT (twice net.inet.tcp.msl, 30 s by
-// default): a connection the previous core closed first keeps its port from
-// a core run by another user until then, though nothing listens on it.
-const (
-	portFreeAttempts = 140
-	portFreeInterval = 250 * time.Millisecond
-)
+// The wait covers the platform's TIME_WAIT (portFreeAttempts, per platform):
+// a connection the previous core closed first keeps its port from a core run
+// by another user until then, though nothing listens on it.
+const portFreeInterval = 250 * time.Millisecond
 
 // waitPortsFree waits until the core's controller and mixed port can be
 // bound. A core that just stopped can hold them a moment longer, and mihomo

@@ -7,89 +7,105 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"hop/internal/model"
+	"hop/internal/repository/routetable"
 )
 
-// netstatWithVerge is this machine's real `netstat -rn -f inet` output while
-// another Clash client's TUN (utun4) held the default-ish routes through the
-// subnet-chain split, with the plain default still on the physical interface.
-const netstatWithVerge = `Routing tables
-
-Internet:
-Destination        Gateway            Flags               Netif Expire
-default            192.168.5.1        UGScg                 en0
-1                  198.18.0.1         UGSc                utun4
-2/7                198.18.0.1         UGSc                utun4
-4/6                198.18.0.1         UGSc                utun4
-8/5                198.18.0.1         UGSc                utun4
-16/4               198.18.0.1         UGSc                utun4
-32/3               198.18.0.1         UGSc                utun4
-64/2               198.18.0.1         UGSc                utun4
-127                127.0.0.1          UCS                   lo0
-127.0.0.1          127.0.0.1          UH                    lo0
-128.0/1            198.18.0.1         UGSc                utun4
-169.254            link#15            UCS                   en0      !
-192.168.5          link#15            UCS                   en0      !
-192.168.5.1/32     link#15            UCS                   en0      !
-192.168.5.215/32   link#15            UCS                   en0      !
-198.18.0.1         198.18.0.1         UH                  utun4
-224.0.0/4          link#15            UmCS                  en0      !
-255.255.255.255/32 link#15            UCS                   en0      !
-`
-
 // TestTunRouteConflict guards the rule that another client's TUN on the
-// default-ish routes reads as taken, and Hop's own TUN never does.
+// default path reads as taken, and Hop's own TUN never does. TUN clients
+// split the default route around the private ranges, so taking the default
+// path is measured by coverage, not by one 0.0.0.0/0 row.
 func TestTunRouteConflict(t *testing.T) {
+	split := routetable.Table{
+		{Destination: "1", Interface: "utun4", Tunnel: true},
+		{Destination: "2/7", Interface: "utun4", Tunnel: true},
+		{Destination: "4/6", Interface: "utun4", Tunnel: true},
+		{Destination: "8/5", Interface: "utun4", Tunnel: true},
+		{Destination: "16/4", Interface: "utun4", Tunnel: true},
+		{Destination: "32/3", Interface: "utun4", Tunnel: true},
+		{Destination: "64/2", Interface: "utun4", Tunnel: true},
+		{Destination: "128.0/1", Interface: "utun4", Tunnel: true},
+	}
 	cases := []struct {
 		name      string
-		out       string
+		table     routetable.Table
 		ownDevice string
 		wantTaken bool
 		wantBy    string
 	}{
 		{
-			name:      "another client's tun on this machine",
-			out:       netstatWithVerge,
+			name: "another client's tun on this machine",
+			table: append(routetable.Table{
+				{Destination: "default", Interface: "en0"},
+				{Destination: "127", Interface: "lo0"},
+				{Destination: "169.254", Interface: "en0"},
+				{Destination: "192.168.5", Interface: "en0"},
+			}, split...),
 			ownDevice: TunDevice,
 			wantTaken: true,
 			wantBy:    "utun4",
 		},
 		{
 			name: "hop's own tun",
-			out: `Internet:
-Destination        Gateway            Flags               Netif Expire
-default            198.18.0.1         UGScg             utun199
-128.0/1            198.18.0.1         UGSc              utun199
-`,
+			table: routetable.Table{
+				{Destination: "default", Interface: TunDevice, Tunnel: true},
+				{Destination: "128.0/1", Interface: TunDevice, Tunnel: true},
+			},
+			ownDevice: TunDevice,
+			wantTaken: false,
+		},
+		{
+			name: "hop's own tun under another case",
+			table: routetable.Table{
+				{Destination: "default", Interface: "UTUN199", Tunnel: true},
+			},
 			ownDevice: TunDevice,
 			wantTaken: false,
 		},
 		{
 			name: "plain default on the physical interface",
-			out: `Internet:
-Destination        Gateway            Flags               Netif Expire
-default            192.168.5.1        UGScg               en0
-`,
+			table: routetable.Table{
+				{Destination: "default", Interface: "en0"},
+			},
 			ownDevice: TunDevice,
 			wantTaken: false,
 		},
 		{
 			name: "both tuns, hop's and another's",
-			out: `Internet:
-Destination        Gateway            Flags               Netif Expire
-default            198.18.0.1         UGScg             utun199
-0/1                10.0.0.1           UGSc               utun7
-`,
+			table: routetable.Table{
+				{Destination: "default", Interface: TunDevice, Tunnel: true},
+				{Destination: "0/1", Interface: "utun7", Tunnel: true},
+			},
 			ownDevice: TunDevice,
 			wantTaken: true,
 			wantBy:    "utun7",
 		},
-		{name: "headers only", out: "Routing tables\n\nInternet:\n", ownDevice: TunDevice},
-		{name: "empty", out: "", ownDevice: TunDevice},
-		{name: "garbage", out: "not a routing table at all\njust words\n", ownDevice: TunDevice},
+		{
+			name: "another tun with the private ranges excluded",
+			table: routetable.Table{
+				{Destination: "0.0.0.0/5", Interface: "utun8", Tunnel: true},
+				{Destination: "8.0.0.0/7", Interface: "utun8", Tunnel: true},
+				{Destination: "32.0.0.0/3", Interface: "utun8", Tunnel: true},
+				{Destination: "64.0.0.0/2", Interface: "utun8", Tunnel: true},
+				{Destination: "128.0.0.0/1", Interface: "utun8", Tunnel: true},
+			},
+			ownDevice: TunDevice,
+			wantTaken: true,
+			wantBy:    "utun8",
+		},
+		{
+			name: "split-tunnel vpn on one subnet",
+			table: routetable.Table{
+				{Destination: "10.0.0.0/8", Interface: "utun9", Tunnel: true},
+			},
+			ownDevice: TunDevice,
+			wantTaken: false,
+		},
+		{name: "headers only", table: routetable.ParseNetstat("Routing tables\n\nInternet:\n"), ownDevice: TunDevice},
+		{name: "empty", table: nil, ownDevice: TunDevice},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			taken, by := TunRouteConflict(tc.out, tc.ownDevice)
+			taken, by := TunRouteConflict(tc.table, tc.ownDevice)
 			if taken != tc.wantTaken || by != tc.wantBy {
 				t.Fatalf("taken=%v by=%q, want taken=%v by=%q", taken, by, tc.wantTaken, tc.wantBy)
 			}

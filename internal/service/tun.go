@@ -12,6 +12,7 @@ import (
 
 	"hop/internal/model"
 	"hop/internal/repository/helper"
+	"hop/internal/repository/routetable"
 )
 
 const (
@@ -35,17 +36,17 @@ type HelperControl interface {
 	StopCore(ctx context.Context) error
 }
 
-// HelperInstall installs and removes the helper's LaunchDaemon.
+// HelperInstall installs and removes the helper's LaunchDaemon on macOS or
+// its Windows service.
 type HelperInstall interface {
 	InstalledVersion(ctx context.Context) (string, error)
 	Install(ctx context.Context, toolSource string, coreSource string, geodataDir string, uid int) error
 	Uninstall(ctx context.Context) error
 }
 
-// RouteTable reads the system's routing table, as `netstat -rn -f inet`
-// prints it.
+// RouteTable reads the system's IPv4 routing table.
 type RouteTable interface {
-	Read(ctx context.Context) (string, error)
+	Read(ctx context.Context) (routetable.Table, error)
 }
 
 // IdleCloser closes the keep-alive connections a client holds to the
@@ -162,11 +163,12 @@ func (s *TunService) Status(ctx context.Context) (model.TunStatus, error) {
 }
 
 // Enable turns TUN on from the user's click: it installs the helper when
-// there is none yet (which asks for the administrator password once),
-// refreshes the core and geodata in it, validates the TUN config with the
-// core itself, stops Hop's own core and starts the helper's, keeping the
-// outbound mode the running core is in. When the helper's core does not come
-// up, Hop's own is started again and the error says so.
+// there is none yet (asking for administrator approval once — a password on
+// macOS, a UAC prompt on Windows), refreshes the core and geodata in it,
+// validates the TUN config with the core itself, stops Hop's own core and
+// starts the helper's, keeping the outbound mode the running core is in.
+// When the helper's core does not come up, Hop's own is started again and
+// the error says so.
 func (s *TunService) Enable(ctx context.Context) error {
 	if err := s.refuseTaken(ctx); err != nil {
 		return err
@@ -413,32 +415,30 @@ func (s *TunService) waitHelper(ctx context.Context) error {
 	return fmt.Errorf("the helper did not answer after %d attempts: %w", helperReadyAttempts, last)
 }
 
-// defaultRouteKeys are the destinations a TUN's auto-route takes over to
-// capture the default path: the plain default plus the half-space split and
-// the subnet-chain splits of it that macOS TUN clients use.
-var defaultRouteKeys = map[string]struct{}{
-	"default": {}, "0/1": {}, "128.0/1": {},
-	"1": {}, "2/7": {}, "4/6": {}, "8/5": {}, "16/4": {}, "32/3": {}, "64/2": {},
-}
+// defaultRouteCoverage is the share of IPv4 a tunnel must route before it
+// counts as holding the default path. A TUN with the private ranges
+// excluded still covers most of it; a split-tunnel VPN's single subnet
+// covers a sliver.
+const defaultRouteCoverage = 0.5
 
-// TunRouteConflict reads the routing table netstat printed (netstat -rn -f
-// inet) and says whether a TUN interface other than ownDevice holds any
-// default-ish route: another client's TUN is up, and Hop never takes the
-// routes over it. The interface that holds them names the conflict.
-func TunRouteConflict(netstatOut string, ownDevice string) (bool, string) {
-	for _, line := range strings.Split(netstatOut, "\n") {
-		fields := strings.Fields(line)
-		// A route line is destination, gateway, flags, interface, and an
-		// optional expire column; anything shorter is a header or a note.
-		if len(fields) < 4 {
+// TunRouteConflict reads the routing table and says whether a TUN interface
+// other than ownDevice takes the default path over: another client's TUN is
+// up, and Hop never takes the routes over it. The interface that holds them
+// names the conflict. Coverage rather than a single 0.0.0.0/0 route is the
+// test because TUN clients exclude the private ranges, splitting the
+// default route into many prefixes.
+func TunRouteConflict(table routetable.Table, ownDevice string) (bool, string) {
+	seen := make(map[string]struct{})
+	for _, route := range table {
+		if !route.Tunnel || strings.EqualFold(route.Interface, ownDevice) {
 			continue
 		}
-		if _, ok := defaultRouteKeys[fields[0]]; !ok {
+		if _, ok := seen[route.Interface]; ok {
 			continue
 		}
-		iface := fields[3]
-		if strings.HasPrefix(iface, "utun") && iface != ownDevice {
-			return true, iface
+		seen[route.Interface] = struct{}{}
+		if routetable.DefaultCoverage(table, route.Interface) >= defaultRouteCoverage {
+			return true, route.Interface
 		}
 	}
 	return false, ""

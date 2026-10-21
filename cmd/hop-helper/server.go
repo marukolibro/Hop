@@ -10,14 +10,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"go.yaml.in/yaml/v3"
@@ -32,7 +30,7 @@ import (
 
 const (
 	// helperVersion is this helper's protocol version, reported by
-	// GET /version; it moves with the socket protocol only.
+	// GET /version; it moves with the socket protocol and the platform setup.
 	helperVersion = helper.Version
 
 	// controllerTimeout bounds one request to the core's controller.
@@ -67,10 +65,16 @@ type serverOptions struct {
 	socket   string
 	home     string
 	core     string
-	allowUID uint32
+	allowUID int
+	// allowSID is Windows's installing user: it goes into the socket
+	// directory's ACL, which is what lets that user connect.
+	allowSID string
+	// serviceMode says the helper runs under the Windows service control
+	// manager: it owns its home's ACL, and its logs go to a file.
+	serviceMode bool
 	// manageDNS lets the helper hold the system DNS while a TUN core runs.
-	// Production sets it; tests never do, so a test can never touch the
-	// real DNS.
+	// Production sets it on macOS only; tests never do, so a test can never
+	// touch the real DNS.
 	manageDNS bool
 }
 
@@ -96,23 +100,41 @@ type server struct {
 	// the helper holds the system DNS now.
 	dnsMu      sync.Mutex
 	dnsManaged atomic.Bool
+
+	// ready is closed once the socket is listening, so the Windows service
+	// reports Running only when the helper can actually serve.
+	ready chan struct{}
 }
 
 func newServer(opts serverOptions) *server {
-	return &server{opts: opts}
+	return &server{opts: opts, ready: make(chan struct{})}
 }
 
-// serve prepares the socket and serves until SIGTERM or SIGINT, then stops
-// the core and removes the socket.
-func (s *server) serve(parent context.Context) error {
+// serve prepares the socket and serves until ctx is done, then stops the
+// core and removes the socket. The caller owns the signals: launchd sends
+// SIGTERM on macOS, the service control manager asks for a stop on Windows.
+func (s *server) serve(ctx context.Context) error {
+	if err := os.MkdirAll(s.opts.home, 0o700); err != nil {
+		return fmt.Errorf("create the helper's home (dir=%q): %w", s.opts.home, err)
+	}
+	if err := secureDirs(s.opts); err != nil {
+		return err
+	}
 	if err := prepareSocket(s.opts.socket); err != nil {
 		return err
+	}
+	// A helper that crashed left its core running: no socket answers, but the
+	// core may still hold the TUN and the ports. It is stopped only through
+	// the pid file the helper itself wrote and only when its command line
+	// carries the helper's home, so nothing else can be hit by this.
+	if err := mihomo.ReapStale(filepath.Join(s.opts.home, "mihomo.pid"), s.opts.home); err != nil {
+		return fmt.Errorf("stop the core an earlier helper left running: %w", err)
 	}
 	listener, err := net.Listen("unix", s.opts.socket)
 	if err != nil {
 		return fmt.Errorf("listen on the helper socket (path=%q): %w", s.opts.socket, err)
 	}
-	if err := os.Chmod(s.opts.socket, 0o666); err != nil {
+	if err := openSocketToCaller(s.opts.socket); err != nil {
 		listener.Close()
 		return fmt.Errorf("open the helper socket to the installing user (path=%q): %w", s.opts.socket, err)
 	}
@@ -130,10 +152,10 @@ func (s *server) serve(parent context.Context) error {
 		restoreDone()
 	}
 
-	ctx, cancel := context.WithCancel(parent)
+	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	s.mu.Lock()
-	s.parentCtx, s.parentCancel = ctx, cancel
+	s.parentCtx, s.parentCancel = runCtx, cancel
 	s.mu.Unlock()
 
 	httpSrv := &http.Server{
@@ -148,15 +170,15 @@ func (s *server) serve(parent context.Context) error {
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- httpSrv.Serve(listener) }()
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
-	defer signal.Stop(signals)
-
+	close(s.ready)
+	var serveError error
 	select {
-	case sig := <-signals:
-		slog.Info("hop-helper stopping", "signal", sig.String())
-	case <-parent.Done():
-		slog.Info("hop-helper stopping", "cause", "context cancelled")
+	case <-ctx.Done():
+		slog.Info("hop-helper stopping", "cause", ctx.Err())
+	case serveError = <-serveErr:
+		// The server ended on its own: stop the core too, rather than serving
+		// nothing until the process is asked to stop.
+		slog.Error("the helper's socket server stopped", "error", serveError)
 	}
 	cancel()
 	drainCtx, drainDone := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -165,7 +187,9 @@ func (s *server) serve(parent context.Context) error {
 		slog.Warn("the helper's socket did not drain cleanly", "error", err)
 	}
 	stopErr := s.stopCore()
-	serveError := <-serveErr
+	if serveError == nil {
+		serveError = <-serveErr
+	}
 	if errors.Is(serveError, http.ErrServerClosed) {
 		// Shutdown was asked for; that the server closed is the clean path.
 		serveError = nil
@@ -235,7 +259,7 @@ func (s *server) handleInstall(w http.ResponseWriter, r *http.Request) {
 	// The file is copied first and then checked as copied: what -v approves
 	// and what is renamed into place is the very same bytes, so the source
 	// can change in between without swapping in an unchecked binary.
-	staged, err := stageCore(req.Path, s.opts.home)
+	staged, err := stageCore(req.Path, s.opts.home, filepath.Ext(s.opts.core))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -658,19 +682,22 @@ func tunEnabled(configYAML string) (bool, error) {
 }
 
 // allowPeer serves a request only when its connection's peer is the allowed
-// user or root; anything else is refused and logged.
+// user or root; anything else is refused and logged. On macOS the peer's
+// uid is read from the socket; on Windows the socket directory's ACL admits
+// only the installing user, SYSTEM and Administrators, and the DACL is
+// enforced when the connection is made.
 func (s *server) allowPeer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, _ := r.Context().Value(connKey{}).(net.Conn)
-		uid, err := peerUID(conn)
+		allowed, who, err := connectionAllowed(conn, s.opts.allowUID)
 		if err != nil {
 			slog.Warn("refused a helper request whose peer could not be identified", "path", r.URL.Path, "error", err)
 			writeError(w, http.StatusForbidden, errors.New("the helper could not identify the caller"))
 			return
 		}
-		if uid != 0 && uid != s.opts.allowUID {
-			slog.Warn("refused a helper request from an unallowed user", "uid", uid, "allowed", s.opts.allowUID, "path", r.URL.Path)
-			writeError(w, http.StatusForbidden, fmt.Errorf("uid %d is not allowed to talk to the helper", uid))
+		if !allowed {
+			slog.Warn("refused a helper request from an unallowed user", "peer", who, "allowed_uid", s.opts.allowUID, "path", r.URL.Path)
+			writeError(w, http.StatusForbidden, fmt.Errorf("%s is not allowed to talk to the helper", who))
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -742,8 +769,9 @@ func checkMihomo(ctx context.Context, binary string) error {
 // stageCore copies src into dir under a temporary name and makes the copy
 // executable: what -v approves and what is later renamed into place are the
 // very same bytes, so the source cannot change between the check and the
-// install.
-func stageCore(src string, dir string) (string, error) {
+// install. suffix is the core's own extension: Windows will not run a file
+// named without .exe.
+func stageCore(src string, dir string, suffix string) (string, error) {
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return "", fmt.Errorf("read the file to install (path=%q): %w", src, err)
@@ -751,7 +779,7 @@ func stageCore(src string, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("create the helper's home (dir=%q): %w", dir, err)
 	}
-	tmp, err := os.CreateTemp(dir, ".core-*")
+	tmp, err := os.CreateTemp(dir, ".core-*"+suffix)
 	if err != nil {
 		return "", fmt.Errorf("stage the core in the helper's home (dir=%q): %w", dir, err)
 	}

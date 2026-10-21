@@ -37,7 +37,7 @@ func ReapStale(pidFile string, homeDir string) error {
 	if err != nil {
 		return err
 	}
-	if !strings.Contains(line, "-d "+homeDir+" ") {
+	if !startedWithHome(line, homeDir) {
 		// Gone, or the pid belongs to something else now.
 		slog.Info("recorded mihomo pid is not Hop's core, left alone", "pid", pid, "running", line != "")
 		return removePidFile(pidFile)
@@ -64,7 +64,7 @@ func terminate(pid int, homeDir string) error {
 		if err != nil {
 			return err
 		}
-		if !strings.Contains(line, "-d "+homeDir+" ") {
+		if !startedWithHome(line, homeDir) {
 			return nil
 		}
 		time.Sleep(stalePoll)
@@ -73,6 +73,15 @@ func terminate(pid int, homeDir string) error {
 		return fmt.Errorf("kill leftover mihomo (pid=%d): %w", pid, err)
 	}
 	return nil
+}
+
+// startedWithHome says the command line carries homeDir as the core's -d
+// argument. Windows quotes an argument that contains spaces, while ps on
+// macOS prints it bare, so both forms are accepted; a different home is
+// never a match, whatever the pid reused.
+func startedWithHome(line string, homeDir string) bool {
+	return strings.Contains(line, "-d "+homeDir+" ") ||
+		strings.Contains(line, `-d "`+homeDir+`"`)
 }
 
 func writePidFile(pidFile string, pid int) error {
