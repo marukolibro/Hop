@@ -136,8 +136,9 @@ func segmentDistance(x float64, y float64, a markPoint, b markPoint) float64 {
 }
 
 // The speed beside the mark in the menu bar: upload over download, each
-// right-aligned in a column wide enough for the longest compact rate, so
-// the item keeps its width as the numbers change.
+// left-aligned against the mark in a column wide enough for the longest
+// compact rate, so the item keeps its width as the numbers change and a
+// short rate such as "0K" does not drift away from the mark.
 const (
 	// traySpeedWidth is the speed column's width in points; it holds the
 	// widest compact rates, such as "↑ 1023K" and "↓ 9.99M".
@@ -161,7 +162,7 @@ func traySpeedIcon(up string, down string) ([]byte, error) {
 		ui.Column(c).Fill().Justify(ui.Center).Children(func() {
 			for _, line := range []string{"↑ " + up, "↓ " + down} {
 				ui.Text(c, line).FontSize(traySpeedFont).FontWeight(weightSemibold).FontFeatures("tnum").
-					LineHeight(1.08).TextColor(ui.RGBA(0, 0, 0, 1)).TextAlign(ui.End).NoWrap()
+					LineHeight(1.08).TextColor(ui.RGBA(0, 0, 0, 1)).TextAlign(ui.Start).NoWrap()
 			}
 		})
 	}, traySpeedWidth, trayHeight, trayScale)
