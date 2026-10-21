@@ -444,6 +444,10 @@ const (
 // automatic refresh off.
 const DefaultSubscriptionUpdateHours = 12
 
+// DefaultMenuBarSpeed is whether the menu bar shows the live speed before the
+// user chooses.
+const DefaultMenuBarSpeed = true
+
 // Settings are the user's preferences, kept between starts.
 type Settings struct {
 	Appearance Appearance
@@ -459,6 +463,8 @@ type Settings struct {
 	// TUN on; Hop applies it at start unless another TUN holds the default
 	// routes.
 	Tun bool
+	// MenuBarSpeed shows the live speed beside the menu bar mark.
+	MenuBarSpeed bool
 }
 
 // Custom rule types, as the config file writes them.

@@ -795,8 +795,8 @@ func (d *Dashboard) View(c *ui.Context) {
 	d.customRuleDialog(c, t)
 }
 
-// header holds what applies to every page: the page switch and whether the
-// core is reachable.
+// header holds what applies to every page: the page switch, and how traffic
+// reaches Hop with whether it does now.
 func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 	// The window has no title bar of its own: the header is it. It keeps
 	// clear of the traffic lights and drags the window.
@@ -805,7 +805,7 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 		brandLockup(c, t, 24)
 		slidingSwitch(c, "页面", &d.page, pageLabels, pageSwitchStyle(t, 48), func(int) {})
 		ui.Box(c).Grow(1)
-		d.statusCapsule(c, t)
+		d.trafficSwitches(c, t)
 	})
 }
 

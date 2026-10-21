@@ -11,8 +11,8 @@ import (
 	"hop/internal/model"
 )
 
-// idleRate is the throughput below which the menu bar shows no speed and
-// the route shows no packets.
+// idleRate is the throughput below which the menu bar shows 0K and the
+// route shows no packets.
 const idleRate = 1024
 
 // MenuBar is Hop's menu bar item: its mark with the live speed beside it,
@@ -132,11 +132,13 @@ func (m *MenuBar) popUpMenu() {
 	m.tray.PopUpMenu()
 }
 
-// showSpeed draws the current speed beside the mark while traffic flows,
-// upload over download in a column of fixed width, so the item does not
-// shift as the numbers change. It redraws only when the numbers do.
+// showSpeed draws the current speed beside the mark, upload over download
+// in a column of fixed width, so the item does not shift as the numbers
+// change; idle, it reads 0K rather than dropping the speed, so the item
+// keeps one width. With the speed turned off in the settings it shows the
+// plain mark. It redraws only when the numbers do.
 func (m *MenuBar) showSpeed(sample model.Traffic) {
-	if sample.Down+sample.Up < idleRate {
+	if !m.d.settings.settings.MenuBarSpeed {
 		m.setIcon("", m.mark)
 		return
 	}
@@ -165,7 +167,11 @@ func (m *MenuBar) setIcon(shown string, icon []byte) {
 }
 
 // compactRate is a speed short enough for the menu bar, such as "2.4M".
+// Below idleRate it is "0K", so a trickle never shows as bare bytes.
 func compactRate(bytesPerSecond int64) string {
+	if bytesPerSecond < idleRate {
+		return "0K"
+	}
 	r := formatBytes(bytesPerSecond)
 	return r.value + strings.TrimSuffix(r.unit, "B")
 }

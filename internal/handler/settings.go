@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"runtime"
 	"slices"
 
 	"github.com/egoist/mygo/ui"
@@ -85,6 +86,24 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 							on := d.openAtLogin
 							ui.Switch(c.Key("open-at-login"), &on).Label("开机启动").OnChange(func() {
 								d.setOpenAtLogin(!d.openAtLogin)
+							})
+						})
+					},
+					func() {
+						settingRow(c, t, "菜单栏网速", "在菜单栏图标旁显示实时上传和下载速度", func() {
+							on := s.settings.MenuBarSpeed
+							ui.Switch(c.Key("menu-bar-speed"), &on).Label("菜单栏网速").OnChange(func() {
+								next := s.settings
+								next.MenuBarSpeed = !next.MenuBarSpeed
+								d.saveSettings(next)
+							})
+						})
+					},
+					func() {
+						settingRow(c, t, "终端代理", "终端不走系统代理,粘贴这条命令后当前窗口就经过 Hop;增强模式下不需要", func() {
+							button(c, buttonSpec{label: "复制命令", icon: iconTerminal, style: softButton(t)}, func() {
+								c.WriteClipboard(service.TerminalProxyCommand(runtime.GOOS, d.proxyAddress))
+								c.Toast("已复制终端代理命令,粘贴到终端即可")
 							})
 						})
 					},

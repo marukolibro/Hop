@@ -2,7 +2,6 @@ package handler
 
 import (
 	"math"
-	"runtime"
 	"strings"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/egoist/mygo/ui/chart"
 
 	"hop/internal/model"
-	"hop/internal/service"
 )
 
 // Motion in Hop is for what changes: the switch slides to the new choice,
@@ -23,12 +21,13 @@ const (
 	switchHeight float32 = 28
 	switchInset  float32 = 2
 	pulsePeriod          = 2 * time.Second
-	// statusTextMinWidth is the window width from which the status capsule
-	// spells out what it does.
-	statusTextMinWidth float32 = 720
-	entranceTime               = 420 * time.Millisecond
-	entranceStep               = 45 * time.Millisecond
-	entranceShift      float32 = 10
+	// trafficCapsuleHeight fits a switch inside the header capsule, and
+	// trafficSwitchWidth is a switch's width, which its spinner keeps.
+	trafficCapsuleHeight float32 = 32
+	trafficSwitchWidth   float32 = 32
+	entranceTime                 = 420 * time.Millisecond
+	entranceStep                 = 45 * time.Millisecond
+	entranceShift        float32 = 10
 
 	// opticalLift raises text in small controls: CJK glyphs sit about a
 	// pixel below the centre of the line box the font's metrics give.
@@ -117,38 +116,47 @@ func statusDot(c *ui.Context, color ui.Color, live bool) {
 	})
 }
 
-// statusCapsule's dot says whether Hop carries the system's traffic, or
-// that the core cannot be reached. While the core runs, the capsule copies
-// the command that sends a terminal's traffic through Hop.
-func (d *Dashboard) statusCapsule(c *ui.Context, t *ui.Theme) {
-	live := d.status == statusConnected
-	capsule := ui.Row(c).Key("status").Gap(gapTight).AlignItems(ui.Center).Height(switchHeight).Padding(0, 12, 0, 6).
-		Radius(switchHeight/2).Background(t.Surface).Border(1, t.Border)
-	if live {
-		capsule.Label("复制终端代理").Cursor(ui.CursorPointer)
-		if capsule.Hovered() {
-			capsule.Background(t.SurfaceHover)
+// trafficSwitches are the header's switches for how traffic reaches Hop,
+// the system proxy and TUN, after the dot that says whether Hop carries the
+// system's traffic now (red when the core cannot be reached). The header
+// holds them so every page shows them. A switch another client holds says
+// so before the capsule.
+func (d *Dashboard) trafficSwitches(c *ui.Context, t *ui.Theme) {
+	for _, note := range []string{d.systemProxyHint(), d.tunHint()} {
+		if note != "" {
+			mutedText(c, t, note).MaxLines(1)
 		}
-		capsule.OnClick(func() {
-			c.WriteClipboard(service.TerminalProxyCommand(runtime.GOOS, d.proxyAddress))
-			c.Toast("已复制终端代理命令,粘贴到终端即可")
-		})
 	}
-	capsule.Children(func() {
-		statusDot(c, d.statusColor(t), d.proxying())
-		// A narrow window drops the words, leaving the dot and the icon.
-		width, _ := c.Size()
-		if live {
-			ui.Icon(c, iconTerminal).Width(iconInline + 1).Height(iconInline + 1).TextColor(t.TextMuted)
-		}
-		if width < statusTextMinWidth {
+	sp, tun := &d.sysProxy, &d.tun
+	ui.Row(c).Key("traffic").Gap(gapLarge).AlignItems(ui.Center).Height(trafficCapsuleHeight).Padding(0, 10, 0, 6).
+		Radius(trafficCapsuleHeight/2).Background(t.Surface).Border(1, t.Border).Children(func() {
+		ui.Box(c).Key("status").Tooltip(d.statusText()).Children(func() {
+			statusDot(c, d.statusColor(t), d.proxying())
+		})
+		trafficSwitch(c, t, pillSpec{
+			label: "系统代理", on: sp.on, busy: sp.busy,
+			disabled: !sp.loaded || (sp.status.Owner == model.ProxyOwnerOther && !sp.on),
+		}, "浏览器和大多数应用经过 Hop", func() { d.beginSystemProxy(!sp.on) })
+		trafficSwitch(c, t, pillSpec{
+			label: "增强模式", on: tun.on, busy: tun.busy,
+			disabled: !tun.loaded || d.controlsLocked() || (tun.taken && !tun.on),
+		}, "接管全部流量,包括终端和游戏", func() { d.beginTun(!tun.on) })
+	})
+}
+
+// trafficSwitch is one labelled switch of trafficSwitches; a spinner takes
+// the switch's place while the change runs.
+func trafficSwitch(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onToggle func()) {
+	ui.Row(c).Key(spec.label).Gap(gapSmall).AlignItems(ui.Center).Tooltip(tip).Children(func() {
+		ui.Text(c, spec.label).FontSize(fontSecondary).FontWeight(weightMedium).NoWrap().Translate(0, -opticalLift)
+		if spec.busy {
+			ui.Box(c).Key("busy").Width(trafficSwitchWidth).Center().Children(func() {
+				spinner(c, iconInline, t.Accent)
+			})
 			return
 		}
-		label := d.statusText()
-		if live {
-			label = "复制终端代理"
-		}
-		ui.Text(c, label).FontSize(fontSecondary).FontWeight(weightMedium).NoWrap().Translate(0, -opticalLift)
+		on := spec.on
+		ui.Switch(c.Key("switch"), &on).Label(spec.label).Disabled(spec.disabled).OnChange(onToggle)
 	})
 }
 

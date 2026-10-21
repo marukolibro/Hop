@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/internal/service"
 )
 
 const (
@@ -16,12 +17,21 @@ const (
 	// sparkMinWidth is the window width from which the sparkline fits
 	// beside the route.
 	sparkMinWidth = 900
+	// modeSegmentWidth fits a two-character mode name.
+	modeSegmentWidth = 56
 )
+
+// modeHints say what each of modeLabels does, index for index.
+var modeHints = []string{
+	"按规则决定哪些走代理、哪些直连",
+	"全部流量走代理",
+	"全部直连,不经过代理",
+}
 
 // routeBar leads the nodes page: the node traffic leaves by, the path it
 // takes there drawn as a short transit line through the groups, and the
-// live speed, on one row; under it, how traffic gets in and is sent on: the
-// outbound mode and the system proxy.
+// live speed, on one row; under it, the outbound mode. How traffic gets in,
+// the system proxy and TUN, is the header's.
 func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 	route := d.view.Route
 	ui.Column(c).Margin(0, pagePadding, gapLarge, pagePadding).
@@ -47,22 +57,23 @@ func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// trafficControls are the route card's foot: the outbound mode on the
-// left, the traffic switches on the right.
+// trafficControls are the route card's foot: the outbound mode, and what
+// it does in a line. The switch waits for the core to report its mode and
+// for any subscription mutation to finish, so an apply cannot carry the mode
+// the user just left back in.
 func (d *Dashboard) trafficControls(c *ui.Context, t *ui.Theme) {
-	ui.Row(c).Key("controls").Gap(gapSmall).AlignItems(ui.Center).Padding(gapSmall+2, panelPadX).Children(func() {
-		for i := range modeLabels {
-			d.modePill(c, t, i)
+	disabled := d.view.Mode == "" || d.subscription.mutations > 0 || d.core.busy
+	ui.Row(c).Key("controls").Gap(gapMedium).AlignItems(ui.Center).Padding(gapSmall+2, panelPadX).Children(func() {
+		mode := ui.Box(c).Key("mode").Disabled(disabled)
+		if disabled {
+			mode.Opacity(disabledOpacity)
 		}
-		ui.Box(c).Grow(1)
-		if note := d.systemProxyHint(); note != "" {
-			mutedText(c, t, note).MaxLines(1)
-		}
-		if note := d.tunHint(); note != "" {
-			mutedText(c, t, note).MaxLines(1)
-		}
-		d.systemProxyPill(c, t)
-		d.tunPill(c, t)
+		mode.Children(func() {
+			slidingSwitch(c, "出站模式", &d.modeIndex, modeLabels, pageSwitchStyle(t, modeSegmentWidth), func(i int) {
+				d.setMode(service.Modes[i])
+			})
+		})
+		mutedText(c, t, modeHints[d.modeIndex]).MaxLines(1)
 	})
 }
 

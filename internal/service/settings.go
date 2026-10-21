@@ -25,13 +25,14 @@ var DelayTimeouts = []int{2, 3, 5}
 var SubscriptionUpdateIntervals = []int{0, 6, 12, 24}
 
 // DefaultSettings are the settings before the user changed any: the system's
-// look, a timeout most nodes answer well within, and a subscription refresh
-// twice a day.
+// look, a timeout most nodes answer well within, a subscription refresh
+// twice a day, and the speed in the menu bar.
 func DefaultSettings() model.Settings {
 	return model.Settings{
 		Appearance:              model.AppearanceSystem,
 		DelayTimeoutSeconds:     3,
 		SubscriptionUpdateHours: model.DefaultSubscriptionUpdateHours,
+		MenuBarSpeed:            model.DefaultMenuBarSpeed,
 	}
 }
 

@@ -156,9 +156,11 @@ for font sizes, weights, gaps or radii in views.
   only on the mark and wordmark.
 - Buttons: always `button(...)` / `iconButton(...)` from `buttons.go` with
   `primaryButton`, `softButton` or `dangerButton`; never `ui.Button`,
-  `ui.PrimaryButton` or `ui.Segmented`. Switches are `slidingSwitch`; on/off
-  and exclusive choices that steer traffic (outbound mode, system proxy) are
-  `togglePill` (`pill.go`), at the foot of the route card and in the flyout.
+  `ui.PrimaryButton` or `ui.Segmented`. Choices are `slidingSwitch`, on/off
+  settings `ui.Switch`. In the window, the system proxy and TUN are the
+  header's `trafficSwitches` (every page shows them) and the outbound mode
+  is a `slidingSwitch` at the foot of the route card; the flyout keeps all
+  three as `togglePill` (`pill.go`).
 - Icons: 24-unit SVG strokes in `icons.go`, tinted by text colour.
 - CJK text in small controls sits ~1px low: apply `Translate(0, -opticalLift)`.
 - UI copy is Chinese, sentence-short, in the user's terms. No ALL-CAPS labels,
