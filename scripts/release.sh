@@ -74,9 +74,9 @@ scripts/build-helper.sh darwin-arm64
 scripts/build-helper.sh darwin-amd64
 
 if [ "$mode" = --dry-run ]; then
-	go tool mygo build -platform darwin/universal
+	go tool mygo build -platform darwin/universal -skip-dmg
 else
-	go tool mygo build -platform darwin/universal -upload
+	go tool mygo build -platform darwin/universal -skip-dmg -upload
 fi
 
 out=$(jq -r '.out // "build"' mygo.json)
@@ -84,7 +84,6 @@ dir="$root/$out/darwin-universal"
 app="$dir/Hop.app"
 archive=$(find "$dir" -maxdepth 1 -name '*.tar.gz' -print -quit)
 manifest="$dir/update-darwin-universal.json"
-dmg=$(find "$dir" -maxdepth 1 -name '*.dmg' -print -quit)
 [ -d "$app" ] || die "the build made no Hop.app"
 [ -n "$archive" ] || die "the build made no update archive"
 [ -f "$manifest" ] || die "the build made no update manifest"
@@ -94,7 +93,6 @@ manifest_version=$(plutil -extract version raw -o - "$manifest")
 
 echo "Built Hop $version"
 echo "  $app"
-[ -n "$dmg" ] && echo "  $dmg"
 echo "  $archive"
 echo "  $manifest"
 

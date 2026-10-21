@@ -68,11 +68,13 @@ jobs:
             echo "::error::the MYGO_UPDATER_PRIVATE_KEY secret is not set; installed apps would not accept this release"
             exit 1
           }
+      # No disk image: an ad hoc signed app opened from a downloaded .dmg is
+      # blocked by Gatekeeper, so people install with install.sh instead.
       - name: Build, sign and upload
         env:
           GH_TOKEN: ${{ github.token }}
           MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
-        run: go tool mygo build -platform darwin/universal -upload
+        run: go tool mygo build -platform darwin/universal -skip-dmg -upload
       - name: Check the update manifest is signed
         run: |
           manifest=build/darwin-universal/update-darwin-universal.json
