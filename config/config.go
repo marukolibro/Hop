@@ -34,6 +34,9 @@ const (
 	// secretFilePerm is owner-only, like everything else in the app dir.
 	secretFileName = "controller-secret"
 	secretFilePerm = 0o600
+	// appDirPerm keeps the app dir owner-only: it holds the subscriptions
+	// and the controller secret.
+	appDirPerm = 0o700
 )
 
 // Config is everything the sidecar core and its controller client need.
@@ -160,6 +163,10 @@ func loadOrCreateSecret(path string) (string, error) {
 	secret, err := newSecret()
 	if err != nil {
 		return "", err
+	}
+	// On a Mac Hop never ran on, the app dir does not exist yet.
+	if err := os.MkdirAll(filepath.Dir(path), appDirPerm); err != nil {
+		return "", fmt.Errorf("create the app dir for the controller secret (path=%q): %w", filepath.Dir(path), err)
 	}
 	if err := os.WriteFile(path, []byte(secret), secretFilePerm); err != nil {
 		return "", fmt.Errorf("store the controller secret (path=%q): %w", path, err)

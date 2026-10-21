@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -58,7 +59,22 @@ const (
 	trafficLightY = 23
 )
 
-func run() error {
+// startupError is a failure before the window could open. Nothing else
+// would tell the user why Hop vanished, so main shows it in a dialog.
+type startupError struct{ err error }
+
+func (e startupError) Error() string { return e.err.Error() }
+func (e startupError) Unwrap() error { return e.err }
+
+func run() (err error) {
+	// uiStarted is set once the app's run loop takes over; an error before
+	// that is a startupError.
+	uiStarted := false
+	defer func() {
+		if err != nil && !uiStarted {
+			err = startupError{err: err}
+		}
+	}()
 	userConfigDir, err := os.UserConfigDir()
 	if err != nil {
 		return fmt.Errorf("locate user config dir: %w", err)
@@ -288,6 +304,7 @@ func run() error {
 		}
 		dashboard.Start(ctx, menuBar)
 	})
+	uiStarted = true
 	runErr := mygo.App.Run()
 	if readyErr != nil {
 		runErr = readyErr
@@ -313,9 +330,33 @@ func geodataDownloadClient(mixedPort int) *http.Client {
 	return client
 }
 
+// showStartupError runs the app only to say why Hop cannot start, then
+// quits: started from Finder, Hop would otherwise just disappear.
+func showStartupError(err error) {
+	mygo.App.WhenReady(func() {
+		go func() {
+			if _, dialogErr := mygo.Dialog.Message(mygo.MessageOptions{
+				Type:    mygo.MessageError,
+				Title:   "Hop 无法启动",
+				Message: "Hop 启动时遇到问题,已经退出。",
+				Detail:  err.Error(),
+			}); dialogErr != nil {
+				slog.Error("could not show why Hop cannot start", "error", dialogErr)
+			}
+			mygo.App.Quit()
+		}()
+	})
+	if runErr := mygo.App.Run(); runErr != nil {
+		slog.Error("could not run the app to show why Hop cannot start", "error", runErr)
+	}
+}
+
 func main() {
 	if err := run(); err != nil {
 		slog.Error("hop failed", "error", err)
+		if errors.As(err, new(startupError)) {
+			showStartupError(err)
+		}
 		os.Exit(1)
 	}
 }
