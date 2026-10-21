@@ -55,6 +55,53 @@ type TrafficHistory struct {
 	Down []float32
 }
 
+// TrafficSplit is how much traffic Hop carried, through a proxy or direct,
+// in each direction.
+type TrafficSplit struct {
+	ProxyUp    int64
+	ProxyDown  int64
+	DirectUp   int64
+	DirectDown int64
+}
+
+// TrafficSource names who carried traffic: the subscription in use, or the
+// bootstrap config when none is.
+type TrafficSource struct {
+	ID   string
+	Name string
+}
+
+// TrafficDay is one local day's traffic for one source, as stored.
+type TrafficDay struct {
+	// Date is the local calendar day, as "2006-01-02".
+	Date       string
+	SourceID   string
+	SourceName string
+	Split      TrafficSplit
+}
+
+// TrafficDayView is one of the last thirty days, for the chart.
+type TrafficDayView struct {
+	Date  string
+	Split TrafficSplit
+}
+
+// TrafficSourceView is one source's traffic this month.
+type TrafficSourceView struct {
+	ID    string
+	Name  string
+	Split TrafficSplit
+}
+
+// TrafficView is what the statistics page shows: today, this month, the last
+// thirty days and this month per source.
+type TrafficView struct {
+	Today   TrafficSplit
+	Month   TrafficSplit
+	Days    []TrafficDayView
+	Sources []TrafficSourceView
+}
+
 // Download is what a provider returned for a subscription link: the Clash
 // YAML and its subscription-userinfo header, "" when it sent none.
 type Download struct {

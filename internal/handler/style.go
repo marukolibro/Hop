@@ -1,6 +1,11 @@
 package handler
 
-import "github.com/egoist/mygo/ui"
+import (
+	"strings"
+	"unicode"
+
+	"github.com/egoist/mygo/ui"
+)
 
 // Hop's type scale, spacing and radii. Every view takes its sizes from
 // here, so the same kind of thing looks the same on every page.
@@ -70,6 +75,18 @@ const (
 	scrollTrim float32 = 4
 	scrollEnd  float32 = 28
 	emptyPadY  float32 = 40
+
+	// Statistics page: the daily chart's height and top inset, the bars'
+	// corner, the tooltip's padding and line height, and the dot before a
+	// split or legend label.
+	statChartHeight  float32 = 124
+	statChartInset   float32 = 8
+	statBarRadius    float32 = 2
+	statTooltipPadX  float32 = 8
+	statTooltipPadY  float32 = 6
+	statTooltipLine  float32 = 15
+	statDot          float32 = 6
+	statBarWidthPart float32 = 0.62
 )
 
 // chipHeight is one chip's height, and chipLineGap what keeps a wrapped
@@ -89,10 +106,15 @@ func sectionTitle(c *ui.Context, text string) ui.Element {
 	return ui.Text(c, text).FontSize(fontBody).FontWeight(weightSemibold)
 }
 
-// chip is a small label for a node's line or rate, or a log level.
+// chip is a small label for a node's line or rate, or a log level. CJK
+// glyphs sit low in a box this small, so a label with any is lifted; a Latin
+// one such as "UDP" is centred already.
 func chip(c *ui.Context, text string, color ui.Color) {
 	ui.Box(c).Key(text).Padding(1, 6).Radius(radiusChip).Background(color.Alpha(0.12)).Children(func() {
-		ui.Text(c, text).FontSize(fontCaption).FontWeight(weightMedium).TextColor(color).NoWrap()
+		label := ui.Text(c, text).FontSize(fontCaption).FontWeight(weightMedium).TextColor(color).NoWrap()
+		if strings.ContainsFunc(text, func(r rune) bool { return unicode.Is(unicode.Han, r) }) {
+			label.Translate(0, -opticalLift)
+		}
 	})
 }
 

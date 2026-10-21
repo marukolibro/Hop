@@ -37,11 +37,12 @@ const (
 const (
 	pageNodes = iota
 	pageConnections
+	pageStats
 	pageLogs
 	pageSettings
 )
 
-var pageLabels = []string{"节点", "连接", "日志", "设置"}
+var pageLabels = []string{"节点", "连接", "统计", "日志", "设置"}
 
 // modeLabels name service.Modes, index for index.
 var modeLabels = []string{"规则", "全局", "直连"}
@@ -82,6 +83,12 @@ type MonitorService interface {
 	CloseConnection(ctx context.Context, id string) error
 	CloseAllConnections(ctx context.Context) error
 	WatchLogs(ctx context.Context, level string, handle func(model.LogEntry)) error
+}
+
+// TrafficService records how much traffic Hop carries and reports it.
+type TrafficService interface {
+	Record(conns model.Connections, source model.TrafficSource, now time.Time)
+	Summary(now time.Time) model.TrafficView
 }
 
 // CoreService reports which mihomo core runs and upgrades it.
@@ -155,6 +162,7 @@ type Services struct {
 	Subscriptions SubscriptionService
 	Modes         ModeService
 	Monitor       MonitorService
+	Traffic       TrafficService
 	Core          CoreService
 	Settings      SettingsService
 	Geodata       GeodataService
@@ -311,6 +319,9 @@ type Dashboard struct {
 	history     model.TrafficHistory
 	connections connectionsState
 	logs        logsState
+	// stats is what the statistics page shows, refreshed with every
+	// connection sample.
+	stats model.TrafficView
 	// coreRestarts carries what the runner's supervision did after the core
 	// left on its own; it is a channel because it is fed from the
 	// supervisor's goroutine, unlike everything else here.
@@ -357,6 +368,7 @@ func NewDashboard(services Services, proxyAddress string, settings model.Setting
 	}
 	d.logs.list.FollowEnd = true
 	d.connections.list.Key = func(row int) any { return d.visibleConnections()[row].ID }
+	d.stats = services.Traffic.Summary(time.Now())
 	return d
 }
 
@@ -633,7 +645,10 @@ func (d *Dashboard) watchTraffic(ctx context.Context, win Updater) {
 
 func (d *Dashboard) watchConnections(ctx context.Context, win Updater) {
 	err := d.services.Monitor.WatchConnections(ctx, func(conns model.Connections) {
-		win.Update(func() { d.connections.data = conns })
+		win.Update(func() {
+			d.connections.data = conns
+			d.recordTraffic(conns, time.Now())
+		})
 	})
 	if ctx.Err() != nil {
 		return
@@ -749,6 +764,8 @@ func (d *Dashboard) View(c *ui.Context) {
 		switch d.page {
 		case pageConnections:
 			d.connectionsPage(c, t)
+		case pageStats:
+			d.statsPage(c, t)
 		case pageLogs:
 			d.logsPage(c, t)
 		case pageSettings:

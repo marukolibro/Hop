@@ -83,6 +83,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	traffic, err := service.NewTrafficService(store)
+	if err != nil {
+		return err
+	}
+	traffic.Start(ctx)
 	// The version in mygo.json, which mygo's updater compares with the
 	// release and the settings row shows.
 	appVersion := mygo.App.Version()
@@ -211,6 +216,9 @@ func run() error {
 			if err := runner.Stop(); err != nil {
 				slog.Warn("mihomo did not exit cleanly", "error", err)
 			}
+			if err := traffic.Flush(); err != nil {
+				slog.Error("could not save traffic history at quit", "error", err)
+			}
 		})
 	}
 	mygo.App.OnQuit(release)
@@ -228,6 +236,7 @@ func run() error {
 		Subscriptions: profiles,
 		Modes:         service.NewModeService(client, store),
 		Monitor:       service.NewMonitorService(client),
+		Traffic:       traffic,
 		Core:          coreService,
 		Settings:      settingsService,
 		Geodata:       geodataService,

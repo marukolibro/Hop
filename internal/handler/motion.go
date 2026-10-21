@@ -34,12 +34,20 @@ const (
 	// pixel below the centre of the line box the font's metrics give.
 	opticalLift float32 = 1
 
-	flowHeight     float32 = 34
-	flowStopR      float32 = 5
-	flowExitR      float32 = 7
-	flowLane       float32 = 3.5
-	flowMaxPackets         = 7
-	flowBaseSpeed  float32 = 70
+	flowHeight float32 = 34
+	flowStopR  float32 = 5
+	flowExitR  float32 = 7
+	flowLane   float32 = 3.5
+	// flowSlots streaks can travel each lane at once, evenly spaced; how
+	// many show, how long and how bright follows the traffic.
+	flowSlots = 5
+	// flowSpeed is constant: a speed that followed the traffic would make
+	// every streak jump whenever it changed.
+	flowSpeed  float64 = 80
+	flowStreak float32 = 22
+	// flowFullLevel is the doubling of idleRate at which a lane is at full
+	// intensity, about 4 MB/s.
+	flowFullLevel = 12
 )
 
 // switchStyle colours a sliding switch.
@@ -145,36 +153,32 @@ func (d *Dashboard) statusCapsule(c *ui.Context, t *ui.Theme) {
 }
 
 // routeFlow draws the route as a line of stops, from this Mac through the
-// groups to the exit, with packets flowing along it: download back from
-// the exit, upload out to it, more and faster as traffic grows. Names sit
-// under the stops.
+// groups to the exit, with traffic streaming along it: download back from
+// the exit above the line, upload out to it below. Streaks move at one
+// speed and spacing; traffic sets how many show, how long and how bright,
+// easing as it changes, so nothing jumps. Names sit under the stops.
 func routeFlow(c *ui.Context, t *ui.Theme, route []model.RouteHop, traffic model.Traffic) {
 	labels := flowLabels(route)
 	line, up, paper, muted := t.Accent, t.Warning, t.Surface, t.TextMuted
-	downN, downSpeed := packetFlow(traffic.Down)
-	upN, upSpeed := packetFlow(traffic.Up)
 	ui.Column(c).Gap(4).Children(func() {
-		ui.Box(c).Height(flowHeight).Label("线路").Description(strings.Join(labels, " → ")).Draw(func(p *ui.Painter, r ui.Rect) {
+		lane := ui.Box(c).Height(flowHeight).Label("线路").Description(strings.Join(labels, " → "))
+		downLevel := lane.AnimateTo("down", flowIntensity(traffic.Down), ui.Smooth)
+		upLevel := lane.AnimateTo("up", flowIntensity(traffic.Up), ui.Smooth)
+		lane.Draw(func(p *ui.Painter, r ui.Rect) {
 			n := len(labels)
 			cy := r.Y + r.H/2
 			stopX := func(i int) float32 { return r.X + (float32(i)+0.5)*r.W/float32(n) }
 			x0, x1 := stopX(0), stopX(n-1)
 			p.Line(x0, cy, x1, cy, 2, line.Alpha(0.3))
-			now := float32(p.Now().UnixMilli()%100000) / 1000
-			span := x1 - x0
-			for k := range downN {
-				f := fract(now*downSpeed/span + float32(k)/float32(downN))
-				packet(p, x1-f*span, cy-flowLane, line)
-			}
-			for k := range upN {
-				f := fract(now*upSpeed/span + float32(k)/float32(upN))
-				packet(p, x0+f*span, cy+flowLane, up)
-			}
+			seconds := float64(p.Now().UnixMilli()) / 1000
+			streams(p, x0, x1, cy-flowLane, seconds, downLevel, line, false)
+			streams(p, x0, x1, cy+flowLane, seconds, upLevel, up, true)
+			pulse := float32(math.Sin(math.Mod(seconds, 2*math.Pi/2.4) * 2.4))
 			for i := range n {
 				x := stopX(i)
 				switch {
 				case i == n-1:
-					glow := 0.18 + 0.1*float32(math.Sin(float64(now)*2.4))
+					glow := 0.18 + 0.1*pulse
 					p.Fill(circle(x, cy, flowExitR+5), line.Alpha(glow), flowExitR+5)
 					p.Fill(circle(x, cy, flowExitR), line, flowExitR)
 				case i == 0:
@@ -211,20 +215,51 @@ func flowLabels(route []model.RouteHop) []string {
 	return append(labels, "出口")
 }
 
-// packetFlow turns a throughput into how many packets travel the line at
-// once and how fast, in DIPs per second; nothing moves while idle.
-func packetFlow(bytesPerSecond int64) (int, float32) {
+// flowIntensity maps a throughput onto 0..1, by doublings of idleRate so a
+// trickle shows and a download does not saturate at once; 0 while idle.
+func flowIntensity(bytesPerSecond int64) float32 {
 	if bytesPerSecond < idleRate {
-		return 0, 0
+		return 0
 	}
 	level := math.Log2(float64(bytesPerSecond) / idleRate)
-	n := min(flowMaxPackets, 1+int(level/2))
-	return n, flowBaseSpeed + float32(level)*14
+	return float32(min(1, 0.2+0.8*level/flowFullLevel))
 }
 
-func packet(p *ui.Painter, x float32, y float32, color ui.Color) {
-	p.Fill(circle(x, y, 4.5), color.Alpha(0.22), 4.5)
-	p.Fill(circle(x, y, 2), color, 2)
+// streams draws one lane's streaks between x0 and x1 at y: heads moving
+// right when outbound, left otherwise, each a line fading to its tail.
+// intensity reveals the slots one after another, each fading in, and every
+// streak fades out near the ends of the line instead of popping.
+func streams(p *ui.Painter, x0 float32, x1 float32, y float32, seconds float64, intensity float32, color ui.Color, outbound bool) {
+	span := x1 - x0
+	if intensity < 0.01 || span <= 0 {
+		return
+	}
+	shown := intensity * flowSlots
+	length := flowStreak * (0.6 + 0.8*intensity)
+	travel := float32(math.Mod(seconds*flowSpeed/float64(span), 1))
+	for k := range flowSlots {
+		reveal := min(1, shown-float32(k))
+		if reveal <= 0 {
+			break
+		}
+		f := fract(travel + float32(k)/flowSlots)
+		edge := min(1, min(f, 1-f)*span/length)
+		alpha := reveal * edge * (0.5 + 0.5*intensity)
+		head, tail := x1-f*span, x1-f*span+length
+		if outbound {
+			head, tail = x0+f*span, x0+f*span-length
+		}
+		tail = max(x0, min(x1, tail))
+		bright, clear := color.Alpha(alpha), color.Alpha(0)
+		g := ui.LinearGradient{From: bright, To: clear, Angle: 90}
+		if outbound {
+			g = ui.LinearGradient{From: clear, To: bright, Angle: 90}
+		}
+		if tail != head {
+			p.StrokePathGradient((&ui.Path{}).MoveTo(min(head, tail), y).LineTo(max(head, tail), y), 2, g)
+		}
+		p.Fill(circle(head, y, 1.75), bright, 1.75)
+	}
 }
 
 // hopMark draws Hop's mark in ink, as the menu bar icon shows it: a ball
