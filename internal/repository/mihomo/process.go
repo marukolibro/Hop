@@ -30,6 +30,9 @@ type Process struct {
 	// startedAt is when the core was started; a supervisor tells a stable
 	// run from a fast crash by it.
 	startedAt time.Time
+	// stopped is done once Hop asked the core to stop, by cancelling the
+	// context it was started with.
+	stopped <-chan struct{}
 
 	// done is closed once the core has exited and been waited, so any
 	// number of Wait callers hear the one result in waitErr.
@@ -83,7 +86,7 @@ func launch(ctx context.Context, cfg config.Config, binary string) (*Process, er
 		_ = cmd.Wait()
 		return nil, err
 	}
-	p := &Process{cmd: cmd, pidFile: pidFile, startedAt: time.Now(), done: make(chan struct{})}
+	p := &Process{cmd: cmd, pidFile: pidFile, startedAt: time.Now(), stopped: ctx.Done(), done: make(chan struct{})}
 	go p.await()
 	slog.Info("mihomo started", "pid", cmd.Process.Pid, "binary", binary, "home", cfg.HomeDir, "controller", cfg.ControllerAddr, "mixed_port", cfg.MixedPort)
 	return p, nil
@@ -95,8 +98,11 @@ func launch(ctx context.Context, cfg config.Config, binary string) (*Process, er
 func (p *Process) await() {
 	waitErr := p.cmd.Wait()
 	if waitErr != nil {
-		if errors.Is(waitErr, context.Canceled) {
-			// A shutdown the context asked for is a normal stop.
+		if p.stopRequested() {
+			// A shutdown Hop asked for is a normal stop, whatever the exit
+			// status: after SIGTERM the core exits 0 and exec reports the
+			// cancelled context, but Windows can only kill it, which exits 1
+			// and exec reports that instead.
 			waitErr = nil
 		} else {
 			waitErr = fmt.Errorf("mihomo exited (pid=%d): %w", p.cmd.Process.Pid, waitErr)
@@ -104,6 +110,16 @@ func (p *Process) await() {
 	}
 	p.waitErr = errors.Join(waitErr, removePidFile(p.pidFile))
 	close(p.done)
+}
+
+// stopRequested says whether Hop has asked the core to stop.
+func (p *Process) stopRequested() bool {
+	select {
+	case <-p.stopped:
+		return true
+	default:
+		return false
+	}
 }
 
 // Wait blocks until the core exits. An exit caused by cancelling the context

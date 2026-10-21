@@ -45,6 +45,16 @@ esac
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+# sha256_of prints a file's SHA-256: macOS has shasum, Git Bash on Windows
+# has sha256sum.
+sha256_of() {
+	if command -v shasum >/dev/null 2>&1; then
+		shasum -a 256 "$1" | cut -d' ' -f1
+	else
+		sha256sum "$1" | cut -d' ' -f1
+	fi
+}
+
 # fetch_pinned downloads url into dest when its SHA-256 is want.
 fetch_pinned() {
 	url=$1
@@ -54,7 +64,7 @@ fetch_pinned() {
 
 	echo "downloading $url"
 	curl --fail --location --silent --show-error --output "$work/$name" "$url"
-	got=$(shasum -a 256 "$work/$name" | cut -d' ' -f1)
+	got=$(sha256_of "$work/$name")
 	if [ "$got" != "$want" ]; then
 		echo "sha256 mismatch for $name: got $got, want $want" >&2
 		exit 1

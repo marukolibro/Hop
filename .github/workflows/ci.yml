@@ -42,3 +42,33 @@ jobs:
         run: go test ./...
         env:
           HOP_MIHOMO_BINARY: ${{ github.workspace }}/resources/darwin-arm64/bin/mihomo
+
+  windows:
+    name: Windows
+    # Windows has never run Hop on a real machine yet; this runs the suite
+    # with the real Windows core, and the TUN path end to end on the runner.
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Fetch the pinned core and geodata
+        run: scripts/fetch-mihomo.sh windows-amd64
+      - name: Build the TUN helper
+        run: scripts/build-helper.sh windows-amd64
+      - name: Test
+        run: go test ./...
+        env:
+          HOP_MIHOMO_BINARY: ${{ github.workspace }}\resources\windows-amd64\bin\mihomo.exe
+      - name: Enhanced mode (TUN) end to end
+        # The runner is a disposable administrator machine: the test installs
+        # the helper service and lets TUN take the routes over, then removes
+        # both. Direct mode, so no real node is needed.
+        run: go test ./internal/integration -run TestWindowsTunEndToEnd -count=1 -v
+        env:
+          HOP_WINDOWS_TUN_E2E: "1"
+          HOP_MIHOMO_BINARY: ${{ github.workspace }}\resources\windows-amd64\bin\mihomo.exe
