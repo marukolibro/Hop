@@ -158,7 +158,8 @@ for font sizes, weights, gaps or radii in views.
   `primaryButton`, `softButton` or `dangerButton`; never `ui.Button`,
   `ui.PrimaryButton` or `ui.Segmented`. Choices are `slidingSwitch`, on/off
   settings `ui.Switch`. In the window, the system proxy and TUN are the
-  header's `trafficSwitches` (every page shows them) and the outbound mode
+  header's `statusToggle` buttons (a green dot while on; every page shows
+  them) and the outbound mode
   is a `slidingSwitch` at the foot of the route card; the flyout keeps all
   three as `togglePill` (`pill.go`).
 - Icons: 24-unit SVG strokes in `icons.go`, tinted by text colour.

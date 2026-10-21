@@ -446,7 +446,7 @@ const DefaultSubscriptionUpdateHours = 12
 
 // DefaultMenuBarSpeed is whether the menu bar shows the live speed before the
 // user chooses.
-const DefaultMenuBarSpeed = true
+const DefaultMenuBarSpeed = false
 
 // Settings are the user's preferences, kept between starts.
 type Settings struct {

@@ -375,7 +375,7 @@ func (d *Dashboard) subscriptionBar(c *ui.Context, t *ui.Theme) {
 			ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 				mutedText(c, t, "当前订阅").NoWrap()
 				d.activeSelect(c, t)
-				ruleChip(c, t, active.Rules)
+				ruleChip(c, t, active.Source, active.Rules)
 				ui.Box(c).Grow(1)
 				if active.Source == model.SourceRemote {
 					mutedText(c, t, updatedText(active.UpdatedAt, now)).NoWrap()
@@ -575,7 +575,7 @@ func (d *Dashboard) subscriptionCard(c *ui.Context, t *ui.Theme, item model.Subs
 					if isActive {
 						activeBadge(c, t)
 					}
-					ruleChip(c, t, item.Rules)
+					ruleChip(c, t, item.Source, item.Rules)
 				})
 				ui.Text(c, subscriptionOrigin(item)).FontSize(fontCaption).TextColor(t.TextMuted).MaxLines(1)
 			})
@@ -815,7 +815,10 @@ func (d *Dashboard) editorForm(c *ui.Context, t *ui.Theme) {
 			if e.intent != editorRename {
 				fieldLabel(c, t, "来源", "")
 				ui.Box(c).Disabled(e.busy || e.fileBusy || e.editingID != "" || !e.sourceLoaded).Children(func() {
-					slidingSwitch(c, "source", &e.sourceIndex, sourceLabels, pageSwitchStyle(t, sourceSegmentWidth), func(int) { e.err = "" })
+					slidingSwitch(c, "source", &e.sourceIndex, sourceLabels, pageSwitchStyle(t, sourceSegmentWidth), func(i int) {
+						e.err = ""
+						e.rulesIndex = slices.Index(service.RuleSources, defaultRules(service.ProfileSources[i]))
+					})
 				})
 				if e.editingID != "" {
 					ui.Text(c, "来源创建后不可更改；需要另一种来源时请新建一个配置。").
@@ -847,10 +850,11 @@ func (d *Dashboard) editorForm(c *ui.Context, t *ui.Theme) {
 					ui.Text(c, hint).FontSize(fontCaption).TextColor(t.TextMuted)
 				}
 				fieldLabel(c, t, "分流规则", "")
+				labels, hints := ruleTexts(service.ProfileSources[e.sourceIndex])
 				ui.Box(c).Disabled(e.busy || e.fileBusy || !e.sourceLoaded).Children(func() {
-					slidingSwitch(c, "rules", &e.rulesIndex, ruleLabels, pageSwitchStyle(t, ruleSegmentWidth), func(int) {})
+					slidingSwitch(c, "rules", &e.rulesIndex, labels, pageSwitchStyle(t, ruleSegmentWidth), func(int) {})
 				})
-				ui.Text(c, ruleHints[e.rulesIndex]).FontSize(fontCaption).TextColor(t.TextMuted)
+				ui.Text(c, hints[e.rulesIndex]).FontSize(fontCaption).TextColor(t.TextMuted)
 			}
 			if e.err != "" {
 				ui.Text(c, e.err).FontSize(fontSecondary).TextColor(t.Danger)
@@ -1021,25 +1025,51 @@ func (d *Dashboard) deleteForm(c *ui.Context, t *ui.Theme) {
 // sourceLabels name service.ProfileSources, index for index.
 var sourceLabels = []string{"订阅链接", "本地配置"}
 
-// ruleLabels name service.RuleSources, index for index; ruleHints say what
-// each does, in the same order.
+// ruleLabels name service.RuleSources for a subscription, index for index;
+// ruleHints say what each does, in the same order. localRuleLabels and
+// localRuleHints say the same of a local config, which has no provider: most
+// are a self-hosted server's node links, with no rules of their own.
 var (
 	ruleLabels = []string{"机场规则", "Hop 智能规则"}
 	ruleHints  = []string{
 		"沿用订阅自带的策略组和规则。节点列表类订阅没有规则，会改用「Hop 智能规则」。",
 		"只用订阅的节点：被墙和境外网站走代理，国内网站直连，名单里没有的按 IP 所在地判断；AI、流媒体、Telegram 等自动分组。",
 	}
+	localRuleLabels = []string{"配置自带规则", "Hop 智能规则"}
+	localRuleHints  = []string{
+		"沿用配置里的策略组和规则。只有节点链接时没有规则，会改用「Hop 智能规则」。",
+		"只用配置里的节点：被墙和境外网站走代理，国内网站直连，名单里没有的按 IP 所在地判断；AI、流媒体、Telegram 等自动分组。适合自建服务器。",
+	}
 )
+
+// ruleTexts are the rule switch's labels and hints for a profile from source.
+func ruleTexts(source model.SubscriptionSource) ([]string, []string) {
+	if source == model.SourceLocal {
+		return localRuleLabels, localRuleHints
+	}
+	return ruleLabels, ruleHints
+}
 
 // ruleChip says whose rules a subscription runs with: the provider's in the
 // muted colour, Hop's template in the accent.
-func ruleChip(c *ui.Context, t *ui.Theme, rules model.RuleSource) {
+func ruleChip(c *ui.Context, t *ui.Theme, source model.SubscriptionSource, rules model.RuleSource) {
 	switch rules {
 	case model.RulesHop:
 		chip(c, "Hop 智能规则", t.Accent)
 	default:
-		chip(c, "机场规则", t.TextMuted)
+		labels, _ := ruleTexts(source)
+		chip(c, labels[0], t.TextMuted)
 	}
+}
+
+// defaultRules is the rule source a new profile from source starts with: a
+// subscription's own rules, and Hop's for a local config, which is most
+// often a self-hosted server's node links.
+func defaultRules(source model.SubscriptionSource) model.RuleSource {
+	if source == model.SourceLocal {
+		return model.RulesHop
+	}
+	return model.RulesProvider
 }
 
 // ruleSegmentWidth fits the longest rule label.

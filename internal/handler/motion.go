@@ -18,16 +18,12 @@ import (
 // only repaint, so a large page is not built again every frame.
 
 const (
-	switchHeight float32 = 28
-	switchInset  float32 = 2
-	pulsePeriod          = 2 * time.Second
-	// trafficCapsuleHeight fits a switch inside the header capsule, and
-	// trafficSwitchWidth is a switch's width, which its spinner keeps.
-	trafficCapsuleHeight float32 = 32
-	trafficSwitchWidth   float32 = 32
-	entranceTime                 = 420 * time.Millisecond
-	entranceStep                 = 45 * time.Millisecond
-	entranceShift        float32 = 10
+	switchHeight  float32 = 28
+	switchInset   float32 = 2
+	pulsePeriod           = 2 * time.Second
+	entranceTime          = 420 * time.Millisecond
+	entranceStep          = 45 * time.Millisecond
+	entranceShift float32 = 10
 
 	// opticalLift raises text in small controls: CJK glyphs sit about a
 	// pixel below the centre of the line box the font's metrics give.
@@ -116,48 +112,28 @@ func statusDot(c *ui.Context, color ui.Color, live bool) {
 	})
 }
 
-// trafficSwitches are the header's switches for how traffic reaches Hop,
-// the system proxy and TUN, after the dot that says whether Hop carries the
-// system's traffic now (red when the core cannot be reached). The header
-// holds them so every page shows them. A switch another client holds says
-// so before the capsule.
+// trafficSwitches are the header's buttons for how traffic reaches Hop, the
+// system proxy and TUN, each lit by a green dot while on. The header holds
+// them so every page shows them. A switch another client holds says so
+// before them, and so does a core Hop cannot reach.
 func (d *Dashboard) trafficSwitches(c *ui.Context, t *ui.Theme) {
+	if d.status == statusFailed {
+		ui.Text(c, "内核未连接").FontSize(fontSecondary).TextColor(t.Danger).NoWrap()
+	}
 	for _, note := range []string{d.systemProxyHint(), d.tunHint()} {
 		if note != "" {
 			mutedText(c, t, note).MaxLines(1)
 		}
 	}
 	sp, tun := &d.sysProxy, &d.tun
-	ui.Row(c).Key("traffic").Gap(gapLarge).AlignItems(ui.Center).Height(trafficCapsuleHeight).Padding(0, 10, 0, 6).
-		Radius(trafficCapsuleHeight/2).Background(t.Surface).Border(1, t.Border).Children(func() {
-		ui.Box(c).Key("status").Tooltip(d.statusText()).Children(func() {
-			statusDot(c, d.statusColor(t), d.proxying())
-		})
-		trafficSwitch(c, t, pillSpec{
-			label: "系统代理", on: sp.on, busy: sp.busy,
-			disabled: !sp.loaded || (sp.status.Owner == model.ProxyOwnerOther && !sp.on),
-		}, "浏览器和大多数应用经过 Hop", func() { d.beginSystemProxy(!sp.on) })
-		trafficSwitch(c, t, pillSpec{
-			label: "增强模式", on: tun.on, busy: tun.busy,
-			disabled: !tun.loaded || d.controlsLocked() || (tun.taken && !tun.on),
-		}, "接管全部流量,包括终端和游戏", func() { d.beginTun(!tun.on) })
-	})
-}
-
-// trafficSwitch is one labelled switch of trafficSwitches; a spinner takes
-// the switch's place while the change runs.
-func trafficSwitch(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onToggle func()) {
-	ui.Row(c).Key(spec.label).Gap(gapSmall).AlignItems(ui.Center).Tooltip(tip).Children(func() {
-		ui.Text(c, spec.label).FontSize(fontSecondary).FontWeight(weightMedium).NoWrap().Translate(0, -opticalLift)
-		if spec.busy {
-			ui.Box(c).Key("busy").Width(trafficSwitchWidth).Center().Children(func() {
-				spinner(c, iconInline, t.Accent)
-			})
-			return
-		}
-		on := spec.on
-		ui.Switch(c.Key("switch"), &on).Label(spec.label).Disabled(spec.disabled).OnChange(onToggle)
-	})
+	statusToggle(c, t, pillSpec{
+		label: "系统代理", on: sp.on, busy: sp.busy,
+		disabled: !sp.loaded || (sp.status.Owner == model.ProxyOwnerOther && !sp.on),
+	}, "浏览器和大多数应用经过 Hop", func() { d.beginSystemProxy(!sp.on) })
+	statusToggle(c, t, pillSpec{
+		label: "增强模式", on: tun.on, busy: tun.busy,
+		disabled: !tun.loaded || (d.controlsLocked() && !tun.busy) || (tun.taken && !tun.on),
+	}, "接管全部流量,包括终端和游戏", func() { d.beginTun(!tun.on) })
 }
 
 // routeFlow draws the route as a line of stops, from this Mac through the

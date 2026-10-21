@@ -13,6 +13,11 @@ const (
 	pillOnLineAlpha  float32 = 0.45
 	pillOffDotAlpha  float32 = 0.35
 	pillDotGlowAlpha float32 = 0.22
+
+	statusOnFillAlpha  float32 = 0.14
+	statusOnHoverAlpha float32 = 0.2
+	statusOnLineAlpha  float32 = 0.55
+	statusOffDotAlpha  float32 = 0.55
 )
 
 // pillSpec is what a toggle pill shows and whether it takes clicks now.
@@ -65,6 +70,59 @@ func togglePill(c *ui.Context, t *ui.Theme, spec pillSpec, onClick func()) ui.El
 				Shadow(0, 0, 0, 3, glow)
 		}
 		ui.Text(c, spec.label).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(ink).
+			NoWrap().Translate(0, -opticalLift)
+	})
+	return b
+}
+
+// statusToggle is a capsule button for something that is on or off, made to
+// be found at a glance. Off, it is a plain outlined button with a grey dot;
+// on, it turns green: a tinted fill and outline, and a dot that pulses like
+// the core's heartbeat. A spinner takes the dot's place while the change
+// runs, without dimming the button; tip says what it does.
+func statusToggle(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onClick func()) ui.Element {
+	b := ui.ButtonBase(c).Key(spec.label).Label(spec.label).Tooltip(tip).Height(switchHeight).Padding(0, 12, 0, 8).Gap(2).
+		Radius(switchHeight / 2).AlignItems(ui.Center).Justify(ui.Center).Disabled(spec.disabled)
+	hovered := b.Hovered() && !spec.disabled && !spec.busy
+	fill, line, weight := t.Surface, t.Border, weightMedium
+	if hovered {
+		fill = t.SurfaceHover
+	}
+	if spec.on {
+		fill, line, weight = t.Success.Alpha(statusOnFillAlpha), t.Success.Alpha(statusOnLineAlpha), weightSemibold
+		if hovered {
+			fill = t.Success.Alpha(statusOnHoverAlpha)
+		}
+	}
+	b.Background(b.AnimateColor("fill", fill, ui.Smooth)).Border(1, b.AnimateColor("line", line, ui.Smooth))
+	scale := float32(1)
+	if b.Pressed() && !spec.busy {
+		scale = pressedScale
+	}
+	b.AnimatePose(ui.Pose{Scale: scale}, ui.Snappy)
+	if spec.disabled {
+		b.Opacity(disabledOpacity)
+	}
+	if !spec.disabled && !spec.busy {
+		b.Cursor(ui.CursorPointer)
+	}
+	b.OnClick(func() {
+		if !spec.busy {
+			onClick()
+		}
+	})
+	b.Children(func() {
+		ui.Box(c).Key("dot").Width(16).Height(16).Center().Children(func() {
+			switch {
+			case spec.busy:
+				spinner(c, iconInline, t.Success)
+			case spec.on:
+				statusDot(c, t.Success, true)
+			default:
+				statusDot(c, t.TextMuted.Alpha(statusOffDotAlpha), false)
+			}
+		})
+		ui.Text(c, spec.label).FontSize(fontSecondary).FontWeight(weight).TextColor(t.Text).
 			NoWrap().Translate(0, -opticalLift)
 	})
 	return b
