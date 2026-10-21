@@ -177,6 +177,10 @@ var hopRules = []string{
 	"GEOSITE,telegram," + groupTelegram,
 	"GEOIP,telegram," + groupTelegram + ",no-resolve",
 	"GEOSITE,google," + groupGoogle,
+	// GitHub is in geosite's microsoft list, whose group goes direct by
+	// default; GitHub itself is not reachable direct from China, and Hop's
+	// own updates come from it.
+	"GEOSITE,github," + groupSelect,
 	"GEOSITE,apple," + groupApple,
 	"GEOSITE,microsoft," + groupMicrosoft,
 	"GEOSITE,gfw," + groupSelect,

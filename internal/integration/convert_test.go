@@ -103,6 +103,9 @@ func TestHopRulesTemplate(t *testing.T) {
 	}
 	if config := readCoreConfig(t, h); !strings.Contains(config, "GEOSITE,gfw,节点选择") || !strings.Contains(config, "GEOIP,CN,DIRECT") || !strings.Contains(config, "MATCH,节点选择") {
 		t.Errorf("Hop's template rules missing from the running config:\n%s", config)
+	} else if github, microsoft := strings.Index(config, "GEOSITE,github,节点选择"), strings.Index(config, "GEOSITE,microsoft,"); github < 0 || github > microsoft {
+		// geosite's microsoft list holds GitHub, which direct cannot reach.
+		t.Errorf("GitHub must go through a node before the microsoft rule sends it direct:\n%s", config)
 	}
 
 	// A Clash profile switched to Hop's template keeps its nodes and loses
