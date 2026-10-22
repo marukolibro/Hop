@@ -70,7 +70,7 @@ func launch(ctx context.Context, cfg config.Config, binary string) (*Process, er
 		return nil, err
 	}
 	configPath := ConfigPath(cfg.HomeDir)
-	cmd := exec.CommandContext(ctx, binary, "-d", cfg.HomeDir, "-f", configPath)
+	cmd := coreCommand(ctx, binary, "-d", cfg.HomeDir, "-f", configPath)
 	// Ask the core to shut down before the context kills it.
 	cmd.Cancel = func() error { return requestStop(cmd.Process) }
 	cmd.WaitDelay = stopGrace

@@ -33,6 +33,9 @@ const (
 	gapLine float32 = 3
 
 	pagePadding float32 = 24
+	// headerMinContentWidth keeps the page tabs and traffic controls whole;
+	// narrower headers sit below native controls on the right.
+	headerMinContentWidth float32 = 600
 	// pageContentWidth keeps a page of one column from stretching across a
 	// wide window.
 	pageContentWidth float32 = 640

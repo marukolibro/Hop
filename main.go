@@ -55,9 +55,13 @@ const (
 	coreLogLevel         = "info"
 	bootstrapGroup       = "Hop"
 
-	// windowMaterial is the native material behind the main window. Change
-	// it here to try another; it only applies on macOS.
+	// windowMaterial is the native material behind the main window on
+	// macOS. Change it here to try another.
 	windowMaterial = mygo.VibrancyUnderWindow
+	// windowsMaterial is the system backdrop behind the main window on
+	// Windows 11. Mica only tints with the wallpaper and costs the GPU
+	// nothing; the wallpaper bitmap and veil sit above it.
+	windowsMaterial = mygo.VibrancyMica
 
 	// trafficLightX and trafficLightY place the close button's top-left
 	// corner so the traffic lights centre on the header's 60 DIP row.
@@ -322,12 +326,16 @@ func run() (err error) {
 	return runErr
 }
 
-// windowVibrancy is the material behind the main window on macOS, and none
-// elsewhere: Windows 11's backdrops are untested on real hardware, and the
-// other platforms have no material, so they keep the solid window.
+// windowVibrancy is the material behind the main window: the macOS material,
+// or Windows 11's Mica. MyGo shows the material only where the system has it
+// (Windows 11 22H2 and later); elsewhere the window keeps the solid palette.
+// Linux has no material.
 func windowVibrancy() mygo.Vibrancy {
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		return windowMaterial
+	case "windows":
+		return windowsMaterial
 	}
 	return mygo.VibrancyNone
 }

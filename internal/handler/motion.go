@@ -108,6 +108,7 @@ func slidingSwitch(c *ui.Context, key string, selected *int, labels []string, st
 // the page.
 func pageTabs(c *ui.Context, t *ui.Theme, key string, selected *int, labels []string, onChange func(int)) {
 	width, _ := c.Size()
+	width -= c.TitleBar().Right
 	segment := tabWidth
 	if width < 760 {
 		segment = tabNarrowWidth

@@ -93,7 +93,7 @@ func (v *ConfigValidator) validateIn(ctx context.Context, config []byte, dir str
 
 	testCtx, cancel := context.WithTimeout(ctx, v.timeout)
 	defer cancel()
-	cmd := exec.CommandContext(testCtx, v.binary, "-t", "-d", dir, "-f", path)
+	cmd := coreCommand(testCtx, v.binary, "-t", "-d", dir, "-f", path)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		return nil

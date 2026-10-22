@@ -138,10 +138,12 @@ func (m *MenuBar) togglePanel() {
 	m.d.testQuickRoutes()
 }
 
-// flyoutVibrancy is the material behind the panel on macOS, and none
-// elsewhere, where the panel draws its own background.
+// flyoutVibrancy is the material behind the panel: the popover material on
+// macOS, which Windows 11 shows as Acrylic. Elsewhere the panel draws its
+// own background.
 func flyoutVibrancy() mygo.Vibrancy {
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin", "windows":
 		return mygo.VibrancyPopover
 	}
 	return mygo.VibrancyNone

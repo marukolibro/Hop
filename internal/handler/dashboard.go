@@ -827,15 +827,21 @@ func (d *Dashboard) View(c *ui.Context) {
 // reaches Hop with whether it does now.
 func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 	// The window has no title bar of its own: the header is it. It keeps
-	// clear of the traffic lights and drags the window.
+	// clear of the native window controls on either side and drags the window.
 	left := max(pagePadding, c.TitleBar().Left+gapSmall)
+	right := max(pagePadding, c.TitleBar().Right+gapSmall)
 	width, _ := c.Size()
+	controls := c.TitleBar()
 	headerGap := gapLarge
 	if width >= 1050 {
 		headerGap = 30
 	}
 	ui.Column(c).Background(headerFill(t)).Children(func() {
-		ui.Row(c).Gap(headerGap).AlignItems(ui.Center).Height(headerHeight).Padding(0, pagePadding, 0, left).DragWindow().Children(func() {
+		if controls.Right > 0 && width-controls.Right < headerMinContentWidth {
+			ui.Box(c).Height(controls.Height).DragWindow()
+			right = pagePadding
+		}
+		ui.Row(c).Gap(headerGap).AlignItems(ui.Center).Height(headerHeight).Padding(0, right, 0, left).DragWindow().Children(func() {
 			if width >= 760 {
 				brandLockup(c, t, 28)
 			} else {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -53,7 +52,7 @@ func (c *CoreChecker) Check(ctx context.Context, binary string) (string, error) 
 func BinaryVersion(ctx context.Context, binary string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, versionTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, binary, "-v").CombinedOutput()
+	out, err := coreCommand(ctx, binary, "-v").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("run %q -v (output=%q): %w", binary, strings.TrimSpace(string(out)), err)
 	}
