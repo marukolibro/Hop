@@ -20,6 +20,8 @@ const (
 	radiusTile    float32 = 10
 	fastDelay             = 150
 	moderateDelay         = 350
+	// nodeOrderSegmentWidth fits a two-character order name.
+	nodeOrderSegmentWidth float32 = 52
 	// Every tile has a hollow choice ring; the selected one fills it.
 	nodeCheckSize float32 = 14
 	nodeCheckIcon float32 = 10
@@ -99,6 +101,7 @@ func (d *Dashboard) groupHeader(c *ui.Context, t *ui.Theme) {
 				}
 			})
 		})
+		slidingSwitch(c, "节点排序", &d.nodeOrder, nodeOrderLabels, pageSwitchStyle(t, nodeOrderSegmentWidth), func(int) {})
 		d.testButton(c, t, group.Name)
 	})
 }
@@ -119,6 +122,12 @@ func (d *Dashboard) nodeGrid(c *ui.Context, t *ui.Theme) {
 			// Groups and DIRECT come first: a group often picks one of them.
 			if len(group.Others) > 0 {
 				d.nodeSection(c, t, group, "线路", group.Others, columns)
+			}
+			if d.nodeOrder == nodeOrderDelay {
+				if nodes := nodesByDelay(group.Regions, d.orderDelay); len(nodes) > 0 {
+					d.nodeSection(c, t, group, "按延迟", nodes, columns)
+				}
+				return
 			}
 			for _, region := range group.Regions {
 				title := strings.TrimSpace(shownFlag(region.Flag) + " " + region.Name)

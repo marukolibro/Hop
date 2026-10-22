@@ -336,7 +336,13 @@ type Dashboard struct {
 	activeGroup string
 	// testing is the group whose delays are being measured, testingAll
 	// during the test at startup, "" for none.
-	testing     string
+	testing string
+	// delaysBeforeTest are the node delays when the running test began; the
+	// delay order ranks by them until it ends.
+	delaysBeforeTest map[string]model.Delay
+	// nodeOrder is how the node grid orders its tiles, one of the nodeOrder
+	// constants; it is not kept between starts.
+	nodeOrder   int
 	last        model.Traffic
 	history     model.TrafficHistory
 	connections connectionsState
@@ -427,7 +433,7 @@ func (d *Dashboard) Start(ctx context.Context, win Updater) {
 		gen := d.nextViewGen()
 		testCtx, cancel := context.WithCancel(ctx)
 		d.delayCancel = cancel
-		d.testing = group
+		d.startTesting(group)
 		timeout := service.DelayTimeout(d.settings.settings)
 		// The probe belongs to the runtime epoch and window context.
 		go func() {
@@ -535,8 +541,20 @@ func (d *Dashboard) nextViewGen() int {
 		d.delayCancel()
 		d.delayCancel = nil
 	}
-	d.testing = ""
+	d.stopTesting()
 	return d.viewGen
+}
+
+// startTesting marks group as being measured and keeps the delays the nodes
+// show now for ranking.
+func (d *Dashboard) startTesting(group string) {
+	d.testing = group
+	d.delaysBeforeTest = nodeDelays(d.view)
+}
+
+func (d *Dashboard) stopTesting() {
+	d.testing = ""
+	d.delaysBeforeTest = nil
 }
 
 // loadView reads the node view; a reply from an epoch older than the current one
@@ -578,7 +596,7 @@ func (d *Dashboard) startupTest(ctx context.Context, win Updater, gen int) {
 		}
 		testCtx, cancel := context.WithCancel(ctx)
 		d.delayCancel = cancel
-		d.testing = testingAll
+		d.startTesting(testingAll)
 		timeout := service.DelayTimeout(d.settings.settings)
 		// The probes belong to the runtime epoch and window context.
 		go func() {
@@ -631,7 +649,7 @@ func (d *Dashboard) finishDelayTest(ctx context.Context, win Updater, gen int, e
 			return
 		}
 		d.delayCancel = nil
-		d.testing = ""
+		d.stopTesting()
 		if err != nil {
 			d.fail(actionTestLatency, err)
 		}
