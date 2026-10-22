@@ -46,6 +46,9 @@ type ruleEditor struct {
 	targetIndex int
 	value       string
 	err         string
+	// suggestions are the rules offered for the connection the dialog was
+	// opened from; none when opened from the settings.
+	suggestions []ruleSuggestion
 }
 
 // loadRules reads the custom rules.
@@ -70,6 +73,23 @@ func (d *Dashboard) openRuleEditor() {
 	}
 	r.editor = ruleEditor{targetIndex: slices.Index(service.CustomRuleTargets, model.CustomRuleProxy)}
 	r.editorOpen = true
+}
+
+// openRuleEditorFor opens the add dialog for conn with the likeliest rule
+// filled in; the others are one click away.
+func (d *Dashboard) openRuleEditorFor(conn model.Connection) {
+	r := &d.rules
+	if !r.loaded {
+		return
+	}
+	d.openRuleEditor()
+	if !r.editorOpen {
+		return
+	}
+	r.editor.suggestions = suggestRules(conn)
+	if len(r.editor.suggestions) > 0 {
+		r.editor.typeIndex, r.editor.value = r.editor.suggestions[0].typeIndex, r.editor.suggestions[0].value
+	}
 }
 
 // submitRuleEditor begins saving the list with the dialog's rule added.
@@ -216,6 +236,7 @@ func (d *Dashboard) customRuleForm(c *ui.Context, t *ui.Theme) {
 			mutedText(c, t, "规则排在订阅规则之前，先于它们匹配；局域网直连规则仍然最先。")
 		})
 		ui.Column(c).Gap(gapSmall).Children(func() {
+			d.ruleSuggestionRow(c, t)
 			fieldLabel(c, t, "类型", "")
 			ui.Box(c).Disabled(r.busy).Children(func() {
 				slidingSwitch(c, "rule-type", &e.typeIndex, ruleTypeLabels, dialogSwitchStyle(t, 68), func(int) { e.err = "" })
@@ -237,6 +258,28 @@ func (d *Dashboard) customRuleForm(c *ui.Context, t *ui.Theme) {
 			button(c, buttonSpec{label: "添加", style: primaryButton(t), busy: r.busy,
 				disabled: r.busy || strings.TrimSpace(e.value) == ""}, d.submitRuleEditor)
 		})
+	})
+}
+
+// ruleSuggestionRow lets the user switch among the rules offered for the
+// connection; the one in the fields shows as chosen.
+func (d *Dashboard) ruleSuggestionRow(c *ui.Context, t *ui.Theme) {
+	r := &d.rules
+	e := &r.editor
+	if len(e.suggestions) == 0 {
+		return
+	}
+	fieldLabel(c, t, "按这条连接", "")
+	ui.Row(c).Gap(gapSmall).Wrap().Children(func() {
+		for _, suggestion := range e.suggestions {
+			style := softButton(t)
+			if suggestion.typeIndex == e.typeIndex && suggestion.value == strings.TrimSpace(e.value) {
+				style = primaryButton(t)
+			}
+			button(c, buttonSpec{label: suggestion.label, style: style, disabled: r.busy}, func() {
+				e.typeIndex, e.value, e.err = suggestion.typeIndex, suggestion.value, ""
+			})
+		}
 	})
 }
 

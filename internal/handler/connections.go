@@ -17,6 +17,7 @@ const (
 	colRoute
 	colDownload
 	colUpload
+	colAddRule
 	colClose
 )
 
@@ -26,6 +27,7 @@ var connectionColumns = []ui.TableColumn{
 	colRoute:    {Title: "线路", Width: 150, MinWidth: 90},
 	colDownload: {Title: "下载", Width: 76, Align: ui.End},
 	colUpload:   {Title: "上传", Width: 76, Align: ui.End},
+	colAddRule:  {Title: "", ID: "add-rule", Width: 40, Fixed: true, Align: ui.Center},
 	colClose:    {Title: "", ID: "close", Width: 40, Fixed: true, Align: ui.Center},
 }
 
@@ -69,9 +71,9 @@ func (d *Dashboard) connectionsPage(c *ui.Context, t *ui.Theme) {
 // connectionLayout drops the rule column when the design's table would not
 // fit; MyGo's table has no horizontal scroll.
 func connectionLayout(narrow bool) ([]ui.TableColumn, []int) {
-	order := []int{colHost, colRule, colRoute, colDownload, colUpload, colClose}
+	order := []int{colHost, colRule, colRoute, colDownload, colUpload, colAddRule, colClose}
 	if narrow {
-		order = []int{colHost, colRoute, colDownload, colUpload, colClose}
+		order = []int{colHost, colRoute, colDownload, colUpload, colAddRule, colClose}
 	}
 	columns := make([]ui.TableColumn, len(order))
 	for i, col := range order {
@@ -97,6 +99,8 @@ func (d *Dashboard) connectionCell(c *ui.Context, t *ui.Theme, conn model.Connec
 		amount(c, conn.Download)
 	case colUpload:
 		amount(c, conn.Upload)
+	case colAddRule:
+		iconButton(c, "为这条连接添加规则", iconPlus, softButton(t), func() { d.openRuleEditorFor(conn) })
 	case colClose:
 		id := conn.ID
 		iconButton(c, "断开连接", iconClose, dangerButton(t), func() { d.closeConnection(id) })
