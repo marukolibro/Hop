@@ -202,7 +202,7 @@ func badge(c *ui.Context, t *ui.Theme, text string) {
 func panelCard(c *ui.Context, t *ui.Theme) ui.Element {
 	panel := ui.Column(c).Border(hairlineWidth, glassMaterialLine(t)).Radius(radiusPanel)
 	if onGlass(t) {
-		return panel.Material(frostedMaterial{tint: glassPanel(t), blur: glassPanelBlur})
+		return panel.Background(glassPanel(t))
 	}
 	return panel.Background(t.Surface)
 }

@@ -157,7 +157,7 @@ func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, 
 	tile := ui.Column(c).Key(node.Name).Gap(7).Padding(10, 11).Radius(radiusTile)
 	hovered := group.Selectable && tile.Hovered()
 	if onGlass(t) {
-		tile.Material(frostedMaterial{tint: glassTile(t, hovered, isActive), blur: glassTileBlur})
+		tile.Background(glassTile(t, hovered, isActive))
 	} else {
 		tile.Background(glassTile(t, hovered, isActive))
 	}

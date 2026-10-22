@@ -792,7 +792,7 @@ func (d *Dashboard) failConnection(a action, err error) {
 func (d *Dashboard) View(c *ui.Context) {
 	c.SetTheme(d.windowTheme(c))
 	t := c.Theme()
-	// The material paints the themed backdrop and blur before any controls.
+	// The material paints the themed backdrop and veil before any controls.
 	c.Root().Background(ui.Transparent)
 	root := ui.Column(c).Fill()
 	if onGlass(t) {

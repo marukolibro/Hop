@@ -1,12 +1,19 @@
 package handler
 
 import (
+	"image"
+	"image/color"
+	"math"
+	"sync"
+
 	"github.com/egoist/mygo/ui"
 )
 
-// The sea wallpaper is the design page's desktop painted into the window:
-// a gradient sky, one soft glow and two tilted blobs, in the page's own
-// proportions, so the glass in front of it blurs the same shapes and colours.
+// The sea wallpaper is the design page's desktop, baked into a small bitmap
+// that the window material stretches over the window: a gradient sky, one soft
+// glow and two tilted blobs, in the page's own proportions. The wallpaper is
+// smooth, so a coarse bitmap shows it as it is, and one small texture costs
+// far less than painting window-sized gradient paths every frame.
 // Positions are in the design's viewport units (1261x826 CSS px around a
 // 1160x714 window at 50.5,75) and scale with the window.
 const (
@@ -17,7 +24,7 @@ const (
 	seaWindowW   float32 = 1160
 	seaWindowH   float32 = 714
 	// seaSaturation is the page's saturate(135%) on its blurred backdrop,
-	// applied to every wallpaper colour because the blur cannot do it here.
+	// applied to every wallpaper colour because the bitmap has no filter.
 	seaSaturation float32 = 1.35
 	seaCornerPct  float32 = 0.48
 	// seaLightLift mixes the light wallpaper toward white so its blues sit
@@ -29,7 +36,11 @@ const (
 	// front of the glass stay a soft sky-blue.
 	seaLightBlobA float32 = 0.55
 	seaLightBlobB float32 = 0.50
-	seaBlobSteps          = 6
+	// seaCell is the size of one bitmap pixel in points.
+	seaCell float32 = 6
+	// seaEdge is the width in design pixels over which a blob's edge fades:
+	// the page's 2px blur plus its 32px glass blur, which the bitmap has not.
+	seaEdge float32 = 40
 )
 
 // seaStop is a colour stop: 0xRRGGBB, its alpha, its place along the line.
@@ -103,76 +114,144 @@ func seaDark() seaWallpaper {
 	}
 }
 
+// seaRGBA is a colour in 0..1 floats with premultiplied alpha, so stops and
+// layers interpolate and composite as CSS does.
+type seaRGBA struct{ r, g, b, a float32 }
+
 // seaColor turns a stop into a colour with the wallpaper's saturation, lifted
-// toward white by lift, its alpha scaled by opacity.
-func seaColor(rgb uint32, alpha float32, opacity float32, lift float32) ui.Color {
-	r, g, b := float32(rgb>>16&0xFF), float32(rgb>>8&0xFF), float32(rgb&0xFF)
+// toward white by lift, its alpha scaled by opacity, premultiplied.
+func seaColor(stop seaStop, opacity float32, lift float32) seaRGBA {
+	r, g, b := float32(stop.rgb>>16&0xFF)/255, float32(stop.rgb>>8&0xFF)/255, float32(stop.rgb&0xFF)/255
 	luma := 0.2126*r + 0.7152*g + 0.0722*b
-	saturate := func(v float32) uint8 {
-		v = min(255, max(0, luma+(v-luma)*seaSaturation))
-		return uint8(v + (255-v)*lift + 0.5)
+	adjust := func(v float32) float32 {
+		v = min(1, max(0, luma+(v-luma)*seaSaturation))
+		return v + (1-v)*lift
 	}
-	return ui.RGBA(saturate(r), saturate(g), saturate(b), alpha*opacity)
+	a := stop.alpha * opacity
+	return seaRGBA{adjust(r) * a, adjust(g) * a, adjust(b) * a, a}
 }
 
-func seaGradient(angle float32, stops []seaStop, opacity float32, lift float32) ui.LinearGradient {
-	out := make([]ui.GradientStop, len(stops))
-	for i, s := range stops {
-		out[i] = ui.GradientStop{Color: seaColor(s.rgb, s.alpha, opacity, lift), At: s.at}
+// seaRamp samples a gradient's stops at t, interpolating premultiplied
+// colours and holding the first and last colour outside the stops.
+func seaRamp(stops []seaStop, opacity float32, lift float32, t float32) seaRGBA {
+	first, last := stops[0], stops[len(stops)-1]
+	if t <= first.at {
+		return seaColor(first, opacity, lift)
 	}
-	return ui.LinearGradient{Angle: angle, Stops: out}
+	for i := 1; i < len(stops); i++ {
+		if t <= stops[i].at {
+			span := stops[i].at - stops[i-1].at
+			k := (t - stops[i-1].at) / span
+			a, b := seaColor(stops[i-1], opacity, lift), seaColor(stops[i], opacity, lift)
+			return seaRGBA{a.r + (b.r-a.r)*k, a.g + (b.g-a.g)*k, a.b + (b.b-a.b)*k, a.a + (b.a-a.a)*k}
+		}
+	}
+	return seaColor(last, opacity, lift)
 }
 
-// seaRoundedPath is a rect whose corners are ellipses of pct of its sides,
-// as CSS's border-radius in percent draws it.
-func seaRoundedPath(r ui.Rect, pct float32) *ui.Path {
-	const kappa = 0.5523
-	rx, ry := r.W*pct, r.H*pct
-	x0, y0, x1, y1 := r.X, r.Y, r.X+r.W, r.Y+r.H
-	path := &ui.Path{}
-	path.MoveTo(x0+rx, y0).LineTo(x1-rx, y0)
-	path.CubeTo(x1-rx+rx*kappa, y0, x1, y0+ry-ry*kappa, x1, y0+ry)
-	path.LineTo(x1, y1-ry)
-	path.CubeTo(x1, y1-ry+ry*kappa, x1-rx+rx*kappa, y1, x1-rx, y1)
-	path.LineTo(x0+rx, y1)
-	path.CubeTo(x0+rx-rx*kappa, y1, x0, y1-ry+ry*kappa, x0, y1-ry)
-	path.LineTo(x0, y0+ry)
-	path.CubeTo(x0, y0+ry-ry*kappa, x0+rx-rx*kappa, y0, x0+rx, y0)
-	return path.Close()
+// seaLineT is where (x, y) falls along a CSS linear gradient of the given
+// angle across a w by h box centred on the origin, from 0 to 1.
+func seaLineT(x float32, y float32, w float32, h float32, angle float32) float32 {
+	rad := float64(angle) * math.Pi / 180
+	sin, cos := float32(math.Sin(rad)), float32(math.Cos(rad))
+	length := float32(math.Abs(float64(w*sin))) + float32(math.Abs(float64(h*cos)))
+	return (x*sin-y*cos)/length + 0.5
 }
 
-// drawSeaWallpaper paints the sea wallpaper behind the window rect r.
-func drawSeaWallpaper(p *ui.Painter, r ui.Rect, dark bool) {
+// over composites top over bottom, both premultiplied.
+func (top seaRGBA) over(bottom seaRGBA) seaRGBA {
+	k := 1 - top.a
+	return seaRGBA{top.r + bottom.r*k, top.g + bottom.g*k, top.b + bottom.b*k, top.a + bottom.a*k}
+}
+
+// seaBlobMask is how much of a blob covers the point (lx, ly), in the blob's
+// own frame centred on the origin: a box whose corners are ellipses of
+// seaCornerPct of its sides, fading over seaEdge at its edge.
+func seaBlobMask(lx float32, ly float32, w float32, h float32) float32 {
+	rx, ry := w*seaCornerPct, h*seaCornerPct
+	ax, ay := float32(math.Abs(float64(lx)))-(w/2-rx), float32(math.Abs(float64(ly)))-(h/2-ry)
+	var dist float32
+	if ax > 0 && ay > 0 {
+		dist = (float32(math.Hypot(float64(ax/rx), float64(ay/ry))) - 1) * min(rx, ry)
+	} else {
+		dist = max(float32(math.Abs(float64(lx)))-w/2, float32(math.Abs(float64(ly)))-h/2)
+	}
+	return min(1, max(0, 0.5-dist/seaEdge))
+}
+
+// seaPixel is the wallpaper's colour at a point of the design's viewport.
+func seaPixel(wall seaWallpaper, u float32, v float32) seaRGBA {
+	px := seaRamp(wall.sky, 1, wall.lift, seaLineT(u-seaViewportW/2, v-seaViewportH/2, seaViewportW, seaViewportH, wall.skyAngle))
+	glow := wall.glow
+	const farthestCorner = 1.4142
+	rx := max(glow.atX, 1-glow.atX) * seaViewportW * farthestCorner * glow.reach
+	ry := max(glow.atY, 1-glow.atY) * seaViewportH * farthestCorner * glow.reach
+	d := float32(math.Hypot(float64((u-glow.atX*seaViewportW)/rx), float64((v-glow.atY*seaViewportH)/ry)))
+	if a := max(0, 1-d); a > 0 {
+		px = seaColor(seaStop{rgb: glow.rgb, alpha: a}, 1, wall.lift).over(px)
+	}
+	for _, blob := range wall.blobs {
+		w, h := blob.widthVW*seaViewportW/100, blob.heightVW*seaViewportW/100
+		cx, cy := blob.leftVW*seaViewportW/100+w/2, blob.topVH*seaViewportH/100+h/2
+		rad := float64(blob.tilt) * math.Pi / 180
+		sin, cos := float32(math.Sin(rad)), float32(math.Cos(rad))
+		dx, dy := u-cx, v-cy
+		lx, ly := dx*cos+dy*sin, -dx*sin+dy*cos
+		mask := seaBlobMask(lx, ly, w, h)
+		if mask <= 0 {
+			continue
+		}
+		c := seaRamp(blob.stops, blob.opacity, wall.lift, seaLineT(lx, ly, w, h, blob.angle))
+		px = seaRGBA{c.r * mask, c.g * mask, c.b * mask, c.a * mask}.over(px)
+	}
+	return px
+}
+
+// seaImage bakes the sea wallpaper for a window of w by h points, one pixel
+// per seaCell points, with the window mapped onto the design page's window.
+func seaImage(w float32, h float32, dark bool) *image.RGBA {
 	wall := seaLight()
 	if dark {
 		wall = seaDark()
 	}
-	sx, sy := r.W/seaWindowW, r.H/seaWindowH
-	view := ui.Rect{X: r.X - seaWindowX*sx, Y: r.Y - seaWindowY*sy, W: seaViewportW * sx, H: seaViewportH * sy}
-	p.Clip(r, 0, func() {
-		p.FillGradient(view, seaGradient(wall.skyAngle, wall.sky, 1, wall.lift), 0)
-		drawSeaGlow(p, view, wall.glow, wall.lift)
-		vw, vh := view.W/100, view.H/100
-		for _, blob := range wall.blobs {
-			box := ui.Rect{X: view.X + blob.leftVW*vw, Y: view.Y + blob.topVH*vh, W: blob.widthVW * vw, H: blob.heightVW * vw}
-			p.Transform(ui.Rotation(blob.tilt), box.X+box.W/2, box.Y+box.H/2, func() {
-				p.FillPathGradient(seaRoundedPath(box, seaCornerPct), seaGradient(blob.angle, blob.stops, blob.opacity, wall.lift))
-			})
+	nx, ny := max(2, int(math.Ceil(float64(w/seaCell)))), max(2, int(math.Ceil(float64(h/seaCell))))
+	img := image.NewRGBA(image.Rect(0, 0, nx, ny))
+	for j := range ny {
+		for i := range nx {
+			u := (float32(i)+0.5)/float32(nx)*seaWindowW + seaWindowX
+			v := (float32(j)+0.5)/float32(ny)*seaWindowH + seaWindowY
+			px := seaPixel(wall, u, v)
+			img.SetRGBA(i, j, color.RGBA{R: uint8(min(1, px.r)*255 + 0.5), G: uint8(min(1, px.g)*255 + 0.5), B: uint8(min(1, px.b)*255 + 0.5), A: 255})
 		}
-	})
+	}
+	return img
 }
 
-// drawSeaGlow stacks soft ellipses to fade a light out from a point; the
-// ellipse reaches farthest-corner times reach of the viewport, as CSS sizes it.
-func drawSeaGlow(p *ui.Painter, view ui.Rect, glow seaGlow, lift float32) {
-	const farthestCorner = 1.4142
-	rx := max(glow.atX, 1-glow.atX) * view.W * farthestCorner * glow.reach
-	ry := max(glow.atY, 1-glow.atY) * view.H * farthestCorner * glow.reach
-	cx, cy := view.X+glow.atX*view.W, view.Y+glow.atY*view.H
-	layer := seaColor(glow.rgb, 0.22, 1, lift)
-	for i := seaBlobSteps; i >= 1; i-- {
-		k := float32(i) / seaBlobSteps
-		ellipse := ui.Rect{X: cx - rx*k, Y: cy - ry*k, W: 2 * rx * k, H: 2 * ry * k}
-		p.Fill(ellipse, layer, min(ellipse.W, ellipse.H)/2)
+// seaBitmapCache keeps the bitmap of the last window size and appearance: the
+// wallpaper is baked again only when the window is resized or switches
+// appearance. The material is rebuilt every frame, so the cache outlives it.
+var seaBitmapCache struct {
+	sync.Mutex
+	key    [3]int
+	bitmap *ui.Bitmap
+}
+
+// seaBitmap is the sea wallpaper as a bitmap for a window of w by h points.
+func seaBitmap(w float32, h float32, dark bool) *ui.Bitmap {
+	key := [3]int{int(math.Round(float64(w / seaCell))), int(math.Round(float64(h / seaCell))), 0}
+	if dark {
+		key[2] = 1
 	}
+	seaBitmapCache.Lock()
+	defer seaBitmapCache.Unlock()
+	if seaBitmapCache.bitmap == nil || seaBitmapCache.key != key {
+		seaBitmapCache.bitmap = ui.NewBitmap(seaImage(w, h, dark))
+		seaBitmapCache.key = key
+	}
+	return seaBitmapCache.bitmap
+}
+
+// drawSeaWallpaper paints the sea wallpaper behind the window rect r.
+func drawSeaWallpaper(p *ui.Painter, r ui.Rect, dark bool) {
+	p.Image(seaBitmap(r.W, r.H, dark), r, ui.FillBox)
 }

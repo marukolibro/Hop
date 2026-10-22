@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
@@ -10,12 +9,9 @@ import (
 // The main window's glass, derived from the design's material spec. Keep
 // every number here: these alphas and inks are the look.
 //
-// The theme provides a stable colored backdrop above native vibrancy. The
-// background blur runs below the veil, keeping all text and controls sharp.
+// The theme provides a stable colored backdrop above native vibrancy; the
+// veil is painted above it, keeping all text and controls sharp.
 const (
-	glassAtmosphereBlur    float32 = 32
-	glassPanelBlur         float32 = 16
-	glassTileBlur          float32 = 10
 	glassHeaderAlpha       float32 = 0.16
 	glassHeroAlpha         float32 = 0.10
 	glassSubscriptionAlpha float32 = 0.18
@@ -256,20 +252,8 @@ func glassSelectedBorder(t *ui.Theme) ui.Color {
 	return t.Accent.Alpha(glassAccentLine)
 }
 
-// frostedMaterial softens the painted backdrop before applying a color veil.
-// It is used only on uniformly rounded cards, after the window light fields.
-type frostedMaterial struct {
-	tint ui.Color
-	blur float32
-}
-
-func (m frostedMaterial) PaintMaterial(p *ui.Painter, r ui.Rect, radii [4]float32) {
-	glass.Blur{Radius: m.blur}.PaintMaterial(p, r, radii)
-	p.Fill(r, m.tint, radii[0])
-}
-
-// themedWindowMaterial keeps the backdrop, its blur and the glass veil in
-// one paint pass, below the content's text and hit targets.
+// themedWindowMaterial paints the wallpaper and the glass veil in one pass,
+// below the content's text and hit targets.
 type themedWindowMaterial struct {
 	palette windowMaterialPalette
 	veil    ui.Color
@@ -277,6 +261,5 @@ type themedWindowMaterial struct {
 
 func (m themedWindowMaterial) PaintMaterial(p *ui.Painter, r ui.Rect, radii [4]float32) {
 	drawWindowAtmosphere(p, r, m.palette)
-	glass.Blur{Radius: glassAtmosphereBlur}.PaintMaterial(p, r, radii)
 	p.Fill(r, m.veil, radii[0])
 }
