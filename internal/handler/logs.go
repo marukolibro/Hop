@@ -9,7 +9,7 @@ import (
 	"hop/internal/model"
 )
 
-const logTimeWidth float32 = 64
+const logTimeWidth float32 = 62
 
 // logFilters are the level filter's segments and the levels each shows.
 var logFilters = []struct {
@@ -29,30 +29,42 @@ func (d *Dashboard) logsPage(c *ui.Context, t *ui.Theme) {
 	for i, f := range logFilters {
 		labels[i] = f.label
 	}
-	toolbar(c, func() {
-		slidingSwitch(c, "日志级别", &d.logs.level, labels, pageSwitchStyle(t, 52), func(int) {})
-		mutedText(c, t, fmt.Sprintf("%d 行", len(visible))).FontFeatures("tnum")
-		ui.Box(c).Grow(1)
-		button(c, buttonSpec{label: "清空", icon: iconTrash, style: softButton(t), disabled: len(d.logs.entries) == 0}, func() { d.logs.entries = nil })
-	})
-	if len(visible) == 0 {
-		emptyState(c, t, "暂无日志", "内核的运行记录会实时出现在这里,比如连接匹配了哪条规则、节点连接失败的原因。")
-		return
-	}
-	ui.Box(c).Grow(1).Margin(0, pagePadding, gapLarge, pagePadding).Radius(radiusControl).Border(1, t.Border).Background(t.Surface).Clip().Children(func() {
-		ui.List(c, &d.logs.list, len(visible), func(i int) {
-			logRow(c, t, visible[i])
-		}).Fill().Padding(gapTight, 0)
+	ui.Column(c).Fill().Children(func() {
+		ui.Column(c).Padding(28, pageGutter(c), 26, pageGutter(c)).Children(func() {
+			pageHeading(c, t, "运行日志", "连接与规则的运行记录")
+		})
+		toolbar(c, func() {
+			slidingSwitch(c, "日志级别", &d.logs.level, labels, pageSwitchStyle(t, 52), func(int) {})
+			mutedText(c, t, fmt.Sprintf("%d 行", len(visible))).FontFeatures("tnum")
+			ui.Box(c).Grow(1)
+			button(c, buttonSpec{label: "清空日志", style: mainSoftButton(t), disabled: len(d.logs.entries) == 0}, func() { d.logs.entries = nil })
+		})
+		if len(visible) == 0 {
+			emptyState(c, t, "暂无日志", "内核的运行记录会实时出现在这里,比如连接匹配了哪条规则、节点连接失败的原因。")
+			return
+		}
+		ui.Box(c).Grow(1).Padding(0, pageGutter(c), 18, pageGutter(c)).Children(func() {
+			panelCard(c, t).Fill().Padding(8, 18).Children(func() {
+				ui.List(c, &d.logs.list, len(visible), func(i int) {
+					logRow(c, t, visible[i], i == len(visible)-1)
+				}).Fill()
+			})
+		})
 	})
 }
 
-func logRow(c *ui.Context, t *ui.Theme, entry model.LogEntry) {
-	ui.Row(c).Gap(gapMedium).AlignItems(ui.Start).Padding(5, gapMedium).Children(func() {
-		ui.Text(c, entry.Time.Format("15:04:05")).FontSize(fontCaption).TextColor(t.TextMuted).FontFeatures("tnum").Width(logTimeWidth).NoWrap()
-		ui.Box(c).Width(44).Children(func() {
-			chip(c, levelLabel(entry.Level), levelColor(t, entry.Level))
+func logRow(c *ui.Context, t *ui.Theme, entry model.LogEntry, last bool) {
+	ui.Column(c).Children(func() {
+		ui.Row(c).Gap(14).AlignItems(ui.Start).Padding(9, 0).Children(func() {
+			captionText(c, t, entry.Time.Format("15:04:05")).FontFeatures("tnum").Width(logTimeWidth).NoWrap()
+			ui.Box(c).Width(38).Children(func() {
+				ui.Text(c, levelLabel(entry.Level)).FontSize(fontSecondary).TextColor(levelColor(t, entry.Level)).NoWrap()
+			})
+			ui.Text(c, entry.Message).FontSize(fontSecondary).Grow(1).Selectable()
 		})
-		ui.Text(c, entry.Message).FontSize(fontSecondary).Grow(1).Selectable()
+		if !last {
+			horizontalHairline(c, t)
+		}
 	})
 }
 

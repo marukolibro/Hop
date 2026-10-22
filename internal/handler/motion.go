@@ -2,7 +2,6 @@ package handler
 
 import (
 	"math"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo/plugins/glass"
@@ -13,37 +12,38 @@ import (
 )
 
 // Motion in Hop is for what changes: the switch slides to the new choice,
-// numbers roll, and packets flow along the route as fast as traffic does.
-// Drawings that move for as long as they show (packets, pulses, spinners)
-// only repaint, so a large page is not built again every frame.
+// numbers roll, and the route gauge's arcs follow the traffic. Nothing here
+// moves for as long as it is shown; a spinner is the one exception, and only
+// while something runs.
 
 const (
 	switchHeight  float32 = 28
 	switchInset   float32 = 2
-	pulsePeriod           = 2 * time.Second
+	statusRipple          = 900 * time.Millisecond
 	entranceTime          = 420 * time.Millisecond
 	entranceStep          = 45 * time.Millisecond
 	entranceShift float32 = 10
+
+	// The page switch: segments fit two CJK labels at 14 with air around
+	// them, the track a floating pill 30 tall inside 36; below the narrow
+	// breakpoint the segments tighten so the width still fits.
+	tabWidth       float32 = 64
+	tabNarrowWidth float32 = 50
+	tabHeight      float32 = 36
+	tabInset       float32 = 3
 
 	// opticalLift raises text in small controls: CJK glyphs sit about a
 	// pixel below the centre of the line box the font's metrics give.
 	opticalLift float32 = 1
 
-	flowHeight float32 = 34
-	flowStopR  float32 = 5
-	flowExitR  float32 = 7
-	flowLane   float32 = 3.5
-	// flowSlots streaks can travel each lane at once, evenly spaced; how
-	// many show, how long and how bright follows the traffic.
-	flowSlots = 5
-	// flowSpeed is constant: a speed that followed the traffic would make
-	// every streak jump whenever it changed.
-	flowSpeed  float64 = 80
-	flowStreak float32 = 22
-	// flowFullLevel is the doubling of idleRate at which a lane is at full
-	// intensity, about 4 MB/s.
+	// flowFullLevel is the doubling of idleRate at which the route gauge's
+	// rings are full, about 4 MB/s.
 	flowFullLevel = 12
 )
+
+// tabPillInk is the dark ink on the page switch's light pill, in both
+// appearances the design gives it.
+var tabPillInk = ui.Hex("#1D2B43")
 
 // switchStyle colours a sliding switch.
 type switchStyle struct {
@@ -56,8 +56,13 @@ type switchStyle struct {
 	segmentWidth  float32
 }
 
-// pageSwitchStyle is the quiet switch between pages and between choices.
+// pageSwitchStyle is the quiet switch between choices in settings, the log
+// filter and the outbound mode.
 func pageSwitchStyle(t *ui.Theme, segmentWidth float32) switchStyle {
+	if onGlass(t) {
+		return switchStyle{track: glassFill(t, glassTrackAlpha), thumb: glassFill(t, glassTrackSelected),
+			active: t.Text, inactive: t.TextMuted, segmentWidth: segmentWidth}
+	}
 	return switchStyle{track: t.SurfacePressed, thumb: t.Surface, thumbMaterial: glass.Glass{}, active: t.Text, inactive: t.TextMuted, segmentWidth: segmentWidth}
 }
 
@@ -97,16 +102,69 @@ func slidingSwitch(c *ui.Context, key string, selected *int, labels []string, st
 	})
 }
 
-// statusDot draws a dot in color; while live, a ring ripples out of it
-// every pulsePeriod, as a heartbeat of the core.
+// pageTabs chooses the window's page into *selected: a translucent track
+// with a solid light pill that springs to the chosen label, as the design's
+// segmented page switch. The labels sit on the window tint; the pill marks
+// the page.
+func pageTabs(c *ui.Context, t *ui.Theme, key string, selected *int, labels []string, onChange func(int)) {
+	width, _ := c.Size()
+	segment := tabWidth
+	if width < 760 {
+		segment = tabNarrowWidth
+	}
+	trackFill := t.SurfacePressed
+	if onGlass(t) {
+		trackFill = glassFill(t, glassTrackAlpha)
+	}
+	pill := ui.Hex("#E7EBF3")
+	if !t.Dark {
+		pill = ui.RGB(255, 255, 255)
+	}
+	inner := tabHeight - 2*tabInset
+	track := ui.Box(c).Key(key).Label(key).Width(segment*float32(len(labels)) + 2*tabInset).
+		Height(tabHeight).Radius(tabHeight / 2).Background(trackFill)
+	x := track.AnimateTo("thumb", float32(*selected)*segment, ui.Snappy)
+	track.Children(func() {
+		ui.Box(c).Absolute().Left(tabInset+x).Top(tabInset).Width(segment).Height(inner).
+			Radius(inner/2).Background(pill).Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.12))
+		ui.Row(c).Absolute().Left(tabInset).Top(tabInset).Children(func() {
+			for i, label := range labels {
+				tab := ui.Box(c).Key(label).Width(segment).Height(inner).Center().Cursor(ui.CursorPointer)
+				ink, weight := t.TextMuted, weightMedium
+				if i == *selected {
+					ink, weight = tabPillInk, weightSemibold
+				}
+				color := tab.AnimateColor("ink", ink, ui.Smooth)
+				tab.OnClick(func() {
+					if *selected != i {
+						*selected = i
+						onChange(i)
+					}
+				})
+				tab.Children(func() {
+					ui.Text(c, label).FontSize(fontEmphasis).FontWeight(weight).TextColor(color).Translate(0, -opticalLift)
+				})
+			}
+		})
+	})
+}
+
+// statusDot draws a dot in color; when live turns on, one ring ripples out
+// of it, as a heartbeat of the core, and the dot then rests without asking
+// for another frame.
 func statusDot(c *ui.Context, color ui.Color, live bool) {
-	ui.Box(c).Width(16).Height(16).Draw(func(p *ui.Painter, r ui.Rect) {
+	dot := ui.Box(c).Key("statusDot").Width(16).Height(16)
+	ripple := float32(0)
+	if live {
+		ripple = dot.AnimateTo("ripple", 1, ui.Animation{Duration: statusRipple, Ease: ui.EaseOut})
+	} else {
+		dot.Jump("ripple", 0)
+	}
+	dot.Draw(func(p *ui.Painter, r ui.Rect) {
 		cx, cy := r.X+r.W/2, r.Y+r.H/2
-		if live {
-			phase := float32(p.Now().UnixMilli()%pulsePeriod.Milliseconds()) / float32(pulsePeriod.Milliseconds())
-			ripple := 3.5 + 4.5*easeOut(phase)
-			p.Fill(circle(cx, cy, ripple), color.Alpha(0.35*(1-phase)), ripple)
-			p.AnimationFrame()
+		if live && ripple < 1 {
+			radius := 3.5 + 4.5*ripple
+			p.Fill(circle(cx, cy, radius), color.Alpha(0.35*(1-ripple)), radius)
 		}
 		p.Fill(circle(cx, cy, 3.5), color, 3.5)
 	})
@@ -136,69 +194,6 @@ func (d *Dashboard) trafficSwitches(c *ui.Context, t *ui.Theme) {
 	}, "接管全部流量,包括终端和游戏", func() { d.beginTun(!tun.on) })
 }
 
-// routeFlow draws the route as a line of stops, from this Mac through the
-// groups to the exit, with traffic streaming along it: download back from
-// the exit above the line, upload out to it below. Streaks move at one
-// speed and spacing; traffic sets how many show, how long and how bright,
-// easing as it changes, so nothing jumps. Names sit under the stops.
-func routeFlow(c *ui.Context, t *ui.Theme, route []model.RouteHop, traffic model.Traffic) {
-	labels := flowLabels(route)
-	line, up, paper, muted := t.Accent, t.Warning, t.Surface, t.TextMuted
-	ui.Column(c).Gap(4).Children(func() {
-		lane := ui.Box(c).Height(flowHeight).Label("线路").Description(strings.Join(labels, " → "))
-		downLevel := lane.AnimateTo("down", flowIntensity(traffic.Down), ui.Smooth)
-		upLevel := lane.AnimateTo("up", flowIntensity(traffic.Up), ui.Smooth)
-		lane.Draw(func(p *ui.Painter, r ui.Rect) {
-			n := len(labels)
-			cy := r.Y + r.H/2
-			stopX := func(i int) float32 { return r.X + (float32(i)+0.5)*r.W/float32(n) }
-			x0, x1 := stopX(0), stopX(n-1)
-			p.Line(x0, cy, x1, cy, 2, line.Alpha(0.3))
-			seconds := float64(p.Now().UnixMilli()) / 1000
-			streams(p, x0, x1, cy-flowLane, seconds, downLevel, line, false)
-			streams(p, x0, x1, cy+flowLane, seconds, upLevel, up, true)
-			pulse := float32(math.Sin(math.Mod(seconds, 2*math.Pi/2.4) * 2.4))
-			for i := range n {
-				x := stopX(i)
-				switch {
-				case i == n-1:
-					glow := 0.18 + 0.1*pulse
-					p.Fill(circle(x, cy, flowExitR+5), line.Alpha(glow), flowExitR+5)
-					p.Fill(circle(x, cy, flowExitR), line, flowExitR)
-				case i == 0:
-					p.Fill(circle(x, cy, flowStopR), paper, flowStopR)
-					p.Stroke(circle(x, cy, flowStopR), muted, flowStopR, 2)
-				default:
-					p.Fill(circle(x, cy, flowStopR), paper, flowStopR)
-					p.Stroke(circle(x, cy, flowStopR), line, flowStopR, 2)
-				}
-			}
-			p.AnimationFrame()
-		})
-		ui.Row(c).Children(func() {
-			for i, label := range labels {
-				text := ui.Text(c, label).Key(i).FontSize(fontCaption).MaxLines(1).TextAlign(ui.Center).Grow(1).Basis(0)
-				if i == len(labels)-1 {
-					text.TextColor(t.Accent).FontWeight(weightSemibold)
-				} else {
-					text.TextColor(t.TextMuted)
-				}
-			}
-		})
-	})
-}
-
-// flowLabels names the stops of a route: this Mac, the groups, the exit.
-func flowLabels(route []model.RouteHop) []string {
-	labels := []string{"本机"}
-	for _, hop := range route {
-		if hop.Group {
-			labels = append(labels, shownName(hop.Name))
-		}
-	}
-	return append(labels, "出口")
-}
-
 // flowIntensity maps a throughput onto 0..1, by doublings of idleRate so a
 // trickle shows and a download does not saturate at once; 0 while idle.
 func flowIntensity(bytesPerSecond int64) float32 {
@@ -207,43 +202,6 @@ func flowIntensity(bytesPerSecond int64) float32 {
 	}
 	level := math.Log2(float64(bytesPerSecond) / idleRate)
 	return float32(min(1, 0.2+0.8*level/flowFullLevel))
-}
-
-// streams draws one lane's streaks between x0 and x1 at y: heads moving
-// right when outbound, left otherwise, each a line fading to its tail.
-// intensity reveals the slots one after another, each fading in, and every
-// streak fades out near the ends of the line instead of popping.
-func streams(p *ui.Painter, x0 float32, x1 float32, y float32, seconds float64, intensity float32, color ui.Color, outbound bool) {
-	span := x1 - x0
-	if intensity < 0.01 || span <= 0 {
-		return
-	}
-	shown := intensity * flowSlots
-	length := flowStreak * (0.6 + 0.8*intensity)
-	travel := float32(math.Mod(seconds*flowSpeed/float64(span), 1))
-	for k := range flowSlots {
-		reveal := min(1, shown-float32(k))
-		if reveal <= 0 {
-			break
-		}
-		f := fract(travel + float32(k)/flowSlots)
-		edge := min(1, min(f, 1-f)*span/length)
-		alpha := reveal * edge * (0.5 + 0.5*intensity)
-		head, tail := x1-f*span, x1-f*span+length
-		if outbound {
-			head, tail = x0+f*span, x0+f*span-length
-		}
-		tail = max(x0, min(x1, tail))
-		bright, clear := color.Alpha(alpha), color.Alpha(0)
-		g := ui.LinearGradient{From: bright, To: clear, Angle: 90}
-		if outbound {
-			g = ui.LinearGradient{From: clear, To: bright, Angle: 90}
-		}
-		if tail != head {
-			p.StrokePathGradient((&ui.Path{}).MoveTo(min(head, tail), y).LineTo(max(head, tail), y), 2, g)
-		}
-		p.Fill(circle(head, y, 1.75), bright, 1.75)
-	}
 }
 
 // hopMark draws Hop's mark in ink, as the menu bar icon shows it: a ball
@@ -307,21 +265,54 @@ func sparkArea(p *ui.Painter, r ui.Rect, history model.TrafficHistory, down ui.C
 	_, upYs := series(history.Up, peak)
 	p.Clip(r, 0, func() {
 		p.FillPathGradient(chart.Area(r, xs, nil, downYs, chart.CurveMonotone), ui.LinearGradient{
-			From: down.Alpha(0.24), To: down.Alpha(0), Angle: 180,
+			From: down.Alpha(0.18), To: down.Alpha(0), Angle: 180,
 		})
 		p.StrokePath(chart.Line(r, xs, upYs, chart.CurveMonotone), 1.25, up)
 		p.StrokePath(chart.Line(r, xs, downYs, chart.CurveMonotone), 1.5, down)
 	})
 }
 
+// sparkAreaLive draws the main window's plot without smoothing: straight
+// segments keep a spike a spike. The window is right-aligned, so a young
+// history starts inside the plot; the area begins on the baseline one step
+// before its first sample, rising over a segment instead of closing with a
+// vertical edge, the "L" a startup spike used to draw.
+func sparkAreaLive(p *ui.Painter, r ui.Rect, history model.TrafficHistory, down ui.Color, up ui.Color) {
+	if len(history.Down) < 2 {
+		return
+	}
+	peak := peakOf(history)
+	xs, downYs := series(history.Down, peak)
+	_, upYs := series(history.Up, peak)
+	areaXs, areaYs := sparkLeadIn(xs, downYs)
+	p.Clip(r, 0, func() {
+		p.FillPathGradient(chart.Area(r, areaXs, nil, areaYs, chart.CurveLinear), ui.LinearGradient{
+			From: down.Alpha(0.18), To: down.Alpha(0), Angle: 180,
+		})
+		p.StrokePath(chart.Line(r, xs, upYs, chart.CurveLinear), 1.25, up)
+		p.StrokePath(chart.Line(r, xs, downYs, chart.CurveLinear), 1.5, down)
+	})
+}
+
+// sparkLeadIn returns the area's series with a zero at one sample before a
+// partial history, so its left boundary slopes up from the baseline. A full
+// window already starts at the plot's edge, where no lead-in fits.
+func sparkLeadIn(xs, ys []float32) ([]float32, []float32) {
+	if len(xs) == 0 || xs[0] <= 0 {
+		return xs, ys
+	}
+	lead := xs[0] - 1/float32(historyLimit-1)
+	if lead < 0 {
+		lead = 0
+	}
+	if lead == xs[0] {
+		return xs, ys
+	}
+	areaXs := make([]float32, 0, len(xs)+1)
+	areaYs := make([]float32, 0, len(ys)+1)
+	return append(append(areaXs, lead), xs...), append(append(areaYs, 0), ys...)
+}
+
 func circle(cx float32, cy float32, radius float32) ui.Rect {
 	return ui.Rect{X: cx - radius, Y: cy - radius, W: 2 * radius, H: 2 * radius}
-}
-
-func fract(v float32) float32 {
-	return v - float32(math.Floor(float64(v)))
-}
-
-func easeOut(v float32) float32 {
-	return 1 - (1-v)*(1-v)
 }

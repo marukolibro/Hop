@@ -10,19 +10,24 @@ const (
 	softHoverAlpha   float32 = 0.11
 	dangerFillAlpha  float32 = 0.1
 	dangerHoverAlpha float32 = 0.18
+	// disabledFillAlpha is the neutral wash of a disabled button: quiet, but
+	// on the same surface as the rest of the window, never the accent at low
+	// opacity.
+	disabledFillAlpha float32 = 0.10
 )
 
 // buttonStyle colours a button at rest and under the pointer.
 type buttonStyle struct {
-	fill  ui.Color
-	hover ui.Color
-	ink   ui.Color
+	fill    ui.Color
+	hover   ui.Color
+	ink     ui.Color
+	outline bool
 }
 
 // primaryButton is the one action a view leads to; softButton every other
 // action; dangerButton one that cuts something off.
 func primaryButton(t *ui.Theme) buttonStyle {
-	return buttonStyle{fill: t.Accent, hover: t.AccentHover, ink: t.AccentText}
+	return buttonStyle{fill: t.Accent, hover: t.AccentHover, ink: t.AccentText, outline: true}
 }
 
 func softButton(t *ui.Theme) buttonStyle {
@@ -30,7 +35,7 @@ func softButton(t *ui.Theme) buttonStyle {
 }
 
 func dangerButton(t *ui.Theme) buttonStyle {
-	return buttonStyle{fill: t.Danger.Alpha(dangerFillAlpha), hover: t.Danger.Alpha(dangerHoverAlpha), ink: t.Danger}
+	return buttonStyle{fill: t.Danger.Alpha(dangerFillAlpha), hover: t.Danger.Alpha(dangerHoverAlpha), ink: textOn(t, t.Danger)}
 }
 
 // buttonSpec is what a button shows and whether it takes clicks now.
@@ -48,21 +53,28 @@ type buttonSpec struct {
 // and it gives a little as it is pressed. It keeps ButtonBase's keyboard,
 // focus and accessibility.
 func button(c *ui.Context, spec buttonSpec, onClick func()) ui.Element {
+	t := c.Theme()
 	b := ui.ButtonBase(c).Key(spec.label).Label(spec.label).Height(switchHeight).Padding(0, 12).Gap(5).
 		Radius(switchHeight / 2).Disabled(spec.disabled || spec.busy)
-	fill := spec.style.fill
-	if b.Hovered() && !spec.disabled {
+	// A disabled button keeps its shape and takes a neutral face with the
+	// secondary ink: legible, plainly inactive, with no accent and no
+	// transparency over the page.
+	fill, ink, outline := spec.style.fill, spec.style.ink, spec.style.outline
+	switch {
+	case spec.disabled:
+		fill, ink, outline = t.Text.Alpha(disabledFillAlpha), t.TextMuted, false
+	case b.Hovered():
 		fill = spec.style.hover
 	}
 	b.Background(b.AnimateColor("fill", fill, ui.Smooth))
+	if outline {
+		b.Border(1, glassMaterialLine(t)).Shadow(0, 2, 8, 0, glassButtonShadow(t))
+	}
 	scale := float32(1)
 	if b.Pressed() {
 		scale = pressedScale
 	}
 	b.AnimatePose(ui.Pose{Scale: scale}, ui.Snappy)
-	if spec.disabled {
-		b.Opacity(disabledOpacity)
-	}
 	if !spec.disabled && !spec.busy {
 		b.Cursor(ui.CursorPointer)
 	}
@@ -70,11 +82,37 @@ func button(c *ui.Context, spec buttonSpec, onClick func()) ui.Element {
 	b.Children(func() {
 		switch {
 		case spec.busy:
-			spinner(c, buttonIconSize, spec.style.ink)
+			spinner(c, buttonIconSize, ink)
 		case spec.icon != nil:
-			ui.Icon(c, spec.icon).Width(buttonIconSize).Height(buttonIconSize).TextColor(spec.style.ink)
+			ui.Icon(c, spec.icon).Width(buttonIconSize).Height(buttonIconSize).TextColor(ink)
 		}
-		ui.Text(c, spec.label).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(spec.style.ink).
+		ui.Text(c, spec.label).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(ink).
+			NoWrap().Translate(0, -opticalLift)
+	})
+	return b
+}
+
+// textButton is the design's quiet text action, with an optional icon. It
+// has no capsule or fill; the ink turns accent under the pointer.
+func textButton(c *ui.Context, t *ui.Theme, label string, icon *ui.SVG, disabled bool, busy bool, onClick func()) ui.Element {
+	b := ui.ButtonBase(c).Key(label).Label(label).Height(switchHeight).Padding(0).Gap(6).
+		Radius(0).Background(ui.Transparent).Disabled(disabled || busy)
+	ink := t.TextMuted
+	if b.Hovered() && !disabled {
+		ink = accentInk(t)
+	}
+	if !disabled && !busy {
+		b.Cursor(ui.CursorPointer)
+	}
+	b.OnClick(onClick)
+	b.Children(func() {
+		switch {
+		case busy:
+			spinner(c, iconInline, t.Accent)
+		case icon != nil:
+			ui.Icon(c, icon).Width(buttonIconSize).Height(buttonIconSize).TextColor(ink)
+		}
+		ui.Text(c, label).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(ink).
 			NoWrap().Translate(0, -opticalLift)
 	})
 	return b

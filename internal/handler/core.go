@@ -171,9 +171,9 @@ func (d *Dashboard) coreActions(c *ui.Context, t *ui.Theme) {
 	canChange := s.info.Origin != model.CoreOverride && !d.controlsLocked() && !d.tun.on
 	ui.Row(c).Key("actions").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 		if s.info.Origin == model.CoreInstalled {
-			button(c, buttonSpec{label: "恢复内置版本", style: softButton(t), disabled: !canChange}, d.beginRestoreCore)
+			button(c, buttonSpec{label: "恢复内置版本", style: mainSoftButton(t), disabled: !canChange}, d.beginRestoreCore)
 		}
-		button(c, buttonSpec{label: "检查更新", icon: iconRefresh, style: softButton(t), busy: s.checking}, d.beginCheckCore)
+		button(c, buttonSpec{label: "检查更新", icon: iconRefresh, style: mainSoftButton(t), busy: s.checking}, d.beginCheckCore)
 		if s.latest != nil && s.newer {
 			button(c, buttonSpec{label: "升级到 " + s.latest.Tag, icon: iconUpgrade, style: primaryButton(t), disabled: !canChange}, d.beginUpgradeCore)
 		}

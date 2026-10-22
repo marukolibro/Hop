@@ -22,6 +22,8 @@ const (
 	// compactSpeedWidth holds "999 KB/s" so the line does not shift as
 	// numbers change.
 	compactSpeedWidth = 88
+	// flyoutGaugeSize is the exit gauge, smaller than the window's.
+	flyoutGaugeSize float32 = 44
 )
 
 // flyoutView is the menu bar panel: where traffic goes and how fast, the
@@ -93,15 +95,19 @@ func (d *Dashboard) flyoutRoute(c *ui.Context, t *ui.Theme) {
 		mutedText(c, t, "还没有使用中的订阅。打开主窗口添加一个。")
 		return
 	}
-	routeFlow(c, t, route, d.last)
-	exitNode(c, t, route[len(route)-1])
+	ui.Row(c).Key("exitRow").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+		routeGauge(c, t, route[len(route)-1], flyoutGaugeSize, d.last)
+		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(gapTight).Children(func() {
+			exitNode(c, t, route)
+		})
+	})
 }
 
 // flyoutSpeeds shows both speeds on one line, rolling as they change,
 // beside the last two minutes of traffic.
 func (d *Dashboard) flyoutSpeeds(c *ui.Context, t *ui.Theme) {
 	history := d.history
-	down, up, base := t.Accent, t.Warning, t.Border
+	down, up, base := t.Accent, uploadColor(t), t.Border
 	ui.Row(c).Gap(gapLarge).AlignItems(ui.Center).Children(func() {
 		compactSpeed(c, t, "↓", formatRate(d.last.Down), down)
 		compactSpeed(c, t, "↑", formatRate(d.last.Up), up)

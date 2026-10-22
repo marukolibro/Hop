@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/egoist/mygo/ui"
 
@@ -10,14 +11,28 @@ import (
 )
 
 const (
-	minTileWidth  = 168
-	tileGap       = gapSmall
-	activeBorder  = 1.5
-	activeTint    = 0.08
-	tileTitleSize = fontEmphasis
-	tileBarHeight = 3
-	fastDelay     = 150
-	moderateDelay = 350
+	// minTileWidth is the narrowest a tile may be; the grid fits as many
+	// whole tiles as the pane holds, so the options stay compact.
+	minTileWidth  float32 = 168
+	tileGap               = gapSmall
+	tileTitleSize float32 = fontEmphasis
+	tileBarHeight float32 = 3
+	radiusTile    float32 = 10
+	fastDelay             = 150
+	moderateDelay         = 350
+	// Every tile has a hollow choice ring; the selected one fills it.
+	nodeCheckSize float32 = 14
+	nodeCheckIcon float32 = 10
+	// The latency bar's track is a wash of the accent; its fill eases from
+	// tileBarFillFrom alpha at the left to full at the right.
+	tileBarTrackLight float32 = 0.14
+	tileBarTrackDark  float32 = 0.18
+	tileBarFillFrom   float32 = 0.7
+	// tileChipFill washes a tile label in its own colour.
+	tileChipFill float32 = 0.10
+	// tileInkShade moves a tier or accent ink toward the text ink, so a
+	// small label keeps 4.5:1 on the tile over any wallpaper.
+	tileInkShade float32 = 0.45
 )
 
 // groupModes says in plain words how each group type picks its node.
@@ -48,12 +63,16 @@ func (d *Dashboard) nodesPage(c *ui.Context, t *ui.Theme) {
 	}
 	d.routeBar(c, t)
 	d.subscriptionBar(c, t)
-	// The row and both panes may shrink below their content, so each pane
+	// The body is one surface: a fixed sidebar, a hairline, and the options
+	// that scroll beside it. Each pane may shrink below its content, so it
 	// scrolls inside the window rather than pushing past it.
-	ui.Row(c).Grow(1).Basis(0).MinHeight(0).AlignItems(ui.Stretch).Gap(gapSection).Padding(0, 0, 0, pagePadding).
+	ui.Row(c).Grow(1).Basis(0).MinHeight(0).AlignItems(ui.Stretch).
 		Disabled(d.controlsLocked()).Children(func() {
 		d.groupSidebar(c, t)
-		ui.Column(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
+		verticalHairline(c, t)
+		pane := ui.Column(c).Grow(1).Basis(0).MinHeight(0).Padding(22, pagePadding, 0, pagePadding).
+			Background(nodeAreaFill(t))
+		pane.Children(func() {
 			d.groupHeader(c, t)
 			d.nodeGrid(c, t)
 		})
@@ -67,7 +86,7 @@ func (d *Dashboard) groupHeader(c *ui.Context, t *ui.Theme) {
 	if !ok {
 		return
 	}
-	ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Padding(0, pagePadding, gapMedium, 0).Children(func() {
+	ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Padding(0, 0, gapMedium, 0).Children(func() {
 		groupIcon(c, t, group, 32)
 		ui.Column(c).Grow(1).Gap(3).Children(func() {
 			ui.Text(c, groupTitle(group)).FontSize(fontHeadline).FontWeight(weightSemibold).MaxLines(1)
@@ -92,9 +111,11 @@ func (d *Dashboard) nodeGrid(c *ui.Context, t *ui.Theme) {
 		return
 	}
 	width, _ := c.Size()
-	columns := tileColumns(width - 2*pagePadding - sidebarWidth - gapSection)
+	paneWidth := width - sidebarWidthFor(width) - hairlineWidth - 2*pagePadding
+	columns := tileColumns(paneWidth)
+	inner := paneWidth
 	ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
-		ui.Column(c).Gap(gapSection).Padding(4, pagePadding, 28, 0).Children(func() {
+		ui.Column(c).Gap(gapSection).Width(inner).Padding(0, 0, 30, 0).Children(func() {
 			// Groups and DIRECT come first: a group often picks one of them.
 			if len(group.Others) > 0 {
 				d.nodeSection(c, t, group, "线路", group.Others, columns)
@@ -115,8 +136,8 @@ func tileColumns(width float32) int {
 func (d *Dashboard) nodeSection(c *ui.Context, t *ui.Theme, group model.GroupView, title string, nodes []model.NodeView, columns int) {
 	ui.Column(c).Key(title).Gap(10).Children(func() {
 		ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-			sectionTitle(c, title)
-			mutedText(c, t, fmt.Sprint(len(nodes))).FontFeatures("tnum")
+			ui.Text(c, title).FontSize(fontSecondary).FontWeight(weightMedium).MaxLines(1)
+			captionText(c, t, fmt.Sprint(len(nodes))).FontFeatures("tnum")
 		})
 		ui.Grid(c).Columns(columns).Gap(tileGap).Children(func() {
 			for _, node := range nodes {
@@ -133,15 +154,19 @@ func (d *Dashboard) nodeSection(c *ui.Context, t *ui.Theme, group model.GroupVie
 func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, node model.NodeView) {
 	isActive := node.Name == group.Selected
 	groupName := group.Name
-	tile := ui.Column(c).Key(node.Name).Gap(7).Padding(10, 11).Radius(radiusControl)
-	switch {
-	case isActive:
-		tile.Background(t.Accent.Alpha(activeTint)).Border(activeBorder, t.Accent)
-	case group.Selectable && tile.Hovered():
-		tile.Background(t.SurfaceHover).Border(1, t.Border)
-	default:
-		tile.Background(t.Surface).Border(1, t.Border)
+	tile := ui.Column(c).Key(node.Name).Gap(7).Padding(10, 11).Radius(radiusTile)
+	hovered := group.Selectable && tile.Hovered()
+	if onGlass(t) {
+		tile.Material(frostedMaterial{tint: glassTile(t, hovered, isActive), blur: glassTileBlur})
+	} else {
+		tile.Background(glassTile(t, hovered, isActive))
 	}
+	if isActive {
+		tile.Border(hairlineWidth, glassSelectedBorder(t))
+	} else {
+		tile.Border(hairlineWidth, glassMaterialLine(t))
+	}
+	tile.Shadow(0, 3, 12, 0, glassCardShadow(t))
 	if group.Selectable {
 		tile.Cursor(ui.CursorPointer).OnClick(func() {
 			if node.Name != group.Selected {
@@ -150,29 +175,43 @@ func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, 
 		})
 	}
 	bar := tile.AnimateTo("bar", speedScore(node.Delay), ui.Snappy)
-	track, fill := t.Border.Alpha(0.6), delayColor(t, node.Delay)
+	// The track stays neutral, so the fill's hue means a latency tier; the
+	// chosen tile's bar shows the accent.
+	track := t.Text.Alpha(neutralLineAlpha)
+	fill := delayFill(t, node.Delay)
+	if isActive {
+		fill = t.Accent
+	}
 	tile.Children(func() {
-		// The title has the first line to itself, so a full name such as
-		// "Hong Kong 01" keeps its number.
-		title := ui.Text(c, tileTitle(node)).FontSize(tileTitleSize).MaxLines(1)
-		if isActive {
-			title.FontWeight(weightSemibold)
-		} else {
-			title.FontWeight(weightMedium)
-		}
-		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
-			// The labels wrap inside one line's height, so a label that does
-			// not fit whole is out of sight rather than cut in half.
-			ui.Row(c).Gap(4).GapY(chipLineGap).Wrap().Height(chipHeight).Clip().Grow(1).Basis(0).Children(func() {
+		ui.Row(c).Key("top").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+			title := ui.Text(c, tileTitle(node)).FontSize(tileTitleSize).MaxLines(1).Grow(1).Basis(0)
+			if isActive {
+				title.FontWeight(weightSemibold)
+			} else {
+				title.FontWeight(weightMedium)
+			}
+			nodeCheck(c, t, isActive)
+		})
+		ui.Row(c).Key("meta").Gap(7).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Gap(gapTight).Height(chipHeight).Clip().Grow(1).Basis(0).Children(func() {
 				if node.Via != "" {
-					ui.Text(c, node.Via).FontSize(fontCaption).TextColor(t.TextMuted).MaxLines(1)
+					captionText(c, t, node.Via).MaxLines(1)
 					return
 				}
-				for _, label := range tileChips(t, node) {
-					chip(c, label.text, label.color)
+				for _, label := range nodeLabels(node) {
+					nodeChip(c, t, label)
+				}
+				if node.Multiplier != "" {
+					nodeChip(c, t, node.Multiplier)
 				}
 			})
-			delayLabel(c, t, node.Delay, fontSecondary)
+			latency := delayText(node.Delay)
+			latencyInk := delayColor(t, node.Delay)
+			if d.testing != "" {
+				latency, latencyInk = "测速中", textOn(t, accentInk(t))
+			}
+			ui.Text(c, latency).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(latencyInk).
+				FontFeatures("tnum").NoWrap().ContentTransition(ui.ContentTransition{Numeric: true})
 		})
 		ui.Box(c).Height(tileBarHeight).Draw(func(p *ui.Painter, r ui.Rect) {
 			p.Fill(r, track, tileBarHeight/2)
@@ -181,6 +220,30 @@ func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, 
 			}
 		})
 	})
+}
+
+// nodeChip is a node's small label, on a tile or under the exit: a neutral
+// wash with the secondary ink, so protocol, line and rate stay quiet and hue
+// means state.
+func nodeChip(c *ui.Context, t *ui.Theme, text string) {
+	pill := ui.Box(c).Padding(1, 6).Radius(radiusChip).Background(t.Text.Alpha(neutralFillAlpha))
+	pill.Children(func() {
+		label := ui.Text(c, text).FontSize(fontCaption).FontWeight(weightMedium).TextColor(t.TextMuted).NoWrap()
+		if strings.ContainsFunc(text, func(r rune) bool { return unicode.Is(unicode.Han, r) }) {
+			label.Translate(0, -opticalLift)
+		}
+	})
+}
+
+// nodeCheck is the hollow choice ring on every tile, filled when chosen.
+func nodeCheck(c *ui.Context, t *ui.Theme, selected bool) {
+	ring := ui.Box(c).Key("check").Width(nodeCheckSize).Height(nodeCheckSize).Radius(nodeCheckSize/2).Center().
+		Border(1, glassStrongLine(t))
+	if selected {
+		ring.Background(t.Accent).Border(1, t.Accent).Children(func() {
+			ui.Icon(c, iconCheck).Width(nodeCheckIcon).Height(nodeCheckIcon).TextColor(t.AccentText)
+		})
+	}
 }
 
 // protocolNames shortens the core's protocol names the way people write
@@ -218,29 +281,6 @@ func nodeLabels(node model.NodeView) []string {
 }
 
 // tileChip is one small label on a tile.
-type tileChip struct {
-	text  string
-	color ui.Color
-}
-
-// tileChips are the labels of a tile in the order that survives a narrow
-// tile best: the protocol, UDP, the rate, which costs something, then the
-// lines the name gives.
-func tileChips(t *ui.Theme, node model.NodeView) []tileChip {
-	labels := nodeLabels(node)
-	fixed := min(len(labels), len(labels)-len(node.Tags))
-	chips := make([]tileChip, 0, len(labels)+1)
-	for _, label := range labels[:fixed] {
-		chips = append(chips, tileChip{label, t.TextMuted})
-	}
-	if node.Multiplier != "" {
-		chips = append(chips, tileChip{node.Multiplier, t.Warning})
-	}
-	for _, label := range labels[fixed:] {
-		chips = append(chips, tileChip{label, t.TextMuted})
-	}
-	return chips
-}
 
 // barCeiling is the delay at which a latency bar is at its shortest.
 const barCeiling = 600
@@ -293,11 +333,26 @@ func delayColor(t *ui.Theme, delay model.Delay) ui.Color {
 	case !delay.Measured:
 		return t.TextMuted
 	case delay.Millis == 0, delay.Millis > moderateDelay:
-		return t.Danger
+		return textOn(t, t.Danger)
 	case delay.Millis <= fastDelay:
-		return t.Success
+		return textOn(t, accentInk(t))
 	default:
-		return t.Warning
+		return textOn(t, t.Warning)
+	}
+}
+
+// delayFill is the tier itself as a bar fill: the accent when fast, then the
+// warning and danger colours; nothing before a test or after a timeout.
+func delayFill(t *ui.Theme, delay model.Delay) ui.Color {
+	switch {
+	case !delay.Measured, delay.Millis == 0:
+		return ui.Transparent
+	case delay.Millis <= fastDelay:
+		return t.Accent
+	case delay.Millis <= moderateDelay:
+		return textOn(t, t.Warning)
+	default:
+		return textOn(t, t.Danger)
 	}
 }
 
@@ -308,5 +363,5 @@ func (d *Dashboard) testButton(c *ui.Context, t *ui.Theme, group string) {
 	if d.testing != "" {
 		label = "测速中"
 	}
-	button(c, buttonSpec{label: label, icon: iconBolt, style: softButton(t), busy: d.testing != ""}, func() { d.testDelay(group) })
+	button(c, buttonSpec{label: label, icon: iconBolt, style: mainSoftButton(t), busy: d.testing != ""}, func() { d.testDelay(group) })
 }

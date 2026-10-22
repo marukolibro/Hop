@@ -21,8 +21,6 @@ import (
 )
 
 const (
-	usageBarWidth  float32 = 160
-	usageBarHeight float32 = 6
 	// Usage turns amber and then red as the account nears its limit, and
 	// the expiry date turns amber in its last week.
 	usageWarning   = 0.8
@@ -30,11 +28,6 @@ const (
 	expiryWarning  = 7 * 24 * time.Hour
 	dayLength      = 24 * time.Hour
 	usageDateStyle = "2006-01-02"
-
-	// activeCardTint is Accent mixed into Surface.
-	// cardDividerAlpha softens the metrics divider.
-	activeCardTint   float32 = 0.05
-	cardDividerAlpha float32 = 0.65
 )
 
 // editorIntent distinguishes adding, renaming and editing a profile.
@@ -369,36 +362,19 @@ func (d *Dashboard) subscriptionBar(c *ui.Context, t *ui.Theme) {
 	}
 	now := time.Now()
 	busy := s.busy(active.ID)
-	ui.Column(c).Gap(gapMedium).Padding(0, pagePadding, gapLarge, pagePadding).Children(func() {
-		ui.Column(c).Gap(gapSmall).Padding(panelPadY, panelPadX).Radius(radiusPanel).
-			Background(t.Surface).Border(1, t.Border).Children(func() {
-			ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-				mutedText(c, t, "当前订阅").NoWrap()
-				d.activeSelect(c, t)
-				ruleChip(c, t, active.Source, active.Rules)
-				ui.Box(c).Grow(1)
-				if active.Source == model.SourceRemote {
-					mutedText(c, t, updatedText(active.UpdatedAt, now)).NoWrap()
-					label := "刷新订阅"
-					if busy {
-						label = "刷新中"
-					}
-					button(c, buttonSpec{label: label, icon: iconRefresh, style: softButton(t),
-						disabled: d.controlsLocked(), busy: busy}, func() {
-						d.refreshSubscription(active.ID)
-					})
-				} else {
-					mutedText(c, t, service.LocalProfileName).NoWrap()
-				}
-				button(c, buttonSpec{label: "管理订阅", icon: iconList, style: softButton(t)}, func() { s.managing = true })
-			})
+	ui.Column(c).Gap(gapSmall).Padding(10, pagePadding).Background(subscriptionFill(t)).Children(func() {
+		ui.Row(c).Wrap().Gap(gapLarge).GapY(gapSmall).AlignItems(ui.Center).Children(func() {
+			d.activeSelect(c, t)
+			// The tag names Hop's own rule set only: a profile that keeps
+			// its provider's rules has nothing extra to say here.
+			if active.Rules == model.RulesHop {
+				chip(c, t, "Hop 智能规则", accentInk(t))
+			}
 			if active.Source == model.SourceRemote {
 				switch {
 				case active.HasUsage:
-					usageLine(c, t, active.Usage, now)
+					subscriptionUsage(c, t, active.Usage, now)
 				case len(d.view.Plan) > 0:
-					// Without the usage header, show what the provider wrote into
-					// the proxy list instead.
 					ui.Row(c).Gap(gapLarge).AlignItems(ui.Center).Children(func() {
 						for _, note := range d.view.Plan {
 							label, value := splitPlanNote(note)
@@ -406,28 +382,84 @@ func (d *Dashboard) subscriptionBar(c *ui.Context, t *ui.Theme) {
 						}
 					})
 				}
+			} else {
+				mutedText(c, t, service.LocalProfileName).NoWrap()
 			}
-			if active.LastError != "" {
-				warningLine(c, t, active.LastError)
+			ui.Box(c).Grow(1)
+			if active.Source == model.SourceRemote {
+				label := "刷新"
+				if busy {
+					label = "刷新中"
+				}
+				textButton(c, t, label, iconRefresh, d.controlsLocked(), busy, func() {
+					d.refreshSubscription(active.ID)
+				})
 			}
+			textButton(c, t, "管理订阅", iconList, false, false, func() { s.managing = true })
 		})
+		if active.LastError != "" {
+			warningLine(c, t, active.LastError)
+		}
 	})
+	horizontalHairline(c, t)
 }
 
 // noSubscriptionBar is what the nodes page shows before any subscription
 // exists: adding the first one uses it at once.
 func (d *Dashboard) noSubscriptionBar(c *ui.Context, t *ui.Theme) {
 	s := &d.subscription
-	ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Padding(panelPadY, panelPadX).
-		Margin(0, pagePadding, gapLarge, pagePadding).
-		Radius(radiusPanel).Background(t.Surface).Border(1, t.Border).Children(func() {
+	ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Padding(10, pagePadding).
+		Background(subscriptionFill(t)).Children(func() {
 		ui.Icon(c, iconLink).Width(iconLead).Height(iconLead).TextColor(t.TextMuted)
 		mutedText(c, t, "还没有使用中的订阅").Grow(1)
 		button(c, buttonSpec{label: "添加并使用", icon: iconPlus, style: primaryButton(t),
 			disabled: d.controlsLocked()}, func() {
 			d.openEditor(editorAdd, "")
 		})
-		button(c, buttonSpec{label: "管理订阅", style: softButton(t)}, func() { s.managing = true })
+		textButton(c, t, "管理订阅", iconList, false, false, func() { s.managing = true })
+	})
+	horizontalHairline(c, t)
+}
+
+// subscriptionUsage is the design's compact account line: used of total, a
+// thin bar, and the days left.
+func subscriptionUsage(c *ui.Context, t *ui.Theme, usage model.Usage, now time.Time) {
+	used := usage.Upload + usage.Download
+	usedReadout := formatBytes(used)
+	value := usedReadout.value + " " + usedReadout.unit
+	var ratio float32
+	if usage.Total > 0 {
+		total := formatBytes(usage.Total)
+		value += " / " + total.value + " " + total.unit
+		ratio = min(1, float32(used)/float32(usage.Total))
+	}
+	ui.Row(c).Key("usage").Gap(10).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, value).FontSize(fontSecondary).TextColor(t.TextMuted).FontFeatures("tnum").NoWrap()
+		if usage.Total > 0 {
+			stripUsageBar(c, t, ratio)
+		}
+		if !usage.Expire.IsZero() {
+			left := usage.Expire.Sub(now)
+			color := t.TextMuted
+			if left < expiryWarning {
+				color = t.Warning
+			}
+			ui.Text(c, remainingText(left)).FontSize(fontSecondary).TextColor(color).NoWrap()
+		}
+	})
+}
+
+func stripUsageBar(c *ui.Context, t *ui.Theme, ratio float32) {
+	const width, height float32 = 70, 3
+	trackFill := t.SurfacePressed
+	if onGlass(t) {
+		trackFill = glassFill(t, glassTrackAlpha)
+	}
+	track := ui.Box(c).Width(width).Height(height).Radius(height / 2).
+		Background(trackFill)
+	fill := track.AnimateTo("used", max(height, ratio*width), ui.Snappy)
+	track.Children(func() {
+		ui.Box(c).Width(fill).Height(height).Radius(height / 2).Background(usageColor(t, ratio))
 	})
 }
 
@@ -437,22 +469,23 @@ func (d *Dashboard) activeSelect(c *ui.Context, t *ui.Theme) {
 	s := &d.subscription
 	sel := ui.SelectBase(c, &s.activeChoice)
 	b := sel.Trigger
-	b.Label("当前订阅").Height(switchHeight).MinWidth(selectMinWidth).
-		Padding(0, gapSmall, 0, pickerPadX).Radius(radiusControl).Border(1, t.Border).Gap(gapSmall).Justify(ui.SpaceBetween).
+	b.Label("当前订阅").Height(switchHeight).Padding(0).Radius(0).Border(0, ui.Transparent).
+		Gap(7).Justify(ui.Start).Background(ui.Transparent).
 		Cursor(ui.CursorPointer).Disabled(d.controlsLocked())
-	fill := t.Surface
+	ink := t.Text
 	if b.Hovered() || sel.Open() {
-		fill = t.SurfaceHover
+		ink = accentInk(t)
 	}
-	b.Background(b.AnimateColor("fill", fill, ui.Smooth))
+	color := b.AnimateColor("ink", ink, ui.Smooth)
 	b.Children(func() {
+		ui.Icon(c, iconGlobe).Width(iconLead).Height(iconLead).TextColor(t.TextMuted)
 		ui.Text(c, pickerLabel(s.view.Items, s.activeChoice)).FontSize(fontBody).FontWeight(weightMedium).
-			MaxLines(1).Grow(1).Basis(0).Translate(0, -opticalLift)
+			MaxLines(1).TextColor(color).Translate(0, -opticalLift)
 		ui.Icon(c, iconChevron).Width(iconInline).Height(iconInline).TextColor(t.TextMuted)
 	})
 	sel.Popup(func(panel ui.Element) {
 		panel.Margin(gapTight, 0, 0, 0).Padding(pickerPopupInset).Radius(radiusControl).
-			Background(t.Surface).Border(1, t.Border).Shadow(0, 6, 20, 0, popupShadow)
+			Background(overlaySurface(t)).Border(1, t.Border).Shadow(0, 6, 20, 0, popupShadow)
 		panel.Children(func() {
 			for _, item := range s.view.Items {
 				option := sel.Item(item.ID)
@@ -490,16 +523,17 @@ func pickerRow(c *ui.Context, t *ui.Theme, option ui.Element, label string, chos
 	})
 }
 
-// managePage is the subscription management subpage of the nodes page: the saved
-// collection as one card per subscription.
+// managePage is the subscription management subpage of the nodes page: the
+// saved collection as spaced, frosted cards.
 func (d *Dashboard) managePage(c *ui.Context, t *ui.Theme) {
 	s := &d.subscription
 	if !s.loaded {
 		return
 	}
-	ui.Column(c).Fill().MinHeight(0).Children(func() {
+	gutter := pageGutter(c)
+	ui.Column(c).Grow(1).Basis(0).MinHeight(0).Padding(pagePadding, 0, 0, 0).Children(func() {
 		toolbar(c, func() {
-			button(c, buttonSpec{label: "返回节点", icon: iconBack, style: softButton(t)}, func() { s.managing = false })
+			button(c, buttonSpec{label: "返回节点", icon: iconBack, style: mainSoftButton(t)}, func() { s.managing = false })
 			ui.Box(c).Grow(1)
 			label := "全部刷新"
 			if s.listBusy {
@@ -508,21 +542,21 @@ func (d *Dashboard) managePage(c *ui.Context, t *ui.Theme) {
 			refreshable := slices.ContainsFunc(s.view.Items, func(item model.SubscriptionSummary) bool {
 				return item.Source == model.SourceRemote
 			})
-			button(c, buttonSpec{label: label, icon: iconRefresh, style: softButton(t),
+			button(c, buttonSpec{label: label, icon: iconRefresh, style: mainSoftButton(t),
 				disabled: s.mutations > 0 || !refreshable || d.modeBusy, busy: s.listBusy}, d.refreshAllSubscriptions)
 			button(c, buttonSpec{label: "添加订阅", icon: iconPlus, style: primaryButton(t),
 				disabled: d.controlsLocked()}, func() {
 				d.openEditor(editorAdd, "")
 			})
 		})
-		ui.Row(c).Gap(gapSmall).AlignItems(ui.End).Padding(0, pagePadding, gapTight, pagePadding).Children(func() {
+		ui.Row(c).Gap(gapSmall).AlignItems(ui.End).Padding(0, gutter, gapTight, gutter).Children(func() {
 			ui.Text(c, "订阅").FontSize(fontHeadline).FontWeight(weightSemibold)
 			mutedText(c, t, fmt.Sprintf("%d 个", len(s.view.Items))).FontFeatures("tnum")
 		})
-		ui.Text(c, "独立保存，按需切换。添加订阅不会改变当前线路。").
-			FontSize(fontSecondary).TextColor(t.TextMuted).Padding(0, pagePadding, gapLarge, pagePadding)
+		mutedText(c, t, "独立保存，按需切换。添加订阅不会改变当前线路。").
+			Padding(0, gutter, gapLarge, gutter)
 		ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
-			ui.Column(c).Gap(gapMedium).Padding(scrollTrim, pagePadding, scrollEnd, pagePadding).Children(func() {
+			ui.Column(c).Gap(gapMedium).Padding(scrollTrim, gutter, scrollEnd, gutter).Children(func() {
 				if len(s.view.Items) == 0 {
 					d.manageEmpty(c, t)
 					return
@@ -540,7 +574,7 @@ func (d *Dashboard) manageEmpty(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Key("空").Grow(1).Center().Gap(gapMedium).Padding(emptyPadY, pagePadding).Children(func() {
 		ui.Icon(c, iconLink).Width(iconEmpty).Height(iconEmpty).TextColor(t.TextMuted)
 		ui.Text(c, "还没有订阅").FontSize(fontEmphasis).FontWeight(weightSemibold)
-		ui.Text(c, "添加一个订阅，开始选择线路。").FontSize(fontSecondary).TextColor(t.TextMuted)
+		mutedText(c, t, "添加一个订阅，开始选择线路。")
 		button(c, buttonSpec{label: "添加并使用", icon: iconPlus, style: primaryButton(t),
 			disabled: d.controlsLocked()}, func() {
 			d.openEditor(editorAdd, "")
@@ -550,37 +584,32 @@ func (d *Dashboard) manageEmpty(c *ui.Context, t *ui.Theme) {
 
 // subscriptionCard is one saved profile: where it comes from, what the account
 // holds, when it last refreshed, and what to do with it. A local profile has
-// no account, refresh or update time. The card in use differs by a quiet
-// accent tint alone.
+// no account, refresh or update time. The profile in use keeps a quiet
+// accent edge and its explicit status badge over the same glass face.
 func (d *Dashboard) subscriptionCard(c *ui.Context, t *ui.Theme, item model.SubscriptionSummary) {
 	s := &d.subscription
 	isActive := item.ID == s.view.ActiveID
 	locked := d.controlsLocked()
-	card := ui.Column(c).Key("sub:"+item.ID).Gap(gapMedium).Padding(gapLarge, gapSection).Radius(radiusPanel)
-	switch {
-	case isActive:
-		// The accent mixed into an opaque Surface, the same border as the rest.
-		card.Background(t.Surface.Mix(t.Accent, activeCardTint)).Border(1, t.Border)
-	case card.Hovered():
-		card.Background(t.SurfaceHover).Border(1, t.Border)
-	default:
-		card.Background(t.Surface).Border(1, t.Border)
+	card := panelCard(c, t).Key("sub:"+item.ID).Gap(gapMedium).Padding(gapLarge).
+		Shadow(0, 3, 12, 0, glassCardShadow(t))
+	if isActive {
+		card.Border(hairlineWidth, glassSelectedBorder(t))
 	}
 	card.Children(func() {
 		ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 			cardSource(c, t, isActive, item.Source)
 			ui.Column(c).Grow(1).Basis(0).Gap(gapLine).Children(func() {
 				ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, item.Name).FontSize(fontEmphasis).FontWeight(weightSemibold).MaxLines(1)
+					ui.Text(c, item.Name).FontSize(fontEmphasis).FontWeight(weightSemibold).MaxLines(1).Grow(1).Basis(0)
 					if isActive {
 						activeBadge(c, t)
 					}
 					ruleChip(c, t, item.Source, item.Rules)
 				})
-				ui.Text(c, subscriptionOrigin(item)).FontSize(fontCaption).TextColor(t.TextMuted).MaxLines(1)
+				captionText(c, t, subscriptionOrigin(item)).MaxLines(1)
 			})
 			if !isActive {
-				button(c, buttonSpec{label: "使用", style: softButton(t), disabled: locked}, func() {
+				button(c, buttonSpec{label: "使用", style: mainSoftButton(t), disabled: locked}, func() {
 					d.useSubscription(item.ID)
 				})
 			}
@@ -590,7 +619,7 @@ func (d *Dashboard) subscriptionCard(c *ui.Context, t *ui.Theme, item model.Subs
 				if busy {
 					label = "刷新中"
 				}
-				button(c, buttonSpec{label: label, icon: iconRefresh, style: softButton(t), disabled: locked, busy: busy}, func() {
+				button(c, buttonSpec{label: label, icon: iconRefresh, style: mainSoftButton(t), disabled: locked, busy: busy}, func() {
 					d.refreshSubscription(item.ID)
 				})
 			}
@@ -633,8 +662,8 @@ func cardSource(c *ui.Context, t *ui.Theme, isActive bool, source model.Subscrip
 // activeBadge marks the subscription in use.
 func activeBadge(c *ui.Context, t *ui.Theme) {
 	ui.Row(c).Key("使用中").Gap(gapLine).AlignItems(ui.Center).Children(func() {
-		ui.Icon(c, iconCheck).Width(iconInline).Height(iconInline).TextColor(t.Success)
-		ui.Text(c, "使用中").FontSize(fontCaption).FontWeight(weightMedium).TextColor(t.Success).NoWrap()
+		ui.Icon(c, iconCheck).Width(iconInline).Height(iconInline).TextColor(t.Accent)
+		ui.Text(c, "使用中").FontSize(fontCaption).FontWeight(weightMedium).TextColor(accentInk(t)).NoWrap()
 	})
 }
 
@@ -646,7 +675,7 @@ func (d *Dashboard) cardMenu(c *ui.Context, t *ui.Theme, item model.Subscription
 	if item.Source == model.SourceLocal {
 		editLabel = "编辑配置"
 	}
-	iconMenuButton(c, item.Name+"的更多操作", iconMore, softButton(t), disabled, func(m *ui.Menu) {
+	iconMenuButton(c, item.Name+"的更多操作", iconMore, mainSoftButton(t), disabled, func(m *ui.Menu) {
 		if m.Item("重命名").Disabled(disabled).Chosen() {
 			d.openEditor(editorRename, id)
 		}
@@ -669,8 +698,8 @@ func (d *Dashboard) cardMetrics(c *ui.Context, t *ui.Theme, item model.Subscript
 	}
 	hasExpiry := item.HasUsage && !item.Usage.Expire.IsZero()
 	ui.Column(c).Key("指标").Gap(gapMedium).Children(func() {
-		ui.Box(c).Height(1).Background(t.Border.Alpha(cardDividerAlpha))
-		ui.Row(c).Gap(gapSection).AlignItems(ui.Start).Children(func() {
+		horizontalHairline(c, t)
+		ui.Row(c).Gap(gapSection).GapY(gapMedium).Wrap().AlignItems(ui.Start).Children(func() {
 			if item.HasUsage {
 				usageMetric(c, t, item.Usage)
 			}
@@ -684,7 +713,7 @@ func (d *Dashboard) cardMetrics(c *ui.Context, t *ui.Theme, item model.Subscript
 
 func usageMetric(c *ui.Context, t *ui.Theme, usage model.Usage) {
 	used := usage.Upload + usage.Download
-	ui.Column(c).Key("已用流量").Grow(1.4).Basis(0).Gap(gapTight).Children(func() {
+	ui.Column(c).Key("已用流量").Grow(1.4).Basis(0).MinWidth(cardUsageBarWidth).Gap(gapTight).Children(func() {
 		metricLabel(c, t, "已用流量")
 		ui.Row(c).Gap(gapTight).AlignItems(ui.End).Children(func() {
 			usedReadout := formatBytes(used)
@@ -692,9 +721,9 @@ func usageMetric(c *ui.Context, t *ui.Theme, usage model.Usage) {
 				FontFeatures("tnum").NoWrap()
 			if usage.Total > 0 {
 				totalReadout := formatBytes(usage.Total)
-				ui.Text(c, "/ "+totalReadout.value+" "+totalReadout.unit).FontSize(fontCaption).TextColor(t.TextMuted).NoWrap()
+				captionText(c, t, "/ "+totalReadout.value+" "+totalReadout.unit).NoWrap()
 				ratio := min(1, float32(used)/float32(usage.Total))
-				ui.Text(c, fmt.Sprintf("%.0f%%", ratio*100)).FontSize(fontCaption).TextColor(usageColor(t, ratio)).
+				ui.Text(c, fmt.Sprintf("%.0f%%", ratio*100)).FontSize(fontCaption).TextColor(usageInk(t, ratio)).
 					FontFeatures("tnum").NoWrap()
 			}
 		})
@@ -710,7 +739,7 @@ func expiryMetric(c *ui.Context, t *ui.Theme, expire time.Time) {
 	if left < expiryWarning {
 		color = t.Warning
 	}
-	ui.Column(c).Key("到期时间").Grow(1).Basis(0).Gap(gapTight).Children(func() {
+	ui.Column(c).Key("到期时间").Grow(1).Basis(0).MinWidth(cardExpiryMinWidth).Gap(gapTight).Children(func() {
 		metricLabel(c, t, "到期时间")
 		ui.Row(c).Gap(gapTight).AlignItems(ui.End).Children(func() {
 			ui.Text(c, expire.Format(usageDateStyle)).FontSize(fontSecondary).FontWeight(weightSemibold).
@@ -721,7 +750,7 @@ func expiryMetric(c *ui.Context, t *ui.Theme, expire time.Time) {
 }
 
 func updatedMetric(c *ui.Context, t *ui.Theme, at time.Time) {
-	ui.Column(c).Key("最近成功更新").Grow(0.8).Basis(0).Gap(gapTight).Children(func() {
+	ui.Column(c).Key("最近成功更新").Grow(0.8).Basis(0).MinWidth(cardUpdateMinWidth).Gap(gapTight).Children(func() {
 		metricLabel(c, t, "最近成功更新")
 		ui.Text(c, updatedText(at, time.Now())).FontSize(fontSecondary).FontWeight(weightSemibold).NoWrap()
 	})
@@ -729,7 +758,7 @@ func updatedMetric(c *ui.Context, t *ui.Theme, at time.Time) {
 
 // metricLabel heads one metric of a card.
 func metricLabel(c *ui.Context, t *ui.Theme, text string) {
-	ui.Text(c, text).FontSize(fontCaption).TextColor(t.TextMuted)
+	captionText(c, t, text)
 }
 
 // cardUsageBar fills to ratio, springing to a new value after a refresh.
@@ -762,7 +791,7 @@ func (d *Dashboard) editorDialog(c *ui.Context, t *ui.Theme) {
 	ui.DialogBase(c, &s.editorOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(dialogScrim)
 		panel.Width(dialogWidth).Padding(pagePadding).Gap(gapLarge).Radius(radiusPanel).
-			Background(t.Surface).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)
+			Background(overlaySurface(t)).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)
 		panel.Children(func() { d.editorForm(c, t) })
 	})
 }
@@ -811,23 +840,23 @@ func (d *Dashboard) editorForm(c *ui.Context, t *ui.Theme) {
 		})
 		ui.Column(c).Gap(gapSmall).Children(func() {
 			fieldLabel(c, t, "配置名称", "选填")
-			ui.TextInput(c, &e.name).Label("配置名称").Placeholder("例如：备用线路").Disabled(e.busy || e.fileBusy)
+			ui.TextInput(c, &e.name).Label("配置名称").Placeholder("例如：备用线路").
+				Background(dialogField(t)).Disabled(e.busy || e.fileBusy)
 			if e.intent != editorRename {
 				fieldLabel(c, t, "来源", "")
 				ui.Box(c).Disabled(e.busy || e.fileBusy || e.editingID != "" || !e.sourceLoaded).Children(func() {
-					slidingSwitch(c, "source", &e.sourceIndex, sourceLabels, pageSwitchStyle(t, sourceSegmentWidth), func(i int) {
+					slidingSwitch(c, "source", &e.sourceIndex, sourceLabels, dialogSwitchStyle(t, sourceSegmentWidth), func(i int) {
 						e.err = ""
 						e.rulesIndex = slices.Index(service.RuleSources, defaultRules(service.ProfileSources[i]))
 					})
 				})
 				if e.editingID != "" {
-					ui.Text(c, "来源创建后不可更改；需要另一种来源时请新建一个配置。").
-						FontSize(fontCaption).TextColor(t.TextMuted)
+					captionText(c, t, "来源创建后不可更改；需要另一种来源时请新建一个配置。")
 				}
 				if local {
 					nameHint := "选择文件时会自动填入文件名；名称留空时显示为「" + service.LocalProfileName + "」。"
 					ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-						button(c, buttonSpec{label: "选择文件…", icon: iconFile, style: softButton(t),
+						button(c, buttonSpec{label: "选择文件…", icon: iconFile, style: mainSoftButton(t),
 							disabled: e.busy || e.fileBusy || !e.sourceLoaded, busy: e.fileBusy}, func() {
 							d.chooseLocalFile(e.seq)
 						})
@@ -840,21 +869,22 @@ func (d *Dashboard) editorForm(c *ui.Context, t *ui.Theme) {
 					fieldLabel(c, t, "配置内容", fmt.Sprintf("上限 %d MB", service.MaxProfileSize>>20))
 					ui.TextArea(c, &e.content).Label("配置内容").
 						Placeholder("粘贴 Clash 配置或节点链接…").Height(localEditorHeight).
-						Disabled(e.busy || e.fileBusy || !e.sourceLoaded)
-					ui.Text(c, localHint).FontSize(fontCaption).TextColor(t.TextMuted)
-					ui.Text(c, nameHint).FontSize(fontCaption).TextColor(t.TextMuted)
+						Background(dialogField(t)).Disabled(e.busy || e.fileBusy || !e.sourceLoaded)
+					captionText(c, t, localHint)
+					captionText(c, t, nameHint)
 				} else {
 					fieldLabel(c, t, "订阅地址", "")
 					ui.TextInput(c, &e.url).Label("订阅地址").Placeholder(urlPlaceholder).
+						Background(dialogField(t)).
 						Disabled(e.busy || e.fileBusy || !e.sourceLoaded).OnSubmit(d.submitEditor)
-					ui.Text(c, hint).FontSize(fontCaption).TextColor(t.TextMuted)
+					captionText(c, t, hint)
 				}
 				fieldLabel(c, t, "分流规则", "")
 				labels, hints := ruleTexts(service.ProfileSources[e.sourceIndex])
 				ui.Box(c).Disabled(e.busy || e.fileBusy || !e.sourceLoaded).Children(func() {
-					slidingSwitch(c, "rules", &e.rulesIndex, labels, pageSwitchStyle(t, ruleSegmentWidth), func(int) {})
+					slidingSwitch(c, "rules", &e.rulesIndex, labels, dialogSwitchStyle(t, ruleSegmentWidth), func(int) {})
 				})
-				ui.Text(c, hints[e.rulesIndex]).FontSize(fontCaption).TextColor(t.TextMuted)
+				captionText(c, t, hints[e.rulesIndex])
 			}
 			if e.err != "" {
 				ui.Text(c, e.err).FontSize(fontSecondary).TextColor(t.Danger)
@@ -968,7 +998,7 @@ func (d *Dashboard) deleteDialog(c *ui.Context, t *ui.Theme) {
 	ui.DialogBase(c, &s.deleteOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(dialogScrim)
 		panel.Width(dialogWidth).Padding(pagePadding).Gap(gapLarge).Radius(radiusPanel).
-			Background(t.Surface).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)
+			Background(overlaySurface(t)).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)
 		panel.Children(func() { d.deleteForm(c, t) })
 	})
 }
@@ -1008,7 +1038,7 @@ func (d *Dashboard) deleteForm(c *ui.Context, t *ui.Theme) {
 			ui.Column(c).Key("替代").Gap(gapSmall).Children(func() {
 				fieldLabel(c, t, "切换到另一个订阅", "")
 				subscriptionPicker(c, t, others, &dlg.replacement)
-				ui.Text(c, "切换成功后再删除，不会自动替你选择线路。").FontSize(fontCaption).TextColor(t.TextMuted)
+				captionText(c, t, "切换成功后再删除，不会自动替你选择线路。")
 			})
 		}
 		if dlg.err != "" {
@@ -1055,10 +1085,10 @@ func ruleTexts(source model.SubscriptionSource) ([]string, []string) {
 func ruleChip(c *ui.Context, t *ui.Theme, source model.SubscriptionSource, rules model.RuleSource) {
 	switch rules {
 	case model.RulesHop:
-		chip(c, "Hop 智能规则", t.Accent)
+		chip(c, t, "Hop 智能规则", accentInk(t))
 	default:
 		labels, _ := ruleTexts(source)
-		chip(c, labels[0], t.TextMuted)
+		chip(c, t, labels[0], t.TextMuted)
 	}
 }
 
@@ -1080,7 +1110,7 @@ func fieldLabel(c *ui.Context, t *ui.Theme, text string, note string) {
 	ui.Row(c).Key(text).Gap(gapTight).AlignItems(ui.End).Children(func() {
 		ui.Text(c, text).FontSize(fontSecondary).FontWeight(weightSemibold)
 		if note != "" {
-			ui.Text(c, note).FontSize(fontCaption).TextColor(t.TextMuted)
+			captionText(c, t, note)
 		}
 	})
 }
@@ -1091,7 +1121,7 @@ func subscriptionPicker(c *ui.Context, t *ui.Theme, items []model.SubscriptionSu
 	sel := ui.SelectBase(c, chosen)
 	b := sel.Trigger
 	b.Label("选择订阅").Height(switchHeight).Grow(1).Padding(0, gapSmall, 0, pickerPadX).
-		Radius(radiusControl).Background(t.Surface).Border(1, t.Border).Gap(gapSmall).
+		Radius(radiusControl).Background(dialogField(t)).Border(1, t.Border).Gap(gapSmall).
 		Justify(ui.SpaceBetween).Cursor(ui.CursorPointer)
 	b.Children(func() {
 		if label := pickerLabel(items, *chosen); label != "" {
@@ -1105,7 +1135,7 @@ func subscriptionPicker(c *ui.Context, t *ui.Theme, items []model.SubscriptionSu
 	})
 	sel.Popup(func(panel ui.Element) {
 		panel.Margin(gapTight, 0, 0, 0).Padding(pickerPopupInset).Radius(radiusControl).
-			Background(t.Surface).Border(1, t.Border).Shadow(0, 6, 20, 0, popupShadow)
+			Background(overlaySurface(t)).Border(1, t.Border).Shadow(0, 6, 20, 0, popupShadow)
 		panel.Children(func() {
 			for _, item := range items {
 				option := sel.Item(item.ID)
@@ -1131,57 +1161,25 @@ func pickerLabel(items []model.SubscriptionSummary, id string) string {
 	return ""
 }
 
-// usageLine shows how much traffic the account used of its total, as a bar
-// that warms as the limit nears, and when the account ends.
-func usageLine(c *ui.Context, t *ui.Theme, usage model.Usage, now time.Time) {
-	used := usage.Upload + usage.Download
-	ui.Row(c).Gap(gapLarge).AlignItems(ui.Center).Children(func() {
-		ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-			mutedText(c, t, "已用")
-			usedText := formatBytes(used)
-			value := usedText.value + " " + usedText.unit
-			if usage.Total > 0 {
-				total := formatBytes(usage.Total)
-				value += " / " + total.value + " " + total.unit
-			}
-			ui.Text(c, value).FontSize(fontSecondary).FontWeight(weightSemibold).FontFeatures("tnum").NoWrap()
-			if usage.Total > 0 {
-				ratio := min(1, float32(used)/float32(usage.Total))
-				usageBar(c, t, ratio)
-				ui.Text(c, fmt.Sprintf("%.0f%%", ratio*100)).FontSize(fontSecondary).TextColor(usageColor(t, ratio)).FontFeatures("tnum").NoWrap()
-			}
-		})
-		if !usage.Expire.IsZero() {
-			ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-				mutedText(c, t, "到期")
-				ui.Text(c, usage.Expire.Format(usageDateStyle)).FontSize(fontSecondary).FontWeight(weightSemibold).FontFeatures("tnum").NoWrap()
-				left := usage.Expire.Sub(now)
-				color := t.TextMuted
-				if left < expiryWarning {
-					color = t.Warning
-				}
-				ui.Text(c, remainingText(left)).FontSize(fontSecondary).TextColor(color).NoWrap()
-			})
-		}
-	})
-}
-
-// usageBar fills to ratio, springing to a new value after a refresh.
-func usageBar(c *ui.Context, t *ui.Theme, ratio float32) {
-	track := ui.Box(c).Width(usageBarWidth).Height(usageBarHeight).Radius(usageBarHeight / 2).Background(t.Text.Alpha(softFillAlpha))
-	width := track.AnimateTo("used", max(usageBarHeight, ratio*usageBarWidth), ui.Snappy)
-	fill := usageColor(t, ratio)
-	track.Children(func() {
-		ui.Box(c).Width(width).Height(usageBarHeight).Radius(usageBarHeight / 2).Background(fill)
-	})
+// usageInk is the usage figure as text: its tier's colour, deepened for
+// contrast, or the accent ink while usage is unremarkable.
+func usageInk(t *ui.Theme, ratio float32) ui.Color {
+	switch {
+	case ratio >= usageCritical:
+		return textOn(t, t.Danger)
+	case ratio >= usageWarning:
+		return textOn(t, t.Warning)
+	default:
+		return textOn(t, accentInk(t))
+	}
 }
 
 func usageColor(t *ui.Theme, ratio float32) ui.Color {
 	switch {
 	case ratio >= usageCritical:
-		return t.Danger
+		return textOn(t, t.Danger)
 	case ratio >= usageWarning:
-		return t.Warning
+		return textOn(t, t.Warning)
 	default:
 		return t.Accent
 	}
@@ -1213,7 +1211,7 @@ func remainingText(left time.Duration) string {
 	case left < dayLength:
 		return "今天到期"
 	default:
-		return fmt.Sprintf("还剩 %d 天", int(left/dayLength))
+		return fmt.Sprintf("剩余 %d 天", int(left/dayLength))
 	}
 }
 

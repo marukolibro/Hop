@@ -175,7 +175,7 @@ func (d *Dashboard) tunDialog(c *ui.Context, t *ui.Theme) {
 	ui.DialogBase(c, &s.installOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(dialogScrim)
 		panel.Width(dialogWidth).Padding(pagePadding).Gap(gapLarge).Radius(radiusPanel).
-			Background(t.Surface).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)
+			Background(overlaySurface(t)).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)
 		panel.Children(func() {
 			ui.Column(c).Gap(gapSection).Children(func() {
 				ui.Column(c).Gap(gapSmall).Children(func() {

@@ -1,7 +1,10 @@
 // Package model holds the types shared across Hop's layers.
 package model
 
-import "time"
+import (
+	"net/netip"
+	"time"
+)
 
 // Group types as the core reports them.
 const (
@@ -53,6 +56,14 @@ type Traffic struct {
 type TrafficHistory struct {
 	Up   []float32
 	Down []float32
+}
+
+// ExitIP is the public address the default route leaves by, and the ISO 3166
+// alpha-2 country that address is registered in. It is the user's address:
+// keep it in memory only.
+type ExitIP struct {
+	Address netip.Addr
+	Country string
 }
 
 // TrafficSplit is how much traffic Hop carried, through a proxy or direct,
@@ -439,6 +450,14 @@ const (
 	AppearanceDark   Appearance = "dark"
 )
 
+// ColorTheme is the material palette chosen independently of appearance.
+type ColorTheme string
+
+const (
+	ThemeOcean ColorTheme = "ocean"
+	ThemeDusk  ColorTheme = "dusk"
+)
+
 // DefaultSubscriptionUpdateHours is how often subscriptions refresh on their
 // own before the user chooses another interval. A value of 0 turns the
 // automatic refresh off.
@@ -448,9 +467,20 @@ const DefaultSubscriptionUpdateHours = 12
 // user chooses.
 const DefaultMenuBarSpeed = false
 
+// Window clarity controls how much themed backdrop shows through the base
+// glass veil: 20 is the most opaque, 85 the most transparent. The default
+// matches the approved glass design.
+const (
+	WindowClarityMin     = 20
+	WindowClarityMax     = 85
+	DefaultWindowClarity = 68
+)
+
 // Settings are the user's preferences, kept between starts.
 type Settings struct {
 	Appearance Appearance
+	// Theme selects the ocean or dusk material palette.
+	Theme ColorTheme
 	// DelayTimeoutSeconds is how long a delay test waits for one node.
 	DelayTimeoutSeconds int
 	// SubscriptionUpdateHours is how often stored subscriptions refresh on
@@ -465,6 +495,10 @@ type Settings struct {
 	Tun bool
 	// MenuBarSpeed shows the live speed beside the menu bar mark.
 	MenuBarSpeed bool
+	// WindowClarity is how much backdrop shows through the base veil, from
+	// WindowClarityMin to WindowClarityMax. It applies only where the window
+	// has a material; solid windows ignore it.
+	WindowClarity int
 }
 
 // Custom rule types, as the config file writes them.

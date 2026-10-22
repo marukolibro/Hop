@@ -18,14 +18,18 @@ func (d *Dashboard) statsPage(c *ui.Context, t *ui.Theme) {
 	view := d.stats
 	if trafficViewEmpty(view) {
 		ui.Row(c).Grow(1).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "还没有流量经过 Hop。").FontSize(fontSecondary).TextColor(t.TextMuted)
+			mutedText(c, t, "还没有流量经过 Hop。")
 		})
 		return
 	}
 	ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
-		ui.Row(c).Justify(ui.Center).Padding(scrollTrim, pagePadding, scrollEnd, pagePadding).Children(func() {
-			ui.Column(c).Grow(1).MaxWidth(settingsWidth).Gap(gapSection).Children(func() {
+		ui.Row(c).Justify(ui.Center).Padding(28, pageGutter(c), 40, pageGutter(c)).Children(func() {
+			ui.Column(c).Grow(1).MaxWidth(settingsWidth).Gap(20).Children(func() {
+				pageHeadingRow(c, t, "流量统计", "每一段流量,都清晰有迹", func() {
+					captionText(c, t, "截至今天")
+				})
 				statsTotals(c, t, view)
+				horizontalHairline(c, t)
 				statsChartCard(c, t, view.Days)
 				if len(view.Sources) > 0 {
 					statsSources(c, t, view.Sources, d.subscription.view.ActiveID)
@@ -57,27 +61,19 @@ func (d *Dashboard) trafficSource() model.TrafficSource {
 	return model.TrafficSource{ID: id}
 }
 
-// statsCard is one panel of the statistics page.
-func statsCard(c *ui.Context, t *ui.Theme, build func()) {
-	ui.Column(c).Padding(panelPadY, panelPadX).Radius(radiusPanel).Background(t.Surface).Border(1, t.Border).Gap(gapMedium).Children(build)
-}
-
 // statsTotals is today and this month, each with its proxy and direct split.
 func statsTotals(c *ui.Context, t *ui.Theme, view model.TrafficView) {
-	statsCard(c, t, func() {
-		ui.Row(c).Children(func() {
-			statsTotalsColumn(c, t, "今天", view.Today)
-			ui.Box(c).Width(1).Margin(0, gapLarge).Background(t.Border.Alpha(cardDividerAlpha))
-			statsTotalsColumn(c, t, "本月", view.Month)
-		})
+	ui.Row(c).Key("totals").Gap(24).Children(func() {
+		statsTotalsColumn(c, t, "今天", view.Today)
+		statsTotalsColumn(c, t, "本月", view.Month)
 	})
 }
 
 func statsTotalsColumn(c *ui.Context, t *ui.Theme, label string, split model.TrafficSplit) {
 	proxy, direct, total := trafficSplitTotals(split)
 	ui.Column(c).Key(label).Grow(1).Basis(0).Gap(gapSmall).Children(func() {
-		ui.Text(c, label).FontSize(fontSecondary).TextColor(t.TextMuted)
-		statsAmount(c, t, total, fontHeadline)
+		mutedText(c, t, label)
+		statsAmount(c, t, total, fontStat)
 		ui.Row(c).Gap(gapLarge).Children(func() {
 			statsSplit(c, t, "代理", proxy, t.Accent)
 			statsSplit(c, t, "直连", direct, t.TextMuted)
@@ -90,9 +86,9 @@ func statsSplit(c *ui.Context, t *ui.Theme, label string, bytes int64, color ui.
 	r := formatBytes(bytes)
 	ui.Row(c).Key(label).Gap(gapTight).AlignItems(ui.Center).Children(func() {
 		statsDot(c, color)
-		ui.Text(c, label).FontSize(fontSecondary).TextColor(t.TextMuted)
+		mutedText(c, t, label)
 		ui.Text(c, r.value).FontSize(fontSecondary).FontFeatures("tnum").ContentTransition(ui.ContentTransition{Numeric: true})
-		ui.Text(c, r.unit).FontSize(fontCaption).TextColor(t.TextMuted)
+		captionText(c, t, r.unit)
 	})
 }
 
@@ -106,16 +102,16 @@ func statsAmount(c *ui.Context, t *ui.Theme, bytes int64, size float32) {
 	r := formatBytes(bytes)
 	ui.Row(c).Gap(4).AlignItems(ui.End).Children(func() {
 		ui.Text(c, r.value).FontSize(size).FontWeight(weightSemibold).FontFeatures("tnum").ContentTransition(ui.ContentTransition{Numeric: true})
-		ui.Text(c, r.unit).FontSize(fontCaption).TextColor(t.TextMuted)
+		captionText(c, t, r.unit)
 	})
 }
 
 // statsChartCard is the last thirty days as one stacked bar per day, proxy
 // over direct, with the hovered day's numbers.
 func statsChartCard(c *ui.Context, t *ui.Theme, days []model.TrafficDayView) {
-	statsCard(c, t, func() {
+	panelCard(c, t).Padding(22, 24).Gap(16).Children(func() {
 		ui.Row(c).Justify(ui.SpaceBetween).AlignItems(ui.Center).Children(func() {
-			sectionTitle(c, "最近 30 天")
+			ui.Text(c, "最近 30 天").FontSize(fontEmphasis).FontWeight(weightMedium)
 			statsLegend(c, t)
 		})
 		statsBars(c, t, days)
@@ -136,7 +132,7 @@ func statsLegend(c *ui.Context, t *ui.Theme) {
 func statsLegendItem(c *ui.Context, t *ui.Theme, label string, color ui.Color) {
 	ui.Row(c).Key(label).Gap(gapTight).AlignItems(ui.Center).Children(func() {
 		statsDot(c, color)
-		ui.Text(c, label).FontSize(fontCaption).TextColor(t.TextMuted)
+		captionText(c, t, label)
 	})
 }
 
@@ -173,7 +169,11 @@ func drawTrafficBars(p *ui.Painter, r ui.Rect, days []model.TrafficDayView, hove
 		peak = max(peak, trafficSplitTotal(day.Split))
 	}
 	if hover >= 0 && hover < len(days) {
-		p.Fill(ui.Rect{X: r.X + band*float32(hover), Y: r.Y, W: band, H: r.H}, t.SurfaceHover, radiusChip)
+		fill := t.SurfaceHover
+		if onGlass(t) {
+			fill = glassFill(t, glassChartHover)
+		}
+		p.Fill(ui.Rect{X: r.X + band*float32(hover), Y: r.Y, W: band, H: r.H}, fill, radiusChip)
 	}
 	p.Line(r.X, bottom+0.5, r.X+r.W, bottom+0.5, 1, t.Border)
 	if peak == 0 {
@@ -244,15 +244,15 @@ func drawTrafficTooltip(p *ui.Painter, r ui.Rect, day model.TrafficDayView, toda
 // use is marked.
 func statsSources(c *ui.Context, t *ui.Theme, sources []model.TrafficSourceView, activeID string) {
 	ui.Column(c).Key("sources").Gap(gapSmall).Children(func() {
-		ui.Row(c).Padding(0, gapLarge).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "本月按订阅").FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(t.TextMuted)
 			ui.Box(c).Grow(1)
-			ui.Text(c, "代理").FontSize(fontCaption).TextColor(t.TextMuted)
+			captionText(c, t, "代理")
 		})
-		ui.Column(c).Radius(radiusPanel).Background(t.Surface).Border(1, t.Border).Children(func() {
+		ui.Column(c).Children(func() {
 			for i, source := range sources {
 				if i > 0 {
-					ui.Box(c).Key(i).Height(1).Margin(0, gapLarge).Background(t.Border.Alpha(cardDividerAlpha))
+					horizontalHairline(c, t)
 				}
 				statsSourceRow(c, t, source, source.ID == activeID)
 			}
@@ -263,10 +263,10 @@ func statsSources(c *ui.Context, t *ui.Theme, sources []model.TrafficSourceView,
 func statsSourceRow(c *ui.Context, t *ui.Theme, source model.TrafficSourceView, active bool) {
 	proxy, _, _ := trafficSplitTotals(source.Split)
 	ui.Row(c).Key(source.ID).Gap(gapMedium).AlignItems(ui.Center).MinHeight(switchHeight).
-		Padding(gapMedium, gapLarge).Children(func() {
+		Padding(gapMedium, 0).Children(func() {
 		ui.Text(c, statsSourceName(source)).FontSize(fontBody).MaxLines(1)
 		if active {
-			chip(c, "使用中", t.Accent)
+			badge(c, t, "使用中")
 		}
 		ui.Box(c).Grow(1)
 		statsDot(c, t.Accent)

@@ -22,7 +22,7 @@ const (
 
 	// headerHeight is the header's row, which is also the window's title
 	// bar; main centres the traffic lights on it.
-	headerHeight = 60
+	headerHeight = 68
 
 	statusConnecting = "connecting"
 	statusConnected  = "connected"
@@ -55,6 +55,11 @@ type ProxyService interface {
 	TestDelay(ctx context.Context, group string, timeout time.Duration) error
 	TestAutoGroups(ctx context.Context, timeout time.Duration) error
 	WatchTraffic(ctx context.Context, handle func(model.Traffic)) error
+}
+
+// ExitIPService reads the public address the default route leaves by.
+type ExitIPService interface {
+	Lookup(ctx context.Context) (model.ExitIP, error)
 }
 
 // SubscriptionService is what the dashboard needs to manage saved profiles:
@@ -172,6 +177,7 @@ type Services struct {
 	SystemProxy   SystemProxyService
 	Tun           TunService
 	LoginItem     LoginItem
+	ExitIP        ExitIPService
 }
 
 // Updater runs fn on the window's UI thread, as mygo.Window does.
@@ -317,13 +323,17 @@ type Dashboard struct {
 	// runtime takes the token on the UI thread as it launches, and replies from
 	// an older epoch are dropped.
 	viewGen int
+	// coreEpoch counts core starts and restarts, so the same resolved exit
+	// is asked for its IP again after the core comes back.
+	coreEpoch int
+	// exitIP is the default route's public address, as the last lookup found
+	// it, and the lookup's state.
+	exitIP exitIPState
 	// delayCancel is UI-thread-owned and cancels the previous epoch's delay
 	// probes.
 	delayCancel context.CancelFunc
 	// activeGroup is the group whose nodes the grid shows.
 	activeGroup string
-	// groupFilter narrows the sidebar to groups whose name contains it.
-	groupFilter string
 	// testing is the group whose delays are being measured, testingAll
 	// during the test at startup, "" for none.
 	testing     string
@@ -545,12 +555,22 @@ func (d *Dashboard) loadView(ctx context.Context, win Updater, gen int) {
 		d.view = view
 		d.modeIndex = modeIndexOf(view.Mode)
 		d.activeGroup = keepActiveGroup(view, d.activeGroup)
+		d.considerExitIP()
 	})
 }
 
 // startupTest loads the profile and starts background probes without holding
 // subscription completion.
 func (d *Dashboard) startupTest(ctx context.Context, win Updater, gen int) {
+	// A new core epoch is taken before the view so its apply asks for the
+	// exit IP again, even when the same node is still selected.
+	win.Update(func() {
+		if gen != d.viewGen || ctx.Err() != nil {
+			return
+		}
+		d.coreEpoch++
+		d.considerExitIP()
+	})
 	d.loadView(ctx, win, gen)
 	win.Update(func() {
 		if gen != d.viewGen || ctx.Err() != nil {
@@ -770,9 +790,17 @@ func (d *Dashboard) failConnection(a action, err error) {
 
 // View builds one frame of the main window.
 func (d *Dashboard) View(c *ui.Context) {
-	c.SetTheme(d.theme(c))
+	c.SetTheme(d.windowTheme(c))
 	t := c.Theme()
-	ui.Column(c).Fill().Children(func() {
+	// The material paints the themed backdrop and blur before any controls.
+	c.Root().Background(ui.Transparent)
+	root := ui.Column(c).Fill()
+	if onGlass(t) {
+		root.Material(themedWindowMaterial{palette: materialPalette(t.Dark, d.settings.settings.Theme), veil: glassBaseColor(t)})
+	} else {
+		root.Background(t.Background)
+	}
+	root.Children(func() {
 		d.header(c, t)
 		d.notice(c, t)
 		switch d.page {
@@ -801,11 +829,23 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 	// The window has no title bar of its own: the header is it. It keeps
 	// clear of the traffic lights and drags the window.
 	left := max(pagePadding, c.TitleBar().Left+gapSmall)
-	ui.Row(c).Gap(gapLarge).AlignItems(ui.Center).Height(headerHeight).Padding(0, pagePadding, 0, left).DragWindow().Children(func() {
-		brandLockup(c, t, 24)
-		slidingSwitch(c, "页面", &d.page, pageLabels, pageSwitchStyle(t, 48), func(int) {})
-		ui.Box(c).Grow(1)
-		d.trafficSwitches(c, t)
+	width, _ := c.Size()
+	headerGap := gapLarge
+	if width >= 1050 {
+		headerGap = 30
+	}
+	ui.Column(c).Background(headerFill(t)).Children(func() {
+		ui.Row(c).Gap(headerGap).AlignItems(ui.Center).Height(headerHeight).Padding(0, pagePadding, 0, left).DragWindow().Children(func() {
+			if width >= 760 {
+				brandLockup(c, t, 28)
+			} else {
+				brandMark(c, t, 28)
+			}
+			pageTabs(c, t, "页面", &d.page, pageLabels, func(int) {})
+			ui.Box(c).Grow(1)
+			d.trafficSwitches(c, t)
+		})
+		horizontalHairline(c, t)
 	})
 }
 
@@ -848,11 +888,18 @@ func (d *Dashboard) notice(c *ui.Context, t *ui.Theme) {
 	if d.failure == nil {
 		return
 	}
-	ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Padding(10, 14).Margin(0, pagePadding, gapMedium, pagePadding).Radius(radiusControl).Background(t.Danger.Alpha(0.1)).Children(func() {
+	fill := t.Danger.Alpha(0.1)
+	if onGlass(t) {
+		// The failure is read over the page; give it a panel face so its
+		// text never meets the desktop.
+		fill = glassPanel(t).Mix(t.Danger, glassNoticeDanger)
+	}
+	ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Padding(10, pagePadding).Background(fill).Children(func() {
 		ui.Column(c).Grow(1).Gap(2).Children(func() {
 			ui.Text(c, d.failure.title).FontSize(fontBody).FontWeight(weightSemibold).TextColor(t.Danger)
 			mutedText(c, t, d.failure.detail)
 		})
 		iconButton(c, "关闭提示", iconClose, dangerButton(t), func() { d.failure = nil })
 	})
+	horizontalHairline(c, t)
 }

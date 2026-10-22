@@ -17,6 +17,9 @@ type SettingsStore interface {
 // Appearances are the looks the settings offer, in the order they show.
 var Appearances = []model.Appearance{model.AppearanceSystem, model.AppearanceLight, model.AppearanceDark}
 
+// ColorThemes are the material palettes in the order offered in settings.
+var ColorThemes = []model.ColorTheme{model.ThemeOcean, model.ThemeDusk}
+
 // DelayTimeouts are the delay test timeouts the settings offer, in seconds.
 var DelayTimeouts = []int{2, 3, 5}
 
@@ -30,9 +33,11 @@ var SubscriptionUpdateIntervals = []int{0, 6, 12, 24}
 func DefaultSettings() model.Settings {
 	return model.Settings{
 		Appearance:              model.AppearanceSystem,
+		Theme:                   model.ThemeOcean,
 		DelayTimeoutSeconds:     3,
 		SubscriptionUpdateHours: model.DefaultSubscriptionUpdateHours,
 		MenuBarSpeed:            model.DefaultMenuBarSpeed,
+		WindowClarity:           model.DefaultWindowClarity,
 	}
 }
 
@@ -74,11 +79,17 @@ func validateSettings(settings model.Settings) error {
 	if !slices.Contains(Appearances, settings.Appearance) {
 		return fmt.Errorf("unknown appearance %q", settings.Appearance)
 	}
+	if !slices.Contains(ColorThemes, settings.Theme) {
+		return fmt.Errorf("unsupported color theme %q", settings.Theme)
+	}
 	if !slices.Contains(DelayTimeouts, settings.DelayTimeoutSeconds) {
 		return fmt.Errorf("unsupported delay test timeout %ds (want one of %v)", settings.DelayTimeoutSeconds, DelayTimeouts)
 	}
 	if !slices.Contains(SubscriptionUpdateIntervals, settings.SubscriptionUpdateHours) {
 		return fmt.Errorf("unsupported subscription update interval %dh (want one of %v)", settings.SubscriptionUpdateHours, SubscriptionUpdateIntervals)
+	}
+	if settings.WindowClarity < model.WindowClarityMin || settings.WindowClarity > model.WindowClarityMax {
+		return fmt.Errorf("unsupported window clarity %d%% (want %d-%d)", settings.WindowClarity, model.WindowClarityMin, model.WindowClarityMax)
 	}
 	return nil
 }

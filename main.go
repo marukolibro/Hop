@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"hop/internal/handler"
 	"hop/internal/repository/corerelease"
 	"hop/internal/repository/corestore"
+	"hop/internal/repository/exitip"
 	"hop/internal/repository/geodata"
 	"hop/internal/repository/helper"
 	"hop/internal/repository/mihomo"
@@ -52,6 +54,10 @@ const (
 	bindAddress          = "127.0.0.1"
 	coreLogLevel         = "info"
 	bootstrapGroup       = "Hop"
+
+	// windowMaterial is the native material behind the main window. Change
+	// it here to try another; it only applies on macOS.
+	windowMaterial = mygo.VibrancyUnderWindow
 
 	// trafficLightX and trafficLightY place the close button's top-left
 	// corner so the traffic lights centre on the header's 60 DIP row.
@@ -163,7 +169,7 @@ func run() (err error) {
 
 	coreService := service.NewCoreService(
 		client,
-		corerelease.NewSource(coreDownloadClient(cfg.MixedPort), corerelease.ReleaseAPI),
+		corerelease.NewSource(hopProxyClient(cfg.MixedPort), corerelease.ReleaseAPI),
 		corestore.New(cfg.AppDir),
 		runner,
 		mihomo.NewCoreChecker(mihomo.ConfigPath(cfg.HomeDir), validateDir, validationTimeout),
@@ -262,6 +268,7 @@ func run() (err error) {
 		SystemProxy:   systemProxy,
 		Tun:           tun,
 		LoginItem:     mygo.App,
+		ExitIP:        service.NewExitIPService(exitip.NewClient(exitip.TraceURL, hopProxyClient(cfg.MixedPort))),
 	}, net.JoinHostPort(bindAddress, strconv.Itoa(cfg.MixedPort)), userSettings, appVersion)
 	// The dashboard hears what supervision does after a crash before the
 	// core starts, so the first crash cannot go unreported.
@@ -295,6 +302,7 @@ func run() (err error) {
 			// centre line, level with the switches beside them.
 			TitleBarStyle:        mygo.TitleBarHidden,
 			TrafficLightPosition: &mygo.Point{X: trafficLightX, Y: trafficLightY},
+			Vibrancy:             windowVibrancy(),
 		})
 		menuBar, err := handler.NewMenuBar(win, dashboard)
 		if err != nil {
@@ -313,19 +321,33 @@ func run() (err error) {
 	return runErr
 }
 
-// coreDownloadClient reaches GitHub through Hop's own core, so a core can be
-// fetched wherever the subscription's lines can reach it. It does not touch
+// windowVibrancy is the material behind the main window on macOS, and none
+// elsewhere: Windows 11's backdrops are untested on real hardware, and the
+// other platforms have no material, so they keep the solid window.
+func windowVibrancy() mygo.Vibrancy {
+	if runtime.GOOS == "darwin" {
+		return windowMaterial
+	}
+	return mygo.VibrancyNone
+}
+
+// hopProxyClient reaches the internet through Hop's own core, so a download
+// or lookup works wherever the subscription's lines reach. It does not touch
 // the system proxy or any other client's.
-func coreDownloadClient(mixedPort int) *http.Client {
-	proxy := &url.URL{Scheme: "http", Host: net.JoinHostPort(bindAddress, strconv.Itoa(mixedPort))}
-	return &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxy)}}
+func hopProxyClient(mixedPort int) *http.Client {
+	return &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(hopProxyURL(mixedPort))}}
+}
+
+// hopProxyURL is Hop's own mixed port, where its core accepts HTTP proxies.
+func hopProxyURL(mixedPort int) *url.URL {
+	return &url.URL{Scheme: "http", Host: net.JoinHostPort(bindAddress, strconv.Itoa(mixedPort))}
 }
 
 // geodataDownloadClient reaches the databases through the same proxy, with
 // an overall timeout: a stuck connection must not hold the update lock
 // forever.
 func geodataDownloadClient(mixedPort int) *http.Client {
-	client := coreDownloadClient(mixedPort)
+	client := hopProxyClient(mixedPort)
 	client.Timeout = geodataDownloadTimeout
 	return client
 }

@@ -104,7 +104,7 @@ func (d *Dashboard) appVersionRow(c *ui.Context, t *ui.Theme) func() {
 					mutedText(c, t, "Hop "+version).NoWrap().FontFeatures("tnum")
 					if s.update.Available {
 						ui.Text(c, "新版本 "+s.update.Version).FontSize(fontBody).FontWeight(weightMedium).
-							TextColor(t.Accent).NoWrap()
+							TextColor(accentInk(t)).NoWrap()
 						if s.enabled {
 							label := "更新并重启"
 							if s.updating {
@@ -122,7 +122,7 @@ func (d *Dashboard) appVersionRow(c *ui.Context, t *ui.Theme) func() {
 					if s.checking {
 						label = "检查中"
 					}
-					button(c, buttonSpec{label: label, style: softButton(t), busy: s.checking,
+					button(c, buttonSpec{label: label, style: mainSoftButton(t), busy: s.checking,
 						disabled: d.controlsLocked()}, d.beginAppCheck)
 				})
 				if s.updating && s.progressTotal > 0 {

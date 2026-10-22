@@ -10,14 +10,22 @@ import (
 )
 
 const (
-	sidebarWidth    float32 = 236
-	sidebarItemH    float32 = 46
+	sidebarItemH    float32 = 48
 	sidebarHeaderH  float32 = 30
-	sidebarIconSize float32 = 26
-	// searchThreshold is how many groups a profile has before the sidebar
-	// offers to search them.
-	searchThreshold = 8
+	sidebarIconSize float32 = 22
 )
+
+// sidebarWidthFor follows the design's three workspace widths.
+func sidebarWidthFor(window float32) float32 {
+	switch {
+	case window < 760:
+		return 155
+	case window < 1050:
+		return 190
+	default:
+		return 213
+	}
+}
 
 // sidebarSections are the sidebar's sections, by what groups are for.
 var sidebarSections = []struct {
@@ -41,17 +49,14 @@ type sidebarRow struct {
 // groupSidebar lists every group by what it is for, with where each sends
 // traffic now. The highlight springs to the group chosen.
 func (d *Dashboard) groupSidebar(c *ui.Context, t *ui.Theme) {
-	rows := sidebarRows(d.view.Groups, d.groupFilter)
-	ui.Column(c).Width(sidebarWidth).MinHeight(0).Gap(gapSmall).Children(func() {
-		if len(d.view.Groups) > searchThreshold {
-			ui.Row(c).Gap(gapTight).AlignItems(ui.Center).Height(switchHeight).Padding(0, 10).Radius(switchHeight / 2).
-				Background(t.Text.Alpha(softFillAlpha)).Children(func() {
-				ui.Icon(c, iconSearch).Width(13).Height(13).TextColor(t.TextMuted)
-				ui.TextInput(c, &d.groupFilter).Placeholder("搜索策略组").Grow(1).Background(ui.Transparent).Border(0, ui.Transparent).Padding(0)
-			})
-		}
+	width, _ := c.Size()
+	sidebarWidth := sidebarWidthFor(width)
+	rows := sidebarRows(d.view.Groups)
+	sidebar := ui.Column(c).Width(sidebarWidth).MinHeight(0).Gap(gapSmall).
+		Padding(18, 12, 0, 12).Background(sidebarFill(t))
+	sidebar.Children(func() {
 		ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
-			list := ui.Box(c).Padding(0, 0, gapLarge, 0)
+			list := ui.Box(c).Padding(0, 0, gapSection, 0)
 			activeY, found := float32(0), false
 			y := float32(0)
 			for _, row := range rows {
@@ -65,11 +70,21 @@ func (d *Dashboard) groupSidebar(c *ui.Context, t *ui.Theme) {
 				y += sidebarItemH
 			}
 			highlightY := list.AnimateTo("highlight", activeY, ui.Snappy)
-			list.Children(func() {
-				if found {
-					ui.Box(c).Absolute().Left(0).Top(highlightY).Width(sidebarWidth).Height(sidebarItemH).
-						Radius(radiusControl).Background(t.Accent.Alpha(0.1))
+			// Paint the moving highlight below the rows. Absolute siblings
+			// paint over their content and would wash out the active ink.
+			list.Draw(func(p *ui.Painter, r ui.Rect) {
+				if !found {
+					return
 				}
+				activeFill := glassFill(t, glassSidebarActive)
+				if !onGlass(t) {
+					activeFill = t.Accent.Alpha(0.06)
+				}
+				rect := ui.Rect{X: r.X, Y: r.Y + highlightY, W: r.W, H: sidebarItemH}
+				p.Fill(rect, activeFill, radiusControl)
+				p.Fill(ui.Rect{X: rect.X, Y: rect.Y + 16, W: 2, H: 16}, t.Accent, 1)
+			})
+			list.Children(func() {
 				ui.Column(c).Children(func() {
 					for _, row := range rows {
 						if row.title != "" {
@@ -85,15 +100,13 @@ func (d *Dashboard) groupSidebar(c *ui.Context, t *ui.Theme) {
 }
 
 // sidebarRows lays the groups out under their section titles, keeping the
-// profile's order within a section and only groups whose name contains
-// filter, ignoring case.
-func sidebarRows(groups []model.GroupView, filter string) []sidebarRow {
-	needle := strings.ToLower(strings.TrimSpace(filter))
+// profile's order within a section.
+func sidebarRows(groups []model.GroupView) []sidebarRow {
 	var rows []sidebarRow
 	for _, section := range sidebarSections {
 		var members []sidebarRow
 		for _, g := range groups {
-			if g.Kind == section.kind && strings.Contains(strings.ToLower(g.Label), needle) {
+			if g.Kind == section.kind {
 				members = append(members, sidebarRow{group: g})
 			}
 		}
@@ -123,20 +136,22 @@ func (d *Dashboard) sidebarItem(c *ui.Context, t *ui.Theme, group model.GroupVie
 	item := ui.Row(c).Key(name).Height(sidebarItemH).Gap(10).AlignItems(ui.Center).Padding(0, 10).Radius(radiusControl).Cursor(ui.CursorPointer)
 	fill := ui.Transparent
 	if item.Hovered() && !isActive {
-		fill = t.Text.Alpha(0.04)
+		fill = glassFill(t, glassSidebarHover)
 	}
 	item.Background(item.AnimateColor("fill", fill, ui.Smooth))
 	item.OnClick(func() { d.activeGroup = name })
 	item.Children(func() {
 		groupIcon(c, t, group, sidebarIconSize)
-		ui.Column(c).Grow(1).Basis(0).Gap(1).Children(func() {
+		ui.Column(c).Grow(1).Basis(0).Gap(4).Children(func() {
 			title := ui.Text(c, groupTitle(group)).FontSize(fontBody).MaxLines(1)
+			captionText(c, t, groupDestination(group)).MaxLines(1)
 			if isActive {
-				title.FontWeight(weightSemibold).TextColor(t.Accent)
+				// The design marks the active row with its veil and an
+				// accent name; the description stays secondary.
+				title.FontWeight(weightSemibold).TextColor(accentInk(t))
 			} else {
 				title.FontWeight(weightMedium)
 			}
-			ui.Text(c, groupDestination(group)).FontSize(fontCaption).TextColor(t.TextMuted).MaxLines(1)
 		})
 		if group.Exit.Name != "" && group.Kind != model.GroupKindRouting {
 			delayLabel(c, t, group.Exit.Delay, fontCaption)
@@ -182,7 +197,7 @@ func groupIcon(c *ui.Context, t *ui.Theme, group model.GroupView, size float32) 
 		case group.Kind == model.GroupKindMain:
 			hopMark(c, glyph, solidInk(t.Accent))
 		case group.Kind == model.GroupKindAuto:
-			ui.Icon(c, iconBolt).Width(glyph).Height(glyph).TextColor(t.Warning)
+			ui.Icon(c, iconBolt).Width(glyph).Height(glyph).TextColor(t.Accent)
 		case group.Kind == model.GroupKindRouting:
 			serviceMark(c, t, group, size, glyph)
 		default:
@@ -200,7 +215,7 @@ func serviceMark(c *ui.Context, t *ui.Theme, group model.GroupView, size float32
 		return
 	}
 	for _, r := range group.Label {
-		ui.Text(c, strings.ToUpper(string(r))).FontSize(size*0.42).FontWeight(weightSemibold).TextColor(t.Accent).Translate(0, -opticalLift)
+		ui.Text(c, strings.ToUpper(string(r))).FontSize(size*0.42).FontWeight(weightSemibold).TextColor(accentInk(t)).Translate(0, -opticalLift)
 		return
 	}
 }

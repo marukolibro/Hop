@@ -8,10 +8,19 @@ import (
 	"hop/internal/model"
 )
 
+// The hero's plot: sparkHeight is its whole height, sparkCaptionH the top
+// strip that holds the caption, and sparkFloor its narrowest width. The
+// plot takes all the room the exit text and the speeds leave; below
+// sparkMinWidth the row's fixed parts would leave it less than its floor,
+// so the hero hides it instead.
 const (
-	sparkWidth  = 132
-	sparkHeight = 40
-	speedWidth  = 92
+	sparkHeight   float32 = 40
+	sparkCaptionH float32 = 14
+	sparkFloor    float32 = 120
+	// The row's fixed parts: page padding (48), the gauge (56), the exit
+	// (210), the speeds (110) and three 24 gaps make 496; with the floor,
+	// 616.
+	sparkMinWidth float32 = 616
 )
 
 // readout is a throughput split into the number and its unit.
@@ -50,34 +59,34 @@ func formatNumber(v float64) string {
 	return fmt.Sprintf("%.2f", v)
 }
 
-// speeds shows the current download and upload speed beside a sparkline of
-// the last two minutes; each colour matches its line.
-func (d *Dashboard) speeds(c *ui.Context, t *ui.Theme) {
-	ui.Row(c).Gap(gapLarge).AlignItems(ui.Center).Children(func() {
-		ui.Column(c).Gap(3).Width(speedWidth).Children(func() {
-			speedLine(c, t, "↓", formatRate(d.last.Down), t.Accent)
-			speedLine(c, t, "↑", formatRate(d.last.Up), t.Warning)
-		})
-		if width, _ := c.Size(); width >= sparkMinWidth {
-			d.sparkline(c, t)
-		}
-	})
-}
-
-func speedLine(c *ui.Context, t *ui.Theme, arrow string, r readout, color ui.Color) {
-	ui.Row(c).Key(arrow).Gap(4).AlignItems(ui.End).Children(func() {
-		ui.Text(c, arrow).FontSize(fontSecondary).FontWeight(weightBold).TextColor(color)
-		ui.Text(c, r.value).FontSize(fontEmphasis).FontWeight(weightSemibold).FontFeatures("tnum").ContentTransition(ui.ContentTransition{Numeric: true})
-		ui.Text(c, r.unit).FontSize(fontCaption).TextColor(t.TextMuted)
-	})
-}
-
+// sparkline is the last two minutes of traffic, filling all the room the
+// exit text and the speeds leave. The newest sample sits at the right edge;
+// a window without real traffic keeps its baseline and says so.
 func (d *Dashboard) sparkline(c *ui.Context, t *ui.Theme) {
 	history := d.history
-	down, up, base := t.Accent, t.Warning, t.Border
-	ui.Box(c).Width(sparkWidth).Height(sparkHeight).Label("Traffic").Description("Download and upload speed over the last two minutes").Draw(func(p *ui.Painter, r ui.Rect) {
-		p.Line(r.X, r.Y+r.H-0.5, r.X+r.W, r.Y+r.H-0.5, 1, base)
-		sparkArea(p, r, history, down, up)
+	down, up, base := t.Accent, uploadColor(t), t.Border
+	idle := historyPeak(history) < idleRate
+	ui.Row(c).Key("sparkSlot").Grow(1).Basis(0).MinWidth(sparkFloor).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+		ui.Box(c).Key("spark").Grow(1).Basis(0).Height(sparkHeight).
+			Label("Traffic").Description("Download and upload speed over the last two minutes").Draw(func(p *ui.Painter, r ui.Rect) {
+			p.Line(r.X, r.Y+r.H-0.5, r.X+r.W, r.Y+r.H-0.5, 1, base)
+			if idle {
+				return
+			}
+			plot := ui.Rect{X: r.X, Y: r.Y + sparkCaptionH, W: r.W, H: r.H - sparkCaptionH}
+			sparkAreaLive(p, plot, history, down, up)
+		}).Children(func() {
+			ui.Column(c).Fill().Children(func() {
+				ui.Row(c).Height(sparkCaptionH).AlignItems(ui.Center).Children(func() {
+					captionText(c, t, "最近 2 分钟")
+				})
+				if idle {
+					ui.Row(c).Grow(1).Basis(0).Center().Children(func() {
+						mutedText(c, t, "暂无流量")
+					})
+				}
+			})
+		})
 	})
 }
 
@@ -94,8 +103,11 @@ func series(values []float32, peak float32) (xs []float32, ys []float32) {
 	return xs, ys
 }
 
-func peakOf(h model.TrafficHistory) float32 {
-	peak := minPeak
+// historyPeak is the largest sample in the window, 0 when it has none. A
+// peak below idleRate means no real traffic, so the plot says so instead of
+// drawing a flat line.
+func historyPeak(h model.TrafficHistory) float32 {
+	peak := float32(0)
 	for _, v := range h.Up {
 		peak = max(peak, v)
 	}
@@ -103,4 +115,8 @@ func peakOf(h model.TrafficHistory) float32 {
 		peak = max(peak, v)
 	}
 	return peak
+}
+
+func peakOf(h model.TrafficHistory) float32 {
+	return max(minPeak, historyPeak(h))
 }

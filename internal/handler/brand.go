@@ -12,13 +12,13 @@ type markInk struct {
 	to   ui.Color
 }
 
-// brandInk is Hop's gradient, cobalt into sky blue, a step brighter in the
-// dark appearance.
+// brandInk is Hop's gradient, the accent into sky blue, a step brighter in
+// the dark appearance.
 func brandInk(t *ui.Theme) markInk {
 	if t.Dark {
-		return markInk{from: ui.Hex("#5B8CFF"), to: ui.Hex("#67D3FB")}
+		return markInk{from: accentDark, to: ui.Hex("#67D3FB")}
 	}
-	return markInk{from: ui.Hex("#2F6BFF"), to: ui.Hex("#22B0EE")}
+	return markInk{from: accentLight, to: ui.Hex("#22B0EE")}
 }
 
 // solidInk is a single colour, for the mark where it marks rather than
@@ -61,5 +61,13 @@ func brandLockup(c *ui.Context, t *ui.Theme, markSizeDIP float32) {
 	ui.Row(c).Key("brand").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 		hopMark(c, markSizeDIP, ink)
 		wordmark(c, ink)
+	})
+}
+
+// brandMark is the mark alone, for a header too narrow to hold the wordmark
+// beside the page switch.
+func brandMark(c *ui.Context, t *ui.Theme, markSizeDIP float32) {
+	ui.Row(c).Key("brand").AlignItems(ui.Center).Children(func() {
+		hopMark(c, markSizeDIP, brandInk(t))
 	})
 }

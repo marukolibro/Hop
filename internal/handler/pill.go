@@ -37,9 +37,19 @@ func togglePill(c *ui.Context, t *ui.Theme, spec pillSpec, onClick func()) ui.El
 	b := ui.ButtonBase(c).Key(spec.label).Label(spec.label).Height(switchHeight).Padding(0, 12).Gap(gapTight).
 		Radius(switchHeight / 2).AlignItems(ui.Center).Justify(ui.Center).Disabled(spec.disabled || spec.busy)
 	// Off, a pill is only a faint fill; on, it takes the accent's tint and
-	// outline, so the choices that are on stand out of the row.
+	// outline, so the choices that are on stand out of the row. On glass
+	// both sit on a near-opaque backing, so their text never meets the
+	// desktop.
 	fill, line, dot, ink := t.Text.Alpha(softFillAlpha), ui.Transparent, t.TextMuted.Alpha(pillOffDotAlpha), t.TextMuted
-	if spec.on {
+	if onGlass(t) {
+		backing := controlBacking(t)
+		fill, line = backing, t.Text.Alpha(0.24)
+		if spec.on {
+			fill, line, dot, ink = t.Accent.Alpha(pillOnFillAlpha).Over(backing), t.Accent.Alpha(pillOnLineAlpha), t.Accent, t.Text
+		} else if b.Hovered() && !spec.disabled {
+			fill = backing.Mix(t.Text, softFillAlpha)
+		}
+	} else if spec.on {
 		fill, line, dot, ink = t.Accent.Alpha(pillOnFillAlpha), t.Accent.Alpha(pillOnLineAlpha), t.Accent, t.Text
 	} else if b.Hovered() && !spec.disabled {
 		fill = t.Text.Alpha(softHoverAlpha)
@@ -77,21 +87,33 @@ func togglePill(c *ui.Context, t *ui.Theme, spec pillSpec, onClick func()) ui.El
 
 // statusToggle is a capsule button for something that is on or off, made to
 // be found at a glance. Off, it is a plain outlined button with a grey dot;
-// on, it turns green: a tinted fill and outline, and a dot that pulses like
-// the core's heartbeat. A spinner takes the dot's place while the change
-// runs, without dimming the button; tip says what it does.
+// on, it turns green: a tinted fill and outline, and a dot that ripples once
+// as the core takes the traffic. A spinner takes the dot's place while the
+// change runs, without dimming the button; tip says what it does.
 func statusToggle(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onClick func()) ui.Element {
 	b := ui.ButtonBase(c).Key(spec.label).Label(spec.label).Tooltip(tip).Height(switchHeight).Padding(0, 12, 0, 8).Gap(2).
 		Radius(switchHeight / 2).AlignItems(ui.Center).Justify(ui.Center).Disabled(spec.disabled)
 	hovered := b.Hovered() && !spec.disabled && !spec.busy
-	fill, line, weight := t.Surface, t.Border, weightMedium
-	if hovered {
-		fill = t.SurfaceHover
-	}
-	if spec.on {
-		fill, line, weight = t.Success.Alpha(statusOnFillAlpha), t.Success.Alpha(statusOnLineAlpha), weightSemibold
+	fill, line, weight, ink := t.Surface, t.Border, weightMedium, t.Text
+	if onGlass(t) {
+		// The design gives the header switches the same 38% button face as
+		// the rest of the window; on keeps a green tint and ink.
+		fill, line, ink = glassButton(t), glassMaterialLine(t), t.TextMuted
 		if hovered {
-			fill = t.Success.Alpha(statusOnHoverAlpha)
+			fill = glassFill(t, glassButtonHover)
+		}
+		if spec.on {
+			fill, line, weight, ink = glassButton(t).Mix(t.Success, glassToggleOnTint), t.Success.Alpha(statusOnLineAlpha), weightSemibold, t.Success
+		}
+	} else {
+		if hovered {
+			fill = t.SurfaceHover
+		}
+		if spec.on {
+			fill, line, weight = t.Success.Alpha(statusOnFillAlpha), t.Success.Alpha(statusOnLineAlpha), weightSemibold
+			if hovered {
+				fill = t.Success.Alpha(statusOnHoverAlpha)
+			}
 		}
 	}
 	b.Background(b.AnimateColor("fill", fill, ui.Smooth)).Border(1, b.AnimateColor("line", line, ui.Smooth))
@@ -112,17 +134,25 @@ func statusToggle(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onClick
 		}
 	})
 	b.Children(func() {
+		// The dot is built in every state, hidden under the spinner while a
+		// change runs, so that it keeps its motion state across the change and
+		// ripples once when the switch turns on.
+		dotColor := t.Success
+		if !spec.on {
+			dotColor = t.TextMuted.Alpha(statusOffDotAlpha)
+		}
+		if spec.busy {
+			dotColor = dotColor.Alpha(0)
+		}
 		ui.Box(c).Key("dot").Width(16).Height(16).Center().Children(func() {
-			switch {
-			case spec.busy:
-				spinner(c, iconInline, t.Success)
-			case spec.on:
-				statusDot(c, t.Success, true)
-			default:
-				statusDot(c, t.TextMuted.Alpha(statusOffDotAlpha), false)
+			statusDot(c, dotColor, spec.on && !spec.busy)
+			if spec.busy {
+				ui.Box(c).Absolute().Left(2).Top(2).Width(iconInline).Height(iconInline).Children(func() {
+					spinner(c, iconInline, t.Success)
+				})
 			}
 		})
-		ui.Text(c, spec.label).FontSize(fontSecondary).FontWeight(weight).TextColor(t.Text).
+		ui.Text(c, spec.label).FontSize(fontSecondary).FontWeight(weight).TextColor(ink).
 			NoWrap().Translate(0, -opticalLift)
 	})
 	return b

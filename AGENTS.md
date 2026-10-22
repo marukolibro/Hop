@@ -103,6 +103,12 @@ handler → service → repository, interfaces defined where they are used.
   loopback proxy, never the system's or another client's.
 - `internal/repository/subscription` — downloads, retries with warnings,
   keeps the `subscription-userinfo` header.
+- `internal/repository/exitip` — one HTTPS GET of
+  `https://1.1.1.1/cdn-cgi/trace` through Hop's own loopback proxy, retried
+  once with a warning and bounded to 8 s and 4 KiB; the reply's `ip=` is
+  validated with `net/netip` and its `loc=` kept as an ISO 3166 alpha-2 code.
+  The IP is the user's public address: keep it in memory only; never write it
+  to disk, settings, logs, errors or fixtures.
 - `internal/repository/profile` — atomic file store for subscription, meta,
   outbound mode and settings (`settings.json`).
 - `internal/service` — business logic. View building (`view.go`) is pure:
@@ -117,13 +123,17 @@ handler → service → repository, interfaces defined where they are used.
   production so the menu bar panel redraws with the window. Closing the
   window hides it and the Dock icon (activation policy accessory) and Hop
   keeps running; started at login (`mygo.App.WasOpenedAtLogin`) it starts
-  that way. The login item itself lives in the system (`mygo.App`
+  that way. The route bar asks for the exit IP when the resolved exit, the
+  mode or the core epoch changes; one lookup runs at a time and a reply for
+  an older exit is dropped. The login item itself lives in the system (`mygo.App`
   `OpenAtLogin`), not in Hop's settings; never turn it on for a dev build.
 - `config` — startup settings; `main.go` wires everything. User settings
   (`service/settings.go`: appearance, delay test timeout, subscription
-  interval, geodata updates) load before the UI and are validated against
-  the offered choices; the dashboard's theme is `d.theme(c)`, which applies
-  the chosen appearance over the system's.
+  interval, geodata updates, color theme and window clarity) load before the UI and are
+  validated against the offered choices; the main window's theme is
+  `d.windowTheme(c)`, which applies the chosen appearance, color theme and
+  clarity; the flyout uses the same palette through `d.theme(c)` with opaque
+  cards.
 - `mygo.json` — the update public key and the `updates.privateKey` path.
   `service/updates.go` wraps `mygo.Updater`: the settings 版本 row checks; the
   row and the flyout download and install, then `mygo.App.Relaunch`. mygo fetches
@@ -147,21 +157,54 @@ All sizes come from `internal/handler/style.go`, and the control metrics
 (`switchHeight`, `opticalLift`) from `motion.go`; do not introduce raw numbers
 for font sizes, weights, gaps or radii in views.
 
-- Type: 11 caption, 12 secondary, 13 body/controls, 14 tile and tab titles,
-  18 headline. Weights 500/600/700 only. Numbers use `FontFeatures("tnum")`.
-- Radii: chips 4, controls and tiles 8, panels 12; capsules (buttons, switches,
-  status) are `switchHeight` (28) tall with fully rounded ends.
-- Colours: theme tokens only (`theme.go`). Accent = route/download, Warning =
-  upload/multiplier, Success = connected/fast. Brand gradient (`brand.go`)
-  only on the mark and wordmark.
+- Layout: the main window follows the user's finished glass design. The base is the window's own colour; header,
+  hero, subscription strip, sidebar and node area are tonal veils
+  separated by full-width hairlines, and the content reaches the window's
+  bottom edge (there is no status bar). The body is the sidebar | one vertical
+  hairline | content. Node tiles and the lists, charts and tables on the
+  other pages are translucent cards, as the design shows. Dialogs, picker
+  popups, tooltips, toasts and the menu-bar flyout stay opaque cards.
+- The hero is the ring gauge with the exit's flag (outer arc download, inner
+  upload, both easing to the traffic and then resting), the exit's name and
+  latency, the `经 …` line, its exit IP, its facts as chips, the sparkline
+  with its `最近 2 分钟` caption and idle state, the speeds behind a hairline,
+  and the mode row. It has no current-line caption. The flyout keeps its own
+  gauge and plot.
+- The subscription strip adds the `Hop 智能规则` tag right after the profile
+  picker only while the active profile runs Hop's rules; a profile that keeps
+  its provider's rules shows no tag.
+- Type: 11 caption, 12 secondary, 13 body/controls and page tabs, 14 tile
+  and section titles, 18 page headings, 22 the hero's exit, 30 the stats
+  total. Weights 500/600/700 only. Numbers use `FontFeatures("tnum")`.
+- Radii: chips 4, tiles 10, controls 8, cards and dialogs 12; capsules
+  (buttons, switches, status) are `switchHeight` (28) tall with fully rounded
+  ends.
+- Glass materials live in `theme_glass.go`; the 海蓝 and 暮紫 palettes and
+  static backdrop live in `theme_palette.go`. The backdrop is blurred before
+  the base veil `(100-clarity)/100` and the regional veils are painted; cards
+  blur what lies under them. Never blur the content or draw the backdrop over
+  it. 海蓝 is the default theme, with 68% clarity. 设置 → 通用 → 主题 changes
+  the palette independently of appearance and persists it. 窗口通透度 changes
+  the base veil live on macOS; existing saved clarity values are preserved.
+- Colours: theme tokens only, one hue family. Accent (sky blue) = route,
+  download, rings, bars, selection; coloured text takes the deeper
+  `accentInk`. Upload (ring inner arc, plot upload line, ↑) is a blue-slate
+  `uploadColor`. Success marks only the live proxy/TUN pill and the core
+  dot; Warning and Danger mark only latency tiers, genuine warnings and
+  errors. Node chips and bars are neutral. Brand gradient (`brand.go`) only
+  on the mark and wordmark, starting from the accent. Header switches use the
+  design's 38% button face, not a separate opaque backing.
 - Buttons: always `button(...)` / `iconButton(...)` from `buttons.go` with
-  `primaryButton`, `softButton` or `dangerButton`; never `ui.Button`,
-  `ui.PrimaryButton` or `ui.Segmented`. Choices are `slidingSwitch`, on/off
-  settings `ui.Switch`. In the window, the system proxy and TUN are the
-  header's `statusToggle` buttons (a green dot while on; every page shows
-  them) and the outbound mode
-  is a `slidingSwitch` at the foot of the route card; the flyout keeps all
-  three as `togglePill` (`pill.go`).
+  `primaryButton`, `mainSoftButton` or `mainDangerButton` on main pages;
+  `softButton`/`dangerButton` remain for the flyout and dialogs. Never
+  `ui.Button`, `ui.PrimaryButton` or `ui.Segmented`. The header's page switch
+  is `pageTabs` (a translucent track with a solid light pill that slides to
+  the chosen page); settings and mode
+  choices are `slidingSwitch`, on/off settings `ui.Switch`. In the window, the
+  system proxy and TUN are the header's `statusToggle` buttons (a green dot
+  while on; every page shows them) and the outbound mode is a `slidingSwitch`
+  at the foot of the hero; the flyout keeps all three as `togglePill`
+  (`pill.go`). Text actions are `textButton`.
 - Icons: 24-unit SVG strokes in `icons.go`, tinted by text colour.
 - CJK text in small controls sits ~1px low: apply `Translate(0, -opticalLift)`.
 - UI copy is Chinese, sentence-short, in the user's terms. No ALL-CAPS labels,
@@ -171,12 +214,13 @@ for font sizes, weights, gaps or radii in views.
 
 ## Motion
 
-Motion shows change: the switch slides, numbers roll, packets flow with
-traffic. Continuous drawings (packets, pulses, spinners) must animate in
-`Draw` with `p.Now()` + `p.AnimationFrame()` so they only repaint; never use
-`Loop`/per-frame state that rebuilds the whole view. Springs (`ui.Snappy`) for
-moves, `AnimateColor` for fills. One orchestrated entrance (the flyout), no
-scattered fade-ins.
+Motion shows change: switches and tabs slide, numbers roll, and the spinner
+turns while work runs. The hero's gauge arcs ease to the traffic and then
+rest. Continuous drawings
+(spinners, the flyout's live pulse) must animate in `Draw` with `p.Now()` +
+`p.AnimationFrame()` so they only repaint; never use `Loop`/per-frame state
+that rebuilds the whole view. Springs (`ui.Snappy`) for moves, `AnimateColor`
+for fills. One orchestrated entrance (the flyout), no scattered fade-ins.
 
 ## MyGo pitfalls
 

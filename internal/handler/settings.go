@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"fmt"
+	"math"
 	"runtime"
 	"slices"
 
@@ -13,6 +15,9 @@ import (
 // appearanceLabels name service.Appearances, index for index.
 var appearanceLabels = []string{"跟随系统", "浅色", "深色"}
 
+// colorThemeLabels name service.ColorThemes, index for index.
+var colorThemeLabels = []string{"海蓝", "暮紫"}
+
 // timeoutLabels name service.DelayTimeouts, index for index.
 var timeoutLabels = []string{"2 秒", "3 秒", "5 秒"}
 
@@ -24,17 +29,30 @@ var updateLabels = []string{"关闭", "6 小时", "12 小时", "24 小时"}
 type settingsState struct {
 	settings        model.Settings
 	appearanceIndex int
+	themeIndex      int
 	timeoutIndex    int
 	updateIndex     int
+	// clarity is the slider's value; settings.WindowClarity is the saved int.
+	clarity float64
 }
 
-// newSettingsState is the state showing settings.
+// newSettingsState is the state showing settings. A zero value from a caller
+// that did not load settings reads as the default, not as a fully opaque
+// window.
 func newSettingsState(settings model.Settings) settingsState {
+	if settings.Theme == "" {
+		settings.Theme = model.ThemeOcean
+	}
+	if settings.WindowClarity < model.WindowClarityMin || settings.WindowClarity > model.WindowClarityMax {
+		settings.WindowClarity = model.DefaultWindowClarity
+	}
 	return settingsState{
 		settings:        settings,
 		appearanceIndex: slices.Index(service.Appearances, settings.Appearance),
+		themeIndex:      slices.Index(service.ColorThemes, settings.Theme),
 		timeoutIndex:    slices.Index(service.DelayTimeouts, settings.DelayTimeoutSeconds),
 		updateIndex:     slices.Index(service.SubscriptionUpdateIntervals, settings.SubscriptionUpdateHours),
+		clarity:         float64(settings.WindowClarity),
 	}
 }
 
@@ -54,7 +72,7 @@ func isDark(appearance model.Appearance, systemDark bool) bool {
 // theme is Hop's theme for this frame: the frame starts on the system's
 // look, which the user's choice overrides.
 func (d *Dashboard) theme(c *ui.Context) *ui.Theme {
-	return hopTheme(isDark(d.settings.settings.Appearance, c.Theme().Dark))
+	return hopColorTheme(isDark(d.settings.settings.Appearance, c.Theme().Dark), d.settings.settings.Theme)
 }
 
 // saveSettings keeps next and shows it; a save that fails leaves the page on
@@ -70,7 +88,7 @@ func (d *Dashboard) saveSettings(next model.Settings) {
 }
 
 // settingsWidth is the column the settings page centres in the window.
-const settingsWidth float32 = 600
+const settingsWidth float32 = 690
 
 // settingsPage holds what the user sets once and then leaves: the look, the
 // delay test and the core, in grouped rows the way macOS lays out its own
@@ -78,9 +96,10 @@ const settingsWidth float32 = 600
 func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 	s := &d.settings
 	ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
-		ui.Row(c).Justify(ui.Center).Padding(scrollTrim, pagePadding, scrollEnd, pagePadding).Children(func() {
-			ui.Column(c).Grow(1).MaxWidth(settingsWidth).Gap(gapSection).Children(func() {
-				settingsGroup(c, t, "通用",
+		ui.Row(c).Justify(ui.Center).Padding(28, pageGutter(c), 40, pageGutter(c)).Children(func() {
+			ui.Column(c).Grow(1).MaxWidth(settingsWidth).Gap(26).Children(func() {
+				pageHeading(c, t, "设置", "按你的习惯,让 Hop 安静运行")
+				general := []func(){
 					func() {
 						settingRow(c, t, "开机启动", "登录后在菜单栏里运行,不打开窗口", func() {
 							on := d.openAtLogin
@@ -101,9 +120,18 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 					},
 					func() {
 						settingRow(c, t, "终端代理", "终端不走系统代理,粘贴这条命令后当前窗口就经过 Hop;增强模式下不需要", func() {
-							button(c, buttonSpec{label: "复制命令", icon: iconTerminal, style: softButton(t)}, func() {
+							button(c, buttonSpec{label: "复制命令", icon: iconTerminal, style: mainSoftButton(t)}, func() {
 								c.WriteClipboard(service.TerminalProxyCommand(runtime.GOOS, d.proxyAddress))
 								c.Toast("已复制终端代理命令,粘贴到终端即可")
+							})
+						})
+					},
+					func() {
+						settingRow(c, t, "主题", "玻璃背景配色,切换后立即生效", func() {
+							slidingSwitch(c, "color-theme", &s.themeIndex, colorThemeLabels, pageSwitchStyle(t, themeSegmentWidth), func(i int) {
+								next := s.settings
+								next.Theme = service.ColorThemes[i]
+								d.saveSettings(next)
 							})
 						})
 					},
@@ -116,6 +144,26 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 							})
 						})
 					},
+				}
+				if runtime.GOOS == "darwin" && c.Vibrancy() {
+					general = append(general, func() {
+						settingRow(c, t, "窗口通透度", "数值越高,玻璃越通透", func() {
+							ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+								ui.Slider(c, &s.clarity, model.WindowClarityMin, model.WindowClarityMax).
+									Label("窗口通透度").Width(150).OnChange(func() {
+									next := s.settings
+									next.WindowClarity = int(math.Round(s.clarity))
+									if next.WindowClarity != s.settings.WindowClarity {
+										d.saveSettings(next)
+									}
+								})
+								ui.Text(c, fmt.Sprintf("%d%%", int(math.Round(s.clarity)))).
+									FontSize(fontSecondary).FontFeatures("tnum").Width(34).TextAlign(ui.End)
+							})
+						})
+					})
+				}
+				general = append(general,
 					func() {
 						settingRow(c, t, "测速超时", "越短测得越快,较慢的线路可能被记为超时", func() {
 							slidingSwitch(c, "timeout", &s.timeoutIndex, timeoutLabels, pageSwitchStyle(t, 52), func(i int) {
@@ -127,6 +175,7 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 					},
 					d.appVersionRow(c, t),
 				)
+				settingsGroup(c, t, "通用", general...)
 				settingsGroup(c, t, "订阅",
 					func() {
 						settingRow(c, t, "自动更新", "按间隔刷新已保存的订阅，本地配置不刷新；失败后等下一个间隔再试", func() {
@@ -149,16 +198,16 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// settingsGroup is a titled card of rows, with a hairline between them.
+// settingsGroup is a titled card of rows, as the design's setting-list.
 func settingsGroup(c *ui.Context, t *ui.Theme, title string, rows ...func()) {
-	ui.Column(c).Key(title).Gap(gapSmall).Children(func() {
-		ui.Text(c, title).FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(t.TextMuted).Padding(0, gapLarge)
-		ui.Column(c).Radius(radiusPanel).Background(t.Surface).Border(1, t.Border).Children(func() {
+	ui.Column(c).Key(title).Gap(10).Children(func() {
+		mutedText(c, t, title).FontWeight(weightMedium).Padding(0, 14)
+		panelCard(c, t).Padding(0, 16).Children(func() {
 			for i, row := range rows {
 				if i > 0 {
-					ui.Box(c).Height(1).Margin(0, gapLarge).Background(t.Border.Alpha(cardDividerAlpha))
+					horizontalHairline(c, t)
 				}
-				ui.Box(c).Key(i).Padding(gapMedium, gapLarge).Children(row)
+				ui.Box(c).Key(i).Padding(16, 0).Children(row)
 			}
 		})
 	})

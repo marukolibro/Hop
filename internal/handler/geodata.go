@@ -84,7 +84,7 @@ func (d *Dashboard) geodataRow(c *ui.Context, t *ui.Theme) func() {
 				if s.busy {
 					label = "更新中"
 				}
-				button(c, buttonSpec{label: label, icon: iconRefresh, style: softButton(t),
+				button(c, buttonSpec{label: label, icon: iconRefresh, style: mainSoftButton(t),
 					disabled: d.controlsLocked(), busy: s.busy}, d.beginGeodataUpdate)
 			})
 		})

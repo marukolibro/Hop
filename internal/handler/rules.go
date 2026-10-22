@@ -179,10 +179,10 @@ func (d *Dashboard) customRuleRow(c *ui.Context, t *ui.Theme, index int, rule mo
 	return func() {
 		ui.Row(c).Key("rule:" + strconv.Itoa(index)).Gap(gapLarge).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
 			ui.Column(c).Grow(1).Basis(0).Gap(gapLine).Children(func() {
-				ui.Text(c, ruleTypeLabel(rule.Type)).FontSize(fontCaption).TextColor(t.TextMuted)
+				captionText(c, t, ruleTypeLabel(rule.Type))
 				ui.Text(c, rule.Value).FontSize(fontBody).FontWeight(weightMedium).MaxLines(1)
 			})
-			chip(c, ruleTargetLabel(rule.Target), ruleTargetColor(t, rule.Target))
+			chip(c, t, ruleTargetLabel(rule.Target), ruleTargetColor(t, rule.Target))
 			ui.Box(c).Disabled(d.controlsLocked()).Children(func() {
 				iconButton(c, "删除规则 "+rule.Value, iconTrash, dangerButton(t), func() { d.deleteRule(index) })
 			})
@@ -196,7 +196,7 @@ func (d *Dashboard) customRuleDialog(c *ui.Context, t *ui.Theme) {
 	ui.DialogBase(c, &r.editorOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(dialogScrim)
 		panel.Width(dialogWidth).Padding(pagePadding).Gap(gapLarge).Radius(radiusPanel).
-			Background(t.Surface).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)
+			Background(overlaySurface(t)).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)
 		panel.Children(func() { d.customRuleForm(c, t) })
 	})
 }
@@ -218,15 +218,15 @@ func (d *Dashboard) customRuleForm(c *ui.Context, t *ui.Theme) {
 		ui.Column(c).Gap(gapSmall).Children(func() {
 			fieldLabel(c, t, "类型", "")
 			ui.Box(c).Disabled(r.busy).Children(func() {
-				slidingSwitch(c, "rule-type", &e.typeIndex, ruleTypeLabels, pageSwitchStyle(t, 68), func(int) { e.err = "" })
+				slidingSwitch(c, "rule-type", &e.typeIndex, ruleTypeLabels, dialogSwitchStyle(t, 68), func(int) { e.err = "" })
 			})
-			ui.Text(c, hint).FontSize(fontCaption).TextColor(t.TextMuted)
+			captionText(c, t, hint)
 			fieldLabel(c, t, "内容", "")
 			ui.TextInput(c, &e.value).Label("规则内容").Placeholder(placeholder).
-				Disabled(r.busy).OnSubmit(d.submitRuleEditor)
+				Background(dialogField(t)).Disabled(r.busy).OnSubmit(d.submitRuleEditor)
 			fieldLabel(c, t, "去向", "")
 			ui.Box(c).Disabled(r.busy).Children(func() {
-				slidingSwitch(c, "rule-target", &e.targetIndex, ruleTargetLabels, pageSwitchStyle(t, 64), func(int) { e.err = "" })
+				slidingSwitch(c, "rule-target", &e.targetIndex, ruleTargetLabels, dialogSwitchStyle(t, 64), func(int) { e.err = "" })
 			})
 			if e.err != "" {
 				ui.Text(c, e.err).FontSize(fontSecondary).TextColor(t.Danger)
@@ -261,7 +261,7 @@ func ruleTargetLabel(target string) string {
 func ruleTargetColor(t *ui.Theme, target string) ui.Color {
 	switch target {
 	case model.CustomRuleProxy:
-		return t.Accent
+		return accentInk(t)
 	case model.CustomRuleReject:
 		return t.Danger
 	default:

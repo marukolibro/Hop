@@ -1,112 +1,165 @@
 package handler
 
 import (
+	"math"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
-	"hop/internal/service"
 )
 
 const (
-	// routeFlowWidth keeps the stops close enough to read as one line.
-	routeFlowWidth = 460
-	// exitWidth fits "🇸🇬 Singapore 01" and its latency on one line.
-	exitWidth = 210
-	// sparkMinWidth is the window width from which the sparkline fits
-	// beside the route.
-	sparkMinWidth = 900
+	// exitWidth fits the exit's public address on one line.
+	exitWidth = 235
+	// gaugeGlyphScale sizes the flag, or the globe standing in for one, to
+	// sit inside the rings.
+	gaugeGlyphScale float32 = 0.32
+	// gaugeArcStep is the angle between the points a ring is drawn from,
+	// fine enough that the polyline reads as an arc.
+	gaugeArcStep float32 = 0.06
 	// modeSegmentWidth fits a two-character mode name.
 	modeSegmentWidth = 56
 )
 
-// modeHints say what each of modeLabels does, index for index.
+// The gauge rings open at the bottom: from the lower left, clockwise
+// through the top, 270 degrees to the lower right.
+const (
+	gaugeStart = 135 * math.Pi / 180
+	gaugeSweep = 270 * math.Pi / 180
+)
+
+// modeHints say what each of modeLabels does, index for index; the mode
+// switch carries the current one as its tooltip, no text on the row.
 var modeHints = []string{
 	"按规则决定哪些走代理、哪些直连",
 	"全部流量走代理",
 	"全部直连,不经过代理",
 }
 
-// routeBar leads the nodes page: the node traffic leaves by, the path it
-// takes there drawn as a short transit line through the groups, and the
-// live speed, on one row; under it, the outbound mode. How traffic gets in,
-// the system proxy and TUN, is the header's.
-func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
-	route := d.view.Route
-	ui.Column(c).Margin(0, pagePadding, gapLarge, pagePadding).
-		Radius(radiusPanel).Background(t.Surface).Border(1, t.Border).Children(func() {
-		ui.Row(c).Key("route").Gap(gapSection).AlignItems(ui.Center).Padding(panelPadY, panelPadX).Children(func() {
-			if len(route) == 0 {
-				mutedText(c, t, "导入订阅后,这里会显示流量经过的线路").Grow(1)
-				d.speeds(c, t)
-				return
-			}
-			ui.Column(c).Key("exit").Gap(gapTight).Width(exitWidth).Children(func() {
-				exitNode(c, t, route[len(route)-1])
-			})
-			ui.Box(c).Key("flow").Grow(1).Basis(0).MinWidth(0).Children(func() {
-				ui.Box(c).MaxWidth(routeFlowWidth).Children(func() {
-					routeFlow(c, t, route, d.last)
-				})
-			})
-			d.speeds(c, t)
-		})
-		ui.Box(c).Height(1).Background(t.Border.Alpha(cardDividerAlpha))
-		d.trafficControls(c, t)
+// routeGauge draws the exit as two rings: the outer sweeps with the download,
+// the inner with the upload, each over a faint track, and both ease to the
+// traffic and then rest. The exit's flag sits in the middle, or a globe when
+// it has none: a group, DIRECT, or one of a provider's plan notes.
+func routeGauge(c *ui.Context, t *ui.Theme, hop model.RouteHop, size float32, traffic model.Traffic) ui.Element {
+	gauge := ui.Box(c).Key("gauge").Width(size).Height(size).Center()
+	down := gauge.AnimateTo("down", flowIntensity(traffic.Down), ui.Smooth)
+	up := gauge.AnimateTo("up", flowIntensity(traffic.Up), ui.Smooth)
+	gauge.Draw(func(p *ui.Painter, r ui.Rect) {
+		drawGauge(p, r, down, up, t)
 	})
-}
-
-// trafficControls are the route card's foot: the outbound mode, and what
-// it does in a line. The switch waits for the core to report its mode and
-// for any subscription mutation to finish, so an apply cannot carry the mode
-// the user just left back in.
-func (d *Dashboard) trafficControls(c *ui.Context, t *ui.Theme) {
-	disabled := d.view.Mode == "" || d.subscription.mutations > 0 || d.core.busy
-	ui.Row(c).Key("controls").Gap(gapMedium).AlignItems(ui.Center).Padding(gapSmall+2, panelPadX).Children(func() {
-		mode := ui.Box(c).Key("mode").Disabled(disabled)
-		if disabled {
-			mode.Opacity(disabledOpacity)
+	gauge.Children(func() {
+		glyph := size * gaugeGlyphScale
+		if flag := shownFlag(hop.Node.Flag); flag != "" && !hop.Group {
+			ui.Text(c, flag).FontSize(glyph)
+			return
 		}
-		mode.Children(func() {
-			slidingSwitch(c, "出站模式", &d.modeIndex, modeLabels, pageSwitchStyle(t, modeSegmentWidth), func(i int) {
-				d.setMode(service.Modes[i])
-			})
-		})
-		mutedText(c, t, modeHints[d.modeIndex]).MaxLines(1)
+		ui.Icon(c, iconGlobe).Width(glyph).Height(glyph).TextColor(t.TextMuted)
 	})
+	return gauge
 }
 
-// exitNode names the node traffic leaves by, with its line, multiplier and
-// latency.
-func exitNode(c *ui.Context, t *ui.Theme, hop model.RouteHop) {
-	if hop.Group {
-		ui.Text(c, hop.Name).FontSize(fontHeadline).FontWeight(weightSemibold)
-		return
+func drawGauge(p *ui.Painter, r ui.Rect, down float32, up float32, t *ui.Theme) {
+	cx, cy := r.X+r.W/2, r.Y+r.H/2
+	outer, inner := r.W*0.43, r.W*0.32
+	outerWidth, innerWidth := r.W*0.075, r.W*0.065
+	track := t.Text.Alpha(neutralLineAlpha)
+	p.StrokePath(gaugeArc(cx, cy, outer, gaugeStart, gaugeSweep), outerWidth, track)
+	p.StrokePath(gaugeArc(cx, cy, inner, gaugeStart, gaugeSweep), innerWidth, track)
+	if down > 0.001 {
+		p.StrokePath(gaugeArc(cx, cy, outer, gaugeStart, gaugeSweep*down), outerWidth, t.Accent)
 	}
+	if up > 0.001 {
+		p.StrokePath(gaugeArc(cx, cy, inner, gaugeStart, gaugeSweep*up), innerWidth, uploadColor(t))
+	}
+}
+
+// gaugeArc is a ring segment from start over sweep radians, clockwise in
+// screen coordinates.
+func gaugeArc(cx float32, cy float32, radius float32, start float32, sweep float32) *ui.Path {
+	at := func(angle float32) (float32, float32) {
+		return cx + radius*float32(math.Cos(float64(angle))), cy + radius*float32(math.Sin(float64(angle)))
+	}
+	path := &ui.Path{}
+	x, y := at(start)
+	path.MoveTo(x, y)
+	end := start + sweep
+	for angle := start + gaugeArcStep; angle < end; angle += gaugeArcStep {
+		x, y = at(angle)
+		path.LineTo(x, y)
+	}
+	x, y = at(end)
+	path.LineTo(x, y)
+	return path
+}
+
+// exitNode names the node traffic leaves by and adds its details, for the
+// menu bar panel, which has no exit IP line.
+func exitNode(c *ui.Context, t *ui.Theme, route []model.RouteHop) {
+	exitIdentity(c, t, route)
+	exitDetails(c, t, route)
+}
+
+// exitIdentity names the exit and the groups it passes on the way.
+func exitIdentity(c *ui.Context, t *ui.Theme, route []model.RouteHop) {
+	hop := route[len(route)-1]
 	node := hop.Node
 	switch {
+	case hop.Group:
+		ui.Text(c, hop.Name).FontSize(fontHeadline).FontWeight(weightSemibold)
 	case node.PlanNote:
 		headline(c, t, "机场信息节点", node.Delay)
-		mutedText(c, t, node.Name+" · 测速后,自动选择会换到延迟最低的节点").MaxLines(1)
-		return
 	case node.Via != "":
 		headline(c, t, "直连", node.Delay)
-		mutedText(c, t, node.Via)
+	default:
+		headline(c, t, strings.TrimSpace(shownFlag(node.Flag)+" "+node.Region+" "+node.Title), node.Delay)
+	}
+	if via := routeVia(route); via != "" {
+		mutedText(c, t, via).MaxLines(1)
+	}
+}
+
+// exitDetails names the exit's line, multiplier and latency, below the exit
+// identity and, on the nodes page, the exit IP line.
+func exitDetails(c *ui.Context, t *ui.Theme, route []model.RouteHop) {
+	hop := route[len(route)-1]
+	node := hop.Node
+	if hop.Group {
 		return
 	}
-	headline(c, t, strings.TrimSpace(shownFlag(node.Flag)+" "+node.Region+" "+node.Title), node.Delay)
-	labels := nodeLabels(node)
-	if len(labels) > 0 || node.Multiplier != "" {
-		ui.Row(c).Gap(gapTight).Children(func() {
-			for _, label := range labels {
-				chip(c, label, t.TextMuted)
-			}
-			if node.Multiplier != "" {
-				chip(c, node.Multiplier, t.Warning)
-			}
-		})
+	switch {
+	case node.PlanNote:
+		mutedText(c, t, node.Name+" · 测速后,自动选择会换到延迟最低的节点").MaxLines(1)
+	case node.Via != "":
+		mutedText(c, t, node.Via)
+	default:
+		labels := nodeLabels(node)
+		if len(labels) > 0 || node.Multiplier != "" {
+			ui.Row(c).Gap(gapTight).Children(func() {
+				for _, label := range labels {
+					nodeChip(c, t, label)
+				}
+				if node.Multiplier != "" {
+					nodeChip(c, t, node.Multiplier)
+				}
+			})
+		}
 	}
+}
+
+// routeVia names the groups between this Mac and the exit, the line under
+// its name; "" when the route passes none.
+func routeVia(route []model.RouteHop) string {
+	var groups []string
+	for _, hop := range route[:len(route)-1] {
+		if hop.Group {
+			groups = append(groups, shownName(hop.Name))
+		}
+	}
+	if len(groups) == 0 {
+		return ""
+	}
+	return "经 " + strings.Join(groups, " › ")
 }
 
 func headline(c *ui.Context, t *ui.Theme, text string, delay model.Delay) {
