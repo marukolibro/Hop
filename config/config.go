@@ -45,12 +45,16 @@ type Instance struct {
 	// NodeDNSAddr is the core's own DNS listener, used only to look up
 	// nodes' servers when a subscription sends them through its hosts.
 	NodeDNSAddr string
+	// UsesHelper says this instance may drive the machine's privileged
+	// helper. There is one helper per machine, so only the installed Hop
+	// does: another instance would stop or replace the core under it.
+	UsesHelper bool
 }
 
 // Release is the installed Hop. Development is the build run by mygo dev.
 var (
-	Release     = Instance{AppDirName: "hop", MixedPort: 17890, ControllerAddr: "127.0.0.1:19090", NodeDNSAddr: "127.0.0.1:17853"}
-	Development = Instance{AppDirName: "hop-dev", MixedPort: 17892, ControllerAddr: "127.0.0.1:19092", NodeDNSAddr: "127.0.0.1:17855"}
+	Release     = Instance{AppDirName: "hop", MixedPort: 17890, ControllerAddr: "127.0.0.1:19090", NodeDNSAddr: "127.0.0.1:17853", UsesHelper: true}
+	Development = Instance{AppDirName: "hop-dev", MixedPort: 17892, ControllerAddr: "127.0.0.1:19092", NodeDNSAddr: "127.0.0.1:17855", UsesHelper: false}
 )
 
 // Config is everything the sidecar core and its controller client need.

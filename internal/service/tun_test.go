@@ -1,14 +1,32 @@
 package service
 
 import (
+	"context"
 	"slices"
 	"testing"
 
 	"go.yaml.in/yaml/v3"
 
 	"hop/internal/model"
+	"hop/internal/repository/helper"
 	"hop/internal/repository/routetable"
 )
+
+// TestTunLeavesTheHelperAloneWithoutIt guards the development build, which
+// shares the machine's helper with the installed Hop: with the helper absent,
+// start and quit must go through without a call that would stop the
+// installed Hop's core.
+func TestTunLeavesTheHelperAloneWithoutIt(t *testing.T) {
+	absent := helper.Absent{}
+	tun := NewTunService(absent, absent, nil, nil, nil, nil, "", "", "", NewTunFlag(), nil)
+	on, err := tun.Startup(context.Background(), false)
+	if err != nil || on {
+		t.Fatalf("Startup(false) = %v, %v; want false and no error", on, err)
+	}
+	if err := tun.Release(context.Background()); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+}
 
 // TestTunRouteConflict guards the rule that another client's TUN on the
 // default path reads as taken, and Hop's own TUN never does. TUN clients

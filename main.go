@@ -93,7 +93,8 @@ func run() (err error) {
 	if err != nil {
 		return fmt.Errorf("locate app resources: %w", err)
 	}
-	cfg, err := config.Load(runningInstance(), userConfigDir, resourcesDir)
+	instance := runningInstance()
+	cfg, err := config.Load(instance, userConfigDir, resourcesDir)
 	if err != nil {
 		return err
 	}
@@ -132,7 +133,7 @@ func run() (err error) {
 		NodeDNSListen:      cfg.NodeDNSAddr,
 	}
 	client := mihomo.NewClient(cfg.ControllerAddr, cfg.Secret, mihomo.ConfigPath(cfg.HomeDir), &http.Client{}, controllerTimeout)
-	helperClient := helper.NewClient(helper.SocketPath, helperCallTimeout)
+	helperClient, geodataHelper, helperInstaller := helperAccess(instance)
 	tunFlag := service.NewTunFlag()
 	profiles := service.NewSubscriptionService(
 		subscription.NewFetcher(&http.Client{Timeout: downloadTimeout}),
@@ -196,7 +197,7 @@ func run() (err error) {
 		mihomo.NewConfigValidator(cfg.MihomoBinary, validateDir, validationTimeout),
 		profiles,
 		store,
-		helper.NewClient(helper.SocketPath, geodataHelperTimeout),
+		geodataHelper,
 		runner,
 		tunFlag,
 		profiles,
@@ -213,7 +214,7 @@ func run() (err error) {
 	}
 	tun := service.NewTunService(
 		helperClient,
-		helper.Installer{},
+		helperInstaller,
 		routetable.Reader{},
 		runner,
 		profiles,
@@ -324,6 +325,24 @@ func run() (err error) {
 	}
 	// The defer and OnQuit listener above have released the proxy and core.
 	return runErr
+}
+
+// helperConnection is what the config applier and the TUN service need of the
+// helper's client.
+type helperConnection interface {
+	service.HelperControl
+	service.ConfigApplier
+}
+
+// helperAccess is the helper's client, the one geodata updates use, which
+// waits longer, and its installer. An instance that does not use the helper
+// gets stand-ins that fail and reach nothing: its start and quit must not
+// stop the core the installed Hop runs under the helper.
+func helperAccess(instance config.Instance) (helperConnection, helperConnection, service.HelperInstall) {
+	if !instance.UsesHelper {
+		return helper.Absent{}, helper.Absent{}, helper.Absent{}
+	}
+	return helper.NewClient(helper.SocketPath, helperCallTimeout), helper.NewClient(helper.SocketPath, geodataHelperTimeout), helper.Installer{}
 }
 
 // runningInstance is the development instance under mygo dev and the

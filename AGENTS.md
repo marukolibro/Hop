@@ -52,6 +52,9 @@ on this machine while developing Hop. Hop must never interfere with it.
   dev build (`mygo dev`) is its own instance (`config.Development`): ports
   `17892`/`19092`/`17855` and its own data dir `hop-dev`, so it runs beside
   an installed Hop and never reaps its core; it starts with no subscription.
+  It also never talks to the privileged helper (`helper.Absent`, `Instance.UsesHelper`):
+  the helper is one per machine, so a dev start or quit would stop the core
+  the installed Hop's TUN runs under it.
   The integration tests use `17891`/`19091`/`17854`. Check a port is free before
   adding one.
 - Subscriptions are filtered by a whitelist (`service/runtime_config.go`):
