@@ -45,8 +45,8 @@ jobs:
 
   windows:
     name: Windows
-    # Windows has never run Hop on a real machine yet; this runs the suite
-    # with the real Windows core, and the TUN path end to end on the runner.
+    # This runs the suite with the real Windows core, and the TUN path end to
+    # end on the runner.
     runs-on: windows-latest
     defaults:
       run:

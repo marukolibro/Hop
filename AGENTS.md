@@ -286,7 +286,7 @@ same: `--dry-run` (build and list) or
 the script then prints the `gh release edit v<version> --draft=false` command
 for the user to run after review). It refuses a dirty tree, a changelog
 without the version, an existing tag, and a build without the signing key.
-Only `darwin/universal` is built. Never use shared or third-party signing
+The release workflow builds `darwin/universal` and `windows/amd64` (an NSIS installer, not code signed); `scripts/release.sh` builds only the former. Never use shared or third-party signing
 certificates. A Developer ID with notarization (MyGo's
 `macos.signingIdentity` and `notarize`) waits for a public release.
 
