@@ -260,6 +260,6 @@ type themedWindowMaterial struct {
 }
 
 func (m themedWindowMaterial) PaintMaterial(p *ui.Painter, r ui.Rect, radii [4]float32) {
-	drawWindowAtmosphere(p, r, m.palette)
+	drawWallpaper(p, r, m.palette)
 	p.Fill(r, m.veil, radii[0])
 }

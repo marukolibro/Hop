@@ -227,31 +227,40 @@ func seaImage(w float32, h float32, dark bool) *image.RGBA {
 	return img
 }
 
-// seaBitmapCache keeps the bitmap of the last window size and appearance: the
-// wallpaper is baked again only when the window is resized or switches
-// appearance. The material is rebuilt every frame, so the cache outlives it.
-var seaBitmapCache struct {
+// wallpaperKey names a baked wallpaper: its size in bitmap pixels, whether it
+// is the dark one, and whether it is the dusk theme's.
+type wallpaperKey struct {
+	nx, ny     int
+	dark, dusk bool
+}
+
+// wallpaperCache keeps the bitmap of the last window size, appearance and
+// theme: the wallpaper is baked again only when one of them changes. The
+// material is rebuilt every frame, so the cache outlives it.
+var wallpaperCache struct {
 	sync.Mutex
-	key    [3]int
+	key    wallpaperKey
 	bitmap *ui.Bitmap
 }
 
-// seaBitmap is the sea wallpaper as a bitmap for a window of w by h points.
-func seaBitmap(w float32, h float32, dark bool) *ui.Bitmap {
-	key := [3]int{int(math.Round(float64(w / seaCell))), int(math.Round(float64(h / seaCell))), 0}
-	if dark {
-		key[2] = 1
+// wallpaperBitmap is the wallpaper of palette as a bitmap for a window of w
+// by h points: the sea's, or the dusk atmosphere.
+func wallpaperBitmap(w float32, h float32, palette windowMaterialPalette) *ui.Bitmap {
+	key := wallpaperKey{nx: int(math.Round(float64(w / seaCell))), ny: int(math.Round(float64(h / seaCell))), dark: palette.dark, dusk: !palette.sea}
+	wallpaperCache.Lock()
+	defer wallpaperCache.Unlock()
+	if wallpaperCache.bitmap == nil || wallpaperCache.key != key {
+		if palette.sea {
+			wallpaperCache.bitmap = ui.NewBitmap(seaImage(w, h, palette.dark))
+		} else {
+			wallpaperCache.bitmap = ui.NewBitmap(duskImage(w, h, palette))
+		}
+		wallpaperCache.key = key
 	}
-	seaBitmapCache.Lock()
-	defer seaBitmapCache.Unlock()
-	if seaBitmapCache.bitmap == nil || seaBitmapCache.key != key {
-		seaBitmapCache.bitmap = ui.NewBitmap(seaImage(w, h, dark))
-		seaBitmapCache.key = key
-	}
-	return seaBitmapCache.bitmap
+	return wallpaperCache.bitmap
 }
 
-// drawSeaWallpaper paints the sea wallpaper behind the window rect r.
-func drawSeaWallpaper(p *ui.Painter, r ui.Rect, dark bool) {
-	p.Image(seaBitmap(r.W, r.H, dark), r, ui.FillBox)
+// drawWallpaper paints the palette's baked wallpaper behind the window rect r.
+func drawWallpaper(p *ui.Painter, r ui.Rect, palette windowMaterialPalette) {
+	p.Image(wallpaperBitmap(r.W, r.H, palette), r, ui.FillBox)
 }

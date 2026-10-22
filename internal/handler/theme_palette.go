@@ -64,21 +64,3 @@ func hopColorTheme(dark bool, theme model.ColorTheme) *ui.Theme {
 	t.AccentPressed = palette.accent.Mix(palette.ink, 0.22)
 	return t
 }
-
-// drawWindowAtmosphere paints static, soft light behind the window's regions.
-// The theme supplies the reference colors; a small native desktop contribution
-// remains underneath. The glass veil is painted above this backdrop, not below.
-func drawWindowAtmosphere(p *ui.Painter, r ui.Rect, palette windowMaterialPalette) {
-	if palette.sea {
-		drawSeaWallpaper(p, r, palette.dark)
-		return
-	}
-	p.FillGradient(r, ui.LinearGradient{From: palette.glow.Alpha(0.90), To: palette.sky.Alpha(0.90), Angle: 180}, 0)
-	fold := (&ui.Path{}).
-		MoveTo(r.X-r.W*0.12, r.Y+r.H*0.38).
-		CubeTo(r.X+r.W*0.20, r.Y-r.H*0.02, r.X+r.W*0.49, r.Y+r.H*0.14, r.X+r.W*1.10, r.Y+r.H*1.05).
-		LineTo(r.X-r.W*0.12, r.Y+r.H*1.05).Close()
-	p.FillPathGradient(fold, ui.LinearGradient{From: palette.base.Alpha(0.12), To: palette.sky.Alpha(0.08), Angle: 160})
-	p.FillGradient(r, ui.LinearGradient{From: palette.fold.Alpha(0), To: palette.fold.Alpha(0.32), Angle: 95}, 0)
-	p.FillGradient(r, ui.LinearGradient{From: palette.base.Alpha(0.04), To: palette.base.Alpha(0), Angle: 180}, 0)
-}
