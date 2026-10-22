@@ -184,6 +184,7 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
+	mygo.Theme.SetSource(handler.AppearanceSource(userSettings.Appearance))
 	appUpdateService := service.NewAppUpdateService()
 	customRulesService := service.NewCustomRulesService(store, profiles)
 	geodataService := service.NewGeodataService(

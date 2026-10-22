@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"slices"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
@@ -69,6 +70,21 @@ func isDark(appearance model.Appearance, systemDark bool) bool {
 	}
 }
 
+// AppearanceSource is the system appearance Hop's windows take under
+// appearance. Applying it makes the native materials, the main window's and
+// the menu bar panel's, follow the user's choice with the palette drawn over
+// them, rather than the system's.
+func AppearanceSource(appearance model.Appearance) mygo.ThemeSource {
+	switch appearance {
+	case model.AppearanceDark:
+		return mygo.ThemeDark
+	case model.AppearanceLight:
+		return mygo.ThemeLight
+	default:
+		return mygo.ThemeSystem
+	}
+}
+
 // theme is Hop's theme for this frame: the frame starts on the system's
 // look, which the user's choice overrides.
 func (d *Dashboard) theme(c *ui.Context) *ui.Theme {
@@ -85,6 +101,7 @@ func (d *Dashboard) saveSettings(next model.Settings) {
 		return
 	}
 	d.settings = newSettingsState(next)
+	mygo.Theme.SetSource(AppearanceSource(next.Appearance))
 }
 
 // settingsWidth is the column the settings page centres in the window.

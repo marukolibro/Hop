@@ -3,7 +3,9 @@ package handler
 import (
 	"fmt"
 	"log/slog"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -14,6 +16,14 @@ import (
 // idleRate is the throughput below which the menu bar shows 0K and the
 // route shows no packets.
 const idleRate = 1024
+
+// reopenGuard is how long after the panel closed the icon's click is taken
+// as the end of the press that closed it: a press outside the panel closes
+// it, and its release lands on the icon, which would open it again.
+const reopenGuard = 500 * time.Millisecond
+
+// flyoutCornerRadius rounds the panel's material and shadow.
+const flyoutCornerRadius = 14
 
 // MenuBar is Hop's menu bar item: its mark with the live speed beside it,
 // and a panel to see the route and switch the mode and the node without
@@ -26,6 +36,7 @@ type MenuBar struct {
 	d    *Dashboard
 	// panel is the open panel, or nil.
 	panel    *mygo.Window
+	closedAt time.Time
 	quitting bool
 	// mark is the plain icon; shown is the speed the icon shows now, ""
 	// for the plain mark.
@@ -100,6 +111,9 @@ func (m *MenuBar) togglePanel() {
 		m.panel.Close()
 		return
 	}
+	if time.Since(m.closedAt) < reopenGuard {
+		return
+	}
 	m.panel = mygo.NewFlyout(mygo.FlyoutOptions{
 		Tray:      m.tray,
 		Placement: mygo.PlacementBottom,
@@ -108,13 +122,29 @@ func (m *MenuBar) togglePanel() {
 		Height:    flyoutHeight,
 		Focusable: true,
 		Shadow:    true,
-		Popover:   true,
+		// The panel is its own window, not an NSPopover: its material
+		// follows the app's appearance, as the palette drawn over it does,
+		// where a popover takes the menu bar's.
+		Vibrancy:     flyoutVibrancy(),
+		CornerRadius: flyoutCornerRadius,
 		Content: ui.View(func(c *ui.Context) {
 			m.d.flyoutView(c, m.showWindow, mygo.App.Quit)
 		}),
 	})
-	m.panel.OnClosed(func() { m.panel = nil })
+	m.panel.OnClosed(func() {
+		m.panel = nil
+		m.closedAt = time.Now()
+	})
 	m.d.testQuickRoutes()
+}
+
+// flyoutVibrancy is the material behind the panel on macOS, and none
+// elsewhere, where the panel draws its own background.
+func flyoutVibrancy() mygo.Vibrancy {
+	if runtime.GOOS == "darwin" {
+		return mygo.VibrancyPopover
+	}
+	return mygo.VibrancyNone
 }
 
 // popUpMenu is the right click's plain menu, for when the panel is not
