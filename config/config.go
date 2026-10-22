@@ -19,16 +19,7 @@ import (
 const (
 	envMihomoBinary = "HOP_MIHOMO_BINARY"
 
-	// Ports are deliberately away from the ones other Clash clients use, so
-	// Hop can run beside them without touching their listeners.
-	mixedPort      = 17890
-	controllerAddr = "127.0.0.1:19090"
-	// nodeDNSAddr is the core's own DNS listener, used only to look up
-	// nodes' servers when a subscription sends them through its hosts.
-	nodeDNSAddr = "127.0.0.1:17853"
-
 	secretBytes = 16
-	appDirName  = "hop"
 
 	// secretFileName keeps the controller secret between starts;
 	// secretFilePerm is owner-only, like everything else in the app dir.
@@ -37,6 +28,29 @@ const (
 	// appDirPerm keeps the app dir owner-only: it holds the subscriptions
 	// and the controller secret.
 	appDirPerm = 0o700
+)
+
+// Instance is one copy of Hop on a machine: where it keeps its files and the
+// ports its core listens on. The ports are deliberately away from the ones
+// other Clash clients use, so Hop can run beside them without touching their
+// listeners; the development build has its own too, so it runs beside an
+// installed Hop without sharing its files, ports or core.
+type Instance struct {
+	// AppDirName is the directory under the user's config dir.
+	AppDirName string
+	// MixedPort is the local HTTP/SOCKS port.
+	MixedPort int
+	// ControllerAddr is host:port of the core's REST controller.
+	ControllerAddr string
+	// NodeDNSAddr is the core's own DNS listener, used only to look up
+	// nodes' servers when a subscription sends them through its hosts.
+	NodeDNSAddr string
+}
+
+// Release is the installed Hop. Development is the build run by mygo dev.
+var (
+	Release     = Instance{AppDirName: "hop", MixedPort: 17890, ControllerAddr: "127.0.0.1:19090", NodeDNSAddr: "127.0.0.1:17853"}
+	Development = Instance{AppDirName: "hop-dev", MixedPort: 17892, ControllerAddr: "127.0.0.1:19092", NodeDNSAddr: "127.0.0.1:17855"}
 )
 
 // Config is everything the sidecar core and its controller client need.
@@ -64,11 +78,11 @@ type Config struct {
 	Secret string
 }
 
-// Load reads the configuration; the core keeps its files under
-// userConfigDir/hop, apart from any other Clash client. resourcesDir is
-// where the app's resources are, which hold the bundled core.
-func Load(userConfigDir string, resourcesDir string) (Config, error) {
-	appDir := filepath.Join(userConfigDir, appDirName)
+// Load reads the configuration of instance; the core keeps its files under
+// userConfigDir/<instance's directory>, apart from any other Clash client.
+// resourcesDir is where the app's resources are, which hold the bundled core.
+func Load(instance Instance, userConfigDir string, resourcesDir string) (Config, error) {
+	appDir := filepath.Join(userConfigDir, instance.AppDirName)
 	bundled, bundledErr := findBundledBinary(resourcesDir)
 	binary, origin, err := chooseBinary(appDir, bundled, bundledErr)
 	if err != nil {
@@ -88,9 +102,9 @@ func Load(userConfigDir string, resourcesDir string) (Config, error) {
 		CoreOrigin:     origin,
 		AppDir:         appDir,
 		HomeDir:        filepath.Join(appDir, "mihomo"),
-		MixedPort:      mixedPort,
-		ControllerAddr: controllerAddr,
-		NodeDNSAddr:    nodeDNSAddr,
+		MixedPort:      instance.MixedPort,
+		ControllerAddr: instance.ControllerAddr,
+		NodeDNSAddr:    instance.NodeDNSAddr,
 		Secret:         secret,
 	}, nil
 }

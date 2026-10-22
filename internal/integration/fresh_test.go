@@ -25,7 +25,7 @@ func TestFreshInstallStartup(t *testing.T) {
 	userConfigDir := t.TempDir()
 	resources := filepath.Join("..", "..", "resources")
 
-	cfg, err := config.Load(userConfigDir, resources)
+	cfg, err := config.Load(config.Release, userConfigDir, resources)
 	if err != nil {
 		t.Fatalf("load the config on a fresh install: %v", err)
 	}

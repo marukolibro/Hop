@@ -93,7 +93,7 @@ func run() (err error) {
 	if err != nil {
 		return fmt.Errorf("locate app resources: %w", err)
 	}
-	cfg, err := config.Load(userConfigDir, resourcesDir)
+	cfg, err := config.Load(runningInstance(), userConfigDir, resourcesDir)
 	if err != nil {
 		return err
 	}
@@ -324,6 +324,16 @@ func run() (err error) {
 	}
 	// The defer and OnQuit listener above have released the proxy and core.
 	return runErr
+}
+
+// runningInstance is the development instance under mygo dev and the
+// release one otherwise, so a dev build never shares files, ports or the core
+// with an installed Hop.
+func runningInstance() config.Instance {
+	if mygo.IsDev() {
+		return config.Development
+	}
+	return config.Release
 }
 
 // windowVibrancy is the material behind the main window: the macOS material,

@@ -48,8 +48,11 @@ on this machine while developing Hop. Hop must never interfere with it.
   carries Hop's home directory. Never kill a process by name or by port.
 - Hop listens only on `127.0.0.1:17890` (mixed) and `127.0.0.1:19090`
   (controller), plus `127.0.0.1:17853` (the core's DNS, opened only for a
-  subscription that points its node servers at other names, see below); the
-  integration tests use `17891`/`19091`/`17854`. Check a port is free before
+  subscription that points its node servers at other names, see below). The
+  dev build (`mygo dev`) is its own instance (`config.Development`): ports
+  `17892`/`19092`/`17855` and its own data dir `hop-dev`, so it runs beside
+  an installed Hop and never reaps its core; it starts with no subscription.
+  The integration tests use `17891`/`19091`/`17854`. Check a port is free before
   adding one.
 - Subscriptions are filtered by a whitelist (`service/runtime_config.go`):
   only `proxies`, `proxy-groups`, `proxy-providers`, `rules`, `rule-providers`,
@@ -76,7 +79,7 @@ on this machine while developing Hop. Hop must never interfere with it.
 - The subscription link is a credential, and so is a local profile's content
   (it carries node passwords). Never log either, print it, put it in errors
   (use `subscription.Redact` / host or file name only), or paste it into chat.
-- Hop's data lives in `~/Library/Application Support/hop/` (files mode 0600).
+- Hop's data lives in `~/Library/Application Support/hop/` (files mode 0600); the dev build's in `hop-dev/`.
 
 ## Architecture
 
