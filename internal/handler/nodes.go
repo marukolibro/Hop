@@ -16,7 +16,6 @@ const (
 	minTileWidth  float32 = 168
 	tileGap               = gapSmall
 	tileTitleSize float32 = fontEmphasis
-	tileBarHeight float32 = 3
 	radiusTile    float32 = 10
 	fastDelay             = 150
 	moderateDelay         = 350
@@ -25,11 +24,6 @@ const (
 	// Every tile has a hollow choice ring; the selected one fills it.
 	nodeCheckSize float32 = 14
 	nodeCheckIcon float32 = 10
-	// The latency bar's track is a wash of the accent; its fill eases from
-	// tileBarFillFrom alpha at the left to full at the right.
-	tileBarTrackLight float32 = 0.14
-	tileBarTrackDark  float32 = 0.18
-	tileBarFillFrom   float32 = 0.7
 	// tileChipFill washes a tile label in its own colour.
 	tileChipFill float32 = 0.10
 	// tileInkShade moves a tier or accent ink toward the text ink, so a
@@ -157,7 +151,7 @@ func (d *Dashboard) nodeSection(c *ui.Context, t *ui.Theme, group model.GroupVie
 }
 
 // nodeTile is one option: its title and latency, its line and rate when
-// the name gives them, and a bar as long as the node is fast. The option
+// the name gives them. The option
 // in use is outlined in the accent colour; in a group that picks by itself,
 // tiles show the choice but do not take clicks.
 func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, node model.NodeView) {
@@ -182,14 +176,6 @@ func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, 
 				d.selectProxy(groupName, node.Name)
 			}
 		})
-	}
-	bar := tile.AnimateTo("bar", speedScore(node.Delay), ui.Snappy)
-	// The track stays neutral, so the fill's hue means a latency tier; the
-	// chosen tile's bar shows the accent.
-	track := t.Text.Alpha(neutralLineAlpha)
-	fill := delayFill(t, node.Delay)
-	if isActive {
-		fill = t.Accent
 	}
 	tile.Children(func() {
 		ui.Row(c).Key("top").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
@@ -221,12 +207,6 @@ func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, 
 			}
 			ui.Text(c, latency).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(latencyInk).
 				FontFeatures("tnum").NoWrap().ContentTransition(ui.ContentTransition{Numeric: true})
-		})
-		ui.Box(c).Height(tileBarHeight).Draw(func(p *ui.Painter, r ui.Rect) {
-			p.Fill(r, track, tileBarHeight/2)
-			if bar > 0 {
-				p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W * bar, H: r.H}, fill, tileBarHeight/2)
-			}
 		})
 	})
 }
@@ -291,18 +271,6 @@ func nodeLabels(node model.NodeView) []string {
 
 // tileChip is one small label on a tile.
 
-// barCeiling is the delay at which a latency bar is at its shortest.
-const barCeiling = 600
-
-// speedScore is how full a latency bar is: nearly full for an instant
-// answer, short near barCeiling, empty before a test or after a failure.
-func speedScore(delay model.Delay) float32 {
-	if !delay.Measured || delay.Millis == 0 {
-		return 0
-	}
-	return max(0.06, 1-float32(min(delay.Millis, barCeiling))/barCeiling)
-}
-
 // tileTitle names a node on its tile, as "Hong Kong 01": the section above
 // already shows the flag. Groups and built-in outbounds keep their title.
 func tileTitle(node model.NodeView) string {
@@ -347,21 +315,6 @@ func delayColor(t *ui.Theme, delay model.Delay) ui.Color {
 		return textOn(t, accentInk(t))
 	default:
 		return textOn(t, t.Warning)
-	}
-}
-
-// delayFill is the tier itself as a bar fill: the accent when fast, then the
-// warning and danger colours; nothing before a test or after a timeout.
-func delayFill(t *ui.Theme, delay model.Delay) ui.Color {
-	switch {
-	case !delay.Measured, delay.Millis == 0:
-		return ui.Transparent
-	case delay.Millis <= fastDelay:
-		return t.Accent
-	case delay.Millis <= moderateDelay:
-		return textOn(t, t.Warning)
-	default:
-		return textOn(t, t.Danger)
 	}
 }
 
