@@ -867,7 +867,11 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 			}
 			pageTabs(c, t, "页面", &d.page, pageLabels, func(int) {})
 			ui.Box(c).Grow(1)
-			d.trafficSwitches(c, t)
+			// The two switches belong together: a tight gap of their own, not the
+			// header's wide one between the brand, the tabs and this group.
+			ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+				d.trafficSwitches(c, t)
+			})
 		})
 		horizontalHairline(c, t)
 	})
