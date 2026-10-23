@@ -5,7 +5,7 @@
 <h1 align="center">Hop</h1>
 
 <p align="center">
-  A native macOS and Windows client for <a href="https://github.com/MetaCubeX/mihomo">mihomo</a> (Clash.Meta), written in Go. No webview, no Electron.
+  A native macOS and Windows proxy client for <a href="https://github.com/MetaCubeX/mihomo">mihomo</a> (Clash.Meta). Built in Go with <a href="https://github.com/egoist/mygo">MyGo</a>: the interface is drawn natively, with no webview.
 </p>
 
 <p align="center">
@@ -28,6 +28,12 @@
     <img src="docs/screenshots/nodes-light.png" width="860" alt="The nodes page: the route's exit, live traffic, and the nodes by region">
   </picture>
 </p>
+
+Hop is a proxy client for the [mihomo](https://github.com/MetaCubeX/mihomo)
+core, one more option next to the clients that already exist. It does not
+provide servers: you bring your own subscription or node links. The interface is
+drawn natively in Go with [MyGo](https://github.com/egoist/mygo) instead of
+running in a webview, and the same code runs on macOS and Windows.
 
 > [!NOTE]
 > Hop's interface is in Chinese for now. Everything in this README is the same

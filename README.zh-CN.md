@@ -5,7 +5,7 @@
 <h1 align="center">Hop</h1>
 
 <p align="center">
-  用 Go 写的 macOS 和 Windows 原生 <a href="https://github.com/MetaCubeX/mihomo">mihomo</a>(Clash.Meta)客户端。没有 webview,也没有 Electron。
+  基于 <a href="https://github.com/MetaCubeX/mihomo">mihomo</a>(Clash.Meta)内核的 macOS / Windows 原生代理客户端,用 Go 和 <a href="https://github.com/egoist/mygo">MyGo</a> 开发,界面原生绘制,没有 webview。
 </p>
 
 <p align="center">
@@ -28,6 +28,11 @@
     <img src="docs/screenshots/nodes-light.png" width="860" alt="节点页:线路出口、实时流量和按地区排列的节点">
   </picture>
 </p>
+
+Hop 是 [mihomo](https://github.com/MetaCubeX/mihomo) 内核的代理客户端,算是现有客户端之外多一个选择。
+它不提供任何服务器,订阅或节点链接要自己带。界面用 Go 和
+[MyGo](https://github.com/egoist/mygo) 原生绘制,不走 webview,同一份代码在
+macOS 和 Windows 上运行。
 
 ## 目录
 
