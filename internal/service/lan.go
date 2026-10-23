@@ -107,7 +107,6 @@ type LANService struct {
 	credentials LANCredentialStore
 	addresses   LANAddressSource
 	reloader    RuntimeReloader
-	tun         *TunFlag
 	port        int
 	// mu serializes changes, so two never reload at once.
 	mu sync.Mutex
@@ -115,10 +114,9 @@ type LANService struct {
 
 // NewLANService returns a service setting state, keeping the account in
 // credentials, reading addresses from addresses and reloading through
-// reloader; tun says whether TUN is on, which pauses the access, and port is
-// the proxy port devices connect to.
-func NewLANService(state *LANState, credentials LANCredentialStore, addresses LANAddressSource, reloader RuntimeReloader, tun *TunFlag, port int) *LANService {
-	return &LANService{state: state, credentials: credentials, addresses: addresses, reloader: reloader, tun: tun, port: port}
+// reloader; port is the proxy port devices connect to.
+func NewLANService(state *LANState, credentials LANCredentialStore, addresses LANAddressSource, reloader RuntimeReloader, port int) *LANService {
+	return &LANService{state: state, credentials: credentials, addresses: addresses, reloader: reloader, port: port}
 }
 
 // Prepare sets the LAN access for a start, before the core runs: nothing is
@@ -176,10 +174,6 @@ func (s *LANService) Status() (model.LANStatus, error) {
 	current := s.state.Get()
 	status := model.LANStatus{Enabled: current.Enabled, Account: current.Account}
 	if !current.Enabled {
-		return status, nil
-	}
-	if s.tun.On() {
-		status.Paused = true
 		return status, nil
 	}
 	addrs, err := s.addresses.Addresses()

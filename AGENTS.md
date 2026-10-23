@@ -70,14 +70,7 @@ on this machine while developing Hop. Hop must never interfere with it.
   own requests need no account. Everything else (the controller, the core's
   DNS, the probe listeners) names `127.0.0.1` itself and never follows
   `bind-address`; `TestLANAccess` checks that against a real core. Never widen
-  `lanAllowedSources`, and never open any other port to the network. Under TUN
-  the core is the helper's and runs as root, and the helper refuses any config
-  with `allow-lan` (`controllerKeys`): a root process must not parse requests
-  from the network. So `baseConfig` leaves LAN access out while TUN is on, and
-  `LANStatus.Paused` tells the page; the next config built after TUN turns off
-  carries it again (`TestLANPausesUnderTun`). Do not relax the helper's check to
-  fix this: it is a privileged boundary, and an installed helper only changes
-  by a reinstall the user authorizes.
+  `lanAllowedSources`, and never open any other port to the network.
 - The unlock check (`service/unlock.go`, `repository/unlock`) needs a request
   through one chosen group, which the controller cannot make: its delay test
   is a HEAD that also overwrites the proxy's delay history. So every config
