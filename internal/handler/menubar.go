@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"image"
 	"log/slog"
 	"runtime"
 	"strings"
@@ -25,6 +26,13 @@ const reopenGuard = 500 * time.Millisecond
 // flyoutCornerRadius rounds the panel's material and shadow.
 const flyoutCornerRadius = 14
 
+// hopFrameTime is how long each frame of the ball's hop shows.
+const hopFrameTime = 30 * time.Millisecond
+
+// shownHopping stands for the icon while the ball hops, so the first rate
+// drawn after it is never taken for what is already there.
+const shownHopping = "hopping"
+
 // MenuBar is Hop's menu bar item: its mark with the live speed beside it,
 // and a panel to see the route and switch the mode and the node without
 // opening the window. Closing the window hides it and Hop's Dock icon; Hop
@@ -42,13 +50,25 @@ type MenuBar struct {
 	// for the plain mark.
 	mark  []byte
 	shown string
+	// arcs are the mark's arcs alone, drawn once; each frame of a hop and
+	// each rate is the mark built over them.
+	arcs *image.NRGBA
+	// speed is the rate column beside the mark, nil while the speed is off.
+	speed *image.RGBA
+	// sample is the latest traffic, drawn when a hop ends.
+	sample model.Traffic
+	// exit is the route's exit the icon last saw; the ball hops when it
+	// changes. hopping says a hop is playing.
+	exit    string
+	hopping bool
 }
 
 // NewMenuBar puts Hop in the menu bar and keeps it running when win is
 // closed. Call it before d.Start, so the menu bar hears the traffic, and
 // start d with the menu bar's Updater, so the panel follows every change.
 func NewMenuBar(win *mygo.Window, d *Dashboard) (*MenuBar, error) {
-	icon, err := trayIcon()
+	arcs := arcsImage()
+	icon, err := encodeTrayIcon(markImage(arcs, 0))
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +76,7 @@ func NewMenuBar(win *mygo.Window, d *Dashboard) (*MenuBar, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create menu bar item: %w", err)
 	}
-	m := &MenuBar{tray: tray, win: win, d: d, mark: icon}
+	m := &MenuBar{tray: tray, win: win, d: d, mark: icon, arcs: arcs}
 	tray.OnClick(m.togglePanel)
 	tray.OnRightClick(m.popUpMenu)
 	d.OnTraffic(m.showSpeed)
@@ -81,10 +101,26 @@ func NewMenuBar(win *mygo.Window, d *Dashboard) (*MenuBar, error) {
 func (m *MenuBar) Update(fn func()) {
 	m.win.Update(func() {
 		fn()
+		m.noticeExit()
 		if m.panel != nil {
 			m.panel.Invalidate()
 		}
 	})
+}
+
+// noticeExit hops the ball when the route's exit changes to another exit. The
+// first exit after a start, and one that returns after the route was empty,
+// are not changes.
+func (m *MenuBar) noticeExit() {
+	exit := ""
+	if route := m.d.view.Route; len(route) > 0 {
+		exit = route[len(route)-1].Name
+	}
+	previous := m.exit
+	m.exit = exit
+	if previous != "" && exit != "" && exit != previous {
+		m.hop()
+	}
 }
 
 // showWindow brings the window back, and Hop's Dock icon with it.
@@ -164,26 +200,83 @@ func (m *MenuBar) popUpMenu() {
 	m.tray.PopUpMenu()
 }
 
-// showSpeed draws the current speed beside the mark, upload over download
-// in a column of fixed width, so the item does not shift as the numbers
-// change; idle, it reads 0K rather than dropping the speed, so the item
-// keeps one width. With the speed turned off in the settings it shows the
-// plain mark. It redraws only when the numbers do.
+// showSpeed keeps the latest traffic and, unless the ball is hopping, draws it.
 func (m *MenuBar) showSpeed(sample model.Traffic) {
+	m.sample = sample
+	if m.hopping {
+		return
+	}
+	m.drawRest()
+}
+
+// drawRest draws the mark at rest with the current speed beside it, upload
+// over download in a column of fixed width, so the item does not shift as the
+// numbers change; idle, it reads 0K rather than dropping the speed, so the
+// item keeps one width. With the speed turned off in the settings it shows
+// the plain mark. It redraws only when the numbers do.
+func (m *MenuBar) drawRest() {
 	if !m.d.settings.settings.MenuBarSpeed {
+		m.speed = nil
 		m.setIcon("", m.mark)
 		return
 	}
-	up, down := compactRate(sample.Up), compactRate(sample.Down)
+	up, down := compactRate(m.sample.Up), compactRate(m.sample.Down)
 	if up+"/"+down == m.shown {
 		return
 	}
-	icon, err := traySpeedIcon(up, down)
+	speed := traySpeedColumn(up, down)
+	icon, err := traySpeedIcon(markImage(m.arcs, 0), speed)
 	if err != nil {
 		slog.Warn("draw menu bar speed", "error", err)
 		return
 	}
+	m.speed = speed
 	m.setIcon(up+"/"+down, icon)
+}
+
+// hop plays the ball's hop, one frame after another on the main thread, and
+// draws the rest again when it lands.
+func (m *MenuBar) hop() {
+	if m.hopping || m.quitting {
+		return
+	}
+	m.hopping = true
+	m.shown = shownHopping
+	m.hopFrame(1)
+}
+
+// hopFrame draws the ball at its height in frame step of the hop and queues
+// the next; after the last it lands.
+func (m *MenuBar) hopFrame(step int) {
+	if m.quitting {
+		return
+	}
+	if step >= trayHopFrames {
+		m.hopping = false
+		m.drawRest()
+		return
+	}
+	icon, err := m.hopIcon(hopLift(float64(step) / trayHopFrames))
+	if err == nil {
+		err = m.tray.SetIcon(icon, true)
+	}
+	if err != nil {
+		slog.Warn("draw menu bar hop", "error", err)
+		m.hopping = false
+		m.drawRest()
+		return
+	}
+	time.AfterFunc(hopFrameTime, func() { mygo.RunOnMain(func() { m.hopFrame(step + 1) }) })
+}
+
+// hopIcon is the icon with the ball raised by lift mark units, and the speed
+// beside it when the item shows one.
+func (m *MenuBar) hopIcon(lift float64) ([]byte, error) {
+	mark := markImage(m.arcs, lift)
+	if m.speed == nil {
+		return encodeTrayIcon(mark)
+	}
+	return traySpeedIcon(mark, m.speed)
 }
 
 // setIcon shows icon in the menu bar as what shown names.

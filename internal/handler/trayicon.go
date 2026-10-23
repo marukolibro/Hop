@@ -67,20 +67,47 @@ func (arc markArc) trimmed() (markPoint, markPoint, markPoint) {
 // trayIcon draws the mark black on transparent, for macOS to tint to the
 // menu bar.
 func trayIcon() ([]byte, error) {
+	return encodeTrayIcon(markImage(arcsImage(), 0))
+}
+
+// encodeTrayIcon is img as the PNG the menu bar takes.
+func encodeTrayIcon(img image.Image) ([]byte, error) {
 	var out bytes.Buffer
-	if err := png.Encode(&out, markImage()); err != nil {
+	if err := png.Encode(&out, img); err != nil {
 		return nil, fmt.Errorf("encode tray icon: %w", err)
 	}
 	return out.Bytes(), nil
 }
 
-// markImage is the mark's pixels, black on transparent, markSize square.
-func markImage() *image.NRGBA {
+// markImage is the mark's pixels, black on transparent, markSize square: arcs
+// with the ball over them, raised by ballLift mark units (0 at rest). The
+// arcs do not change, so a hop draws them once and moves only the ball.
+func markImage(arcs *image.NRGBA, ballLift float64) *image.NRGBA {
+	ball := markPoint{x: markBall.x, y: markBall.y - ballLift}
+	img := image.NewNRGBA(arcs.Bounds())
+	copy(img.Pix, arcs.Pix)
+	for y := range markSize {
+		for x := range markSize {
+			coverage := ballCoverage(float64(x), float64(y), ball)
+			if coverage == 0 {
+				continue
+			}
+			alpha := max(img.NRGBAAt(x, y).A, uint8(math.Round(coverage*255)))
+			img.SetNRGBA(x, y, color.NRGBA{A: alpha})
+		}
+	}
+	return img
+}
+
+// arcsImage is the mark's two arcs, black on transparent, markSize square.
+func arcsImage() *image.NRGBA {
 	segments := markSegments()
 	img := image.NewNRGBA(image.Rect(0, 0, markSize, markSize))
 	for y := range markSize {
 		for x := range markSize {
-			coverage := pixelCoverage(float64(x), float64(y), segments)
+			coverage := pixelCoverage(float64(x), float64(y), func(px float64, py float64) bool {
+				return onArcs(px, py, segments)
+			})
 			if coverage > 0 {
 				img.SetNRGBA(x, y, color.NRGBA{A: uint8(math.Round(coverage * 255))})
 			}
@@ -102,37 +129,70 @@ func markSegments() [][2]markPoint {
 	return segments
 }
 
-// pixelCoverage is how much of the pixel with its corner at (x, y) the mark,
-// raised by trayLift, covers, from a grid of samples inside it.
-func pixelCoverage(x float64, y float64, segments [][2]markPoint) float64 {
-	total := 0.0
+// pixelCoverage is how much of the pixel with its corner at (x, y) the shape
+// inside covers, raised by trayLift, from a grid of samples inside the pixel.
+func pixelCoverage(x float64, y float64, inside func(x float64, y float64) bool) float64 {
+	hits := 0
 	for sy := range markSupersamp {
 		for sx := range markSupersamp {
 			px := x + (float64(sx)+0.5)/markSupersamp
 			py := y + (float64(sy)+0.5)/markSupersamp + trayLift
-			total += pointCoverage(px, py, segments)
+			if inside(px, py) {
+				hits++
+			}
 		}
 	}
-	return total / (markSupersamp * markSupersamp)
+	return float64(hits) / (markSupersamp * markSupersamp)
 }
 
-// pointCoverage is 1 inside the mark and 0 outside; strokes have round ends.
-func pointCoverage(x float64, y float64, segments [][2]markPoint) float64 {
-	if math.Hypot(x-markBall.x, y-markBall.y) <= markBallR {
-		return 1
-	}
+// ballCoverage is how much of the pixel at (x, y) a ball centred on ball
+// covers.
+func ballCoverage(x float64, y float64, ball markPoint) float64 {
+	return pixelCoverage(x, y, func(px float64, py float64) bool {
+		return math.Hypot(px-ball.x, py-ball.y) <= markBallR
+	})
+}
+
+// onArcs says whether a point lies on the arcs; strokes have round ends.
+func onArcs(x float64, y float64, segments [][2]markPoint) bool {
 	for _, s := range segments {
 		if segmentDistance(x, y, s[0], s[1]) <= markStroke/2 {
-			return 1
+			return true
 		}
 	}
-	return 0
+	return false
 }
 
 func segmentDistance(x float64, y float64, a markPoint, b markPoint) float64 {
 	dx, dy := b.x-a.x, b.y-a.y
 	t := max(0, min(1, ((x-a.x)*dx+(y-a.y)*dy)/(dx*dx+dy*dy)))
 	return math.Hypot(x-(a.x+t*dx), y-(a.y+t*dy))
+}
+
+// The ball's hop, played when the route's exit changes: two bounces, the
+// second lower, and it lands where it started.
+const (
+	// trayHopFrames is how many frames the hop is drawn in after the first.
+	trayHopFrames = 14
+	// trayHopHigh and trayHopLow are the bounces' heights in mark units.
+	trayHopHigh = 8.0
+	trayHopLow  = 3.5
+	// trayHopSplit is how far through the hop the first bounce ends.
+	trayHopSplit = 0.58
+)
+
+// hopLift is how high the ball is, in mark units, at progress (0 to 1)
+// through a hop.
+func hopLift(progress float64) float64 {
+	if progress < trayHopSplit {
+		return trayHopHigh * parabola(progress/trayHopSplit)
+	}
+	return trayHopLow * parabola((progress-trayHopSplit)/(1-trayHopSplit))
+}
+
+// parabola is 0 at both ends of 0..1 and 1 in the middle.
+func parabola(t float64) float64 {
+	return 4 * t * (1 - t)
 }
 
 // The speed beside the mark in the menu bar: upload over download, each
@@ -154,10 +214,10 @@ const (
 	trayScale = 2
 )
 
-// traySpeedIcon draws the mark with the upload and download rates beside
-// it, black on transparent, for macOS to tint to the menu bar.
-func traySpeedIcon(up string, down string) ([]byte, error) {
-	speed := ui.Render(func(c *ui.Context) {
+// traySpeedColumn draws the upload and download rates, black on transparent,
+// in the column the menu bar item keeps at one width.
+func traySpeedColumn(up string, down string) *image.RGBA {
+	return ui.Render(func(c *ui.Context) {
 		c.Root().Background(ui.Transparent)
 		ui.Column(c).Fill().Justify(ui.Center).Children(func() {
 			for _, line := range []string{"↑ " + up, "↓ " + down} {
@@ -166,14 +226,14 @@ func traySpeedIcon(up string, down string) ([]byte, error) {
 			}
 		})
 	}, traySpeedWidth, trayHeight, trayScale)
-	mark := markImage()
+}
+
+// traySpeedIcon draws mark with speed beside it, as the PNG the menu bar
+// takes.
+func traySpeedIcon(mark *image.NRGBA, speed *image.RGBA) ([]byte, error) {
 	gap := traySpeedGap * trayScale
 	img := image.NewNRGBA(image.Rect(0, 0, markSize+gap+speed.Bounds().Dx(), markSize))
 	draw.Draw(img, mark.Bounds(), mark, image.Point{}, draw.Src)
 	draw.Draw(img, speed.Bounds().Add(image.Point{X: markSize + gap}), speed, image.Point{}, draw.Over)
-	var out bytes.Buffer
-	if err := png.Encode(&out, img); err != nil {
-		return nil, fmt.Errorf("encode tray speed icon: %w", err)
-	}
-	return out.Bytes(), nil
+	return encodeTrayIcon(img)
 }
