@@ -35,22 +35,10 @@
 
 ## Contents
 
-[Why Hop](#why-hop) · [Features](#features) · [Install](#install) ·
+[Features](#features) · [Limits](#limits) · [Install](#install) ·
 [Getting started](#getting-started) · [How it works](#how-it-works) ·
 [Privacy and safety](#privacy-and-safety) · [Troubleshooting](#troubleshooting) ·
 [Development](#development) · [License](#license)
-
-## Why Hop
-
-Hop runs its own mihomo core on `127.0.0.1` and drives it through the core's
-REST API. The whole interface is drawn natively by
-[MyGo](https://github.com/egoist/mygo), so it starts fast, stays light and
-feels like a native app: a translucent glass window on macOS and Windows 11,
-a solid one elsewhere, and a window that repaints nothing while nothing changes.
-
-It is built to sit next to another Clash client without touching its settings,
-ports or files, and to keep everything a subscription could change under its
-own control.
 
 ## Features
 
@@ -125,8 +113,8 @@ own control.
   macOS and Windows 11 (Mica, Acrylic for the panel); a solid window with the
   same layout on Windows 10. Light, dark or follow the system, independently of
   the colour theme. On macOS a slider sets how translucent the window is.
-- **Quiet.** Motion shows what changes, a switch sliding or a number rolling,
-  and nothing moves for as long as it is shown.
+- **Calm motion.** Motion shows what changes: a switch slides, a number rolls,
+  a spinner turns while work runs.
 
 <p align="center">
   <picture>
@@ -158,6 +146,14 @@ own control.
   digest GitHub publishes, and rolls back by itself if the new core does not
   come up. The bundled core can always be restored.
 - **Geodata** (the rules' databases) refreshes weekly, or on demand.
+
+## Limits
+
+Hop is young and deliberately small. The interface is in Chinese only. There is
+no Linux build. It has no profile scripts or merge files, so how far you can
+reshape a provider's configuration is limited by design. The macOS app is ad
+hoc signed and the Windows installer is not code signed, so the first run needs
+a confirmation (see [Install](#install)).
 
 ## Install
 
