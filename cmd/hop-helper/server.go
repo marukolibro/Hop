@@ -8,9 +8,11 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -725,12 +727,18 @@ func prepareSocket(path string) error {
 
 // controllerKeys pulls the external controller address and its secret out of
 // a runtime config, and refuses what a core run as root must never do: bind
-// the controller off loopback, or serve the LAN.
+// the controller off loopback, open a listener off loopback, or serve a network
+// wider than the private ones (see checkLANSources).
 func controllerKeys(configYAML string) (string, string, error) {
 	var doc struct {
-		ExternalController string `yaml:"external-controller"`
-		Secret             string `yaml:"secret"`
-		AllowLAN           bool   `yaml:"allow-lan"`
+		ExternalController string   `yaml:"external-controller"`
+		Secret             string   `yaml:"secret"`
+		AllowLAN           bool     `yaml:"allow-lan"`
+		LanAllowedIPs      []string `yaml:"lan-allowed-ips"`
+		Listeners          []struct {
+			Name   string `yaml:"name"`
+			Listen string `yaml:"listen"`
+		} `yaml:"listeners"`
 	}
 	if err := yaml.Unmarshal([]byte(configYAML), &doc); err != nil {
 		return "", "", fmt.Errorf("the config is not YAML: %w", err)
@@ -745,10 +753,44 @@ func controllerKeys(configYAML string) (string, string, error) {
 	if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
 		return "", "", fmt.Errorf("the config's external-controller %q is not on loopback", doc.ExternalController)
 	}
+	for _, listener := range doc.Listeners {
+		if ip := net.ParseIP(listener.Listen); listener.Listen != "localhost" && (ip == nil || !ip.IsLoopback()) {
+			return "", "", fmt.Errorf("the config's listener %q listens on %q, not on loopback", listener.Name, listener.Listen)
+		}
+	}
 	if doc.AllowLAN {
-		return "", "", errors.New("the config turns allow-lan on, which a root-run core never does")
+		if err := checkLANSources(doc.LanAllowedIPs); err != nil {
+			return "", "", err
+		}
 	}
 	return doc.ExternalController, doc.Secret, nil
+}
+
+// checkLANSources says whether a config that serves the network limits it to
+// the private networks. A root-run core parses whatever the network sends it,
+// so it may serve the LAN only to sources inside helper.LANSources: the
+// list must be there (the core's default is every address) and no entry may
+// reach outside them.
+func checkLANSources(sources []string) error {
+	if len(sources) == 0 {
+		return errors.New("the config turns allow-lan on without lan-allowed-ips, which would let every address in")
+	}
+	var allowed []netip.Prefix
+	for _, source := range helper.LANSources {
+		allowed = append(allowed, netip.MustParsePrefix(source))
+	}
+	for _, source := range sources {
+		prefix, err := netip.ParsePrefix(source)
+		if err != nil {
+			return fmt.Errorf("the config's lan-allowed-ips entry %q is not a prefix: %w", source, err)
+		}
+		if !slices.ContainsFunc(allowed, func(base netip.Prefix) bool {
+			return base.Contains(prefix.Addr()) && prefix.Bits() >= base.Bits()
+		}) {
+			return fmt.Errorf("the config's lan-allowed-ips entry %q reaches outside the private networks", source)
+		}
+	}
+	return nil
 }
 
 // checkMihomo runs `binary -v` and requires the answer to say mihomo, so a

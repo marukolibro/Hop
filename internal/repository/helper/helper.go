@@ -14,9 +14,22 @@ import (
 )
 
 // Version is the helper's own version, what GET /version reports. It moves
-// only when the socket protocol or the platform setup changes; version 7
-// runs the same protocol as 6 on Windows too, as a service.
-const Version = "7"
+// only when the socket protocol, the platform setup or what the helper accepts
+// changes; version 7 runs the same protocol as 6 on Windows too, as a service,
+// and version 8 accepts a config that serves the private networks (LAN access)
+// where 7 refused every config that serves a network.
+const Version = "8"
+
+// LANSources are the only source ranges a core run as root may be told to
+// answer when the config serves the network: this computer and the private
+// networks a router hands out. The app writes them into every config with LAN
+// access, and the helper accepts nothing wider, so the internet is never let
+// in even when this computer has a public address.
+var LANSources = []string{
+	"127.0.0.0/8", "::1/128",
+	"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16",
+	"fc00::/7", "fe80::/10",
+}
 
 // versionProbeTimeout bounds the version probe InstalledVersion makes; on
 // macOS the osascript prompt itself waits for the user as long as it must.

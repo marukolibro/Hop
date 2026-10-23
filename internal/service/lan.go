@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"hop/internal/model"
+	"hop/internal/repository/helper"
 )
 
 // LANSettings is what a config says about other devices using the proxy port.
@@ -49,12 +50,9 @@ func (s *LANState) Set(next LANSettings) {
 // lanAllowedSources are the only sources the proxy port answers while LAN
 // access is on: this computer, and the private networks a router hands out.
 // Nothing from the internet is let in, even when this computer has a public
-// address or the router forwards the port.
-var lanAllowedSources = []string{
-	"127.0.0.0/8", "::1/128",
-	"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16",
-	"fc00::/7", "fe80::/10",
-}
+// address or the router forwards the port. The helper refuses a root-run core
+// any wider list, so the two share one.
+var lanAllowedSources = helper.LANSources
 
 // lanSkipAuthSources are the sources that need no account even when one is
 // asked for: this computer, so the system proxy and Hop's own requests keep

@@ -70,7 +70,15 @@ on this machine while developing Hop. Hop must never interfere with it.
   own requests need no account. Everything else (the controller, the core's
   DNS, the probe listeners) names `127.0.0.1` itself and never follows
   `bind-address`; `TestLANAccess` checks that against a real core. Never widen
-  `lanAllowedSources`, and never open any other port to the network.
+  `lanAllowedSources`, and never open any other port to the network. Under TUN
+  the core is the helper's and runs as root, and a root process must not parse
+  requests from the whole internet, so the helper (`controllerKeys`,
+  `checkLANSources`) accepts `allow-lan` only with a `lan-allowed-ips` list
+  inside `helper.LANSources` (the one list the app writes too), and refuses a
+  listener that is not on the loopback; `TestHelperServesItsCore` checks that
+  against a real helper. That rule is a privileged boundary: widening it needs
+  the user's say, and it changes `helper.Version` (now 8), which makes an
+  installed older helper be replaced on the user's authorization.
 - The unlock check (`service/unlock.go`, `repository/unlock`) needs a request
   through one chosen group, which the controller cannot make: its delay test
   is a HEAD that also overwrites the proxy's delay history. So every config

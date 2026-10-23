@@ -202,6 +202,40 @@ func TestHelperServesItsCore(t *testing.T) {
 		t.Errorf("mode after the refused applies = %q (err %v), want %q", mode, err, model.ModeGlobal)
 	}
 
+	// LAN access is accepted only inside the private networks: the config the
+	// app writes for it is applied, anything wider or any listener off the
+	// loopback is a 400, and the core keeps what it had.
+	withLAN := next
+	withLAN.LAN = service.LANSettings{Enabled: true, Account: model.LANCredential{Username: "hop", Password: "s3cretpw"}}
+	lanConfig, err := service.BootstrapConfig(withLAN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	everyAddress := bytes.Replace(lanConfig, []byte("127.0.0.0/8"), []byte("0.0.0.0/0"), 1)
+	noSources := bytes.Replace(lanConfig, []byte("lan-allowed-ips"), []byte("lan-allowed-ips-unused"), 1)
+	offLoopbackListener := append(append([]byte{}, lanConfig...), []byte("listeners:\n  - {name: wide, type: http, listen: 0.0.0.0, port: 17999, proxy: DIRECT}\n")...)
+	for name, refused := range map[string][]byte{
+		"a source range reaching the internet": everyAddress,
+		"no source range at all":               noSources,
+		"a listener off the loopback":          offLoopbackListener,
+	} {
+		if bytes.Equal(refused, lanConfig) {
+			t.Fatalf("the test config for %s did not change", name)
+		}
+		if err := client.ApplyConfig(ctx, refused); !errors.As(err, &apiErr) || apiErr.Status != http.StatusBadRequest {
+			t.Fatalf("apply with %s = %v, want a 400", name, err)
+		}
+	}
+	if err := client.ApplyConfig(ctx, lanConfig); err != nil {
+		t.Fatalf("apply the LAN access the app writes: %v", err)
+	}
+	if mode, err := coreClient.Mode(ctx); err != nil || mode != model.ModeGlobal {
+		t.Errorf("mode after the LAN config = %q (err %v), want %q", mode, err, model.ModeGlobal)
+	}
+	if err := client.ApplyConfig(ctx, second); err != nil {
+		t.Fatalf("apply the config without LAN access again: %v", err)
+	}
+
 	// New geodata replaces the helper's copies and restarts the running core
 	// on them, because the core reads the databases once, at start. The
 	// controller answers again afterwards and the config it ran stays.
