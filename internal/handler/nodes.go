@@ -76,7 +76,7 @@ func (d *Dashboard) nodesPage(c *ui.Context, t *ui.Theme) {
 }
 
 // groupHeader names the group shown, how it picks its node and where its
-// traffic leaves now, with a way to test its nodes.
+// traffic leaves now and what works through it, with a way to test its nodes.
 func (d *Dashboard) groupHeader(c *ui.Context, t *ui.Theme) {
 	group, ok := d.activeGroupView()
 	if !ok {
@@ -93,10 +93,13 @@ func (d *Dashboard) groupHeader(c *ui.Context, t *ui.Theme) {
 					ui.Text(c, nodeDisplay(group.Exit)).FontSize(fontSecondary).FontWeight(weightMedium).MaxLines(1)
 					delayLabel(c, t, group.Exit.Delay, fontSecondary)
 				}
+				if result, checked := d.unlock.results[group.Name]; checked {
+					unlockChips(c, t, result)
+				}
 			})
 		})
 		slidingSwitch(c, "节点排序", &d.nodeOrder, nodeOrderLabels, pageSwitchStyle(t, nodeOrderSegmentWidth), func(int) {})
-		d.unlockControls(c, t, group.Name)
+		d.unlockControls(c, t)
 		d.testButton(c, t, group.Name)
 	})
 }

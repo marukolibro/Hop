@@ -217,9 +217,10 @@ func flowIntensity(bytesPerSecond int64) float32 {
 
 // hopMark draws Hop's mark in ink, as the menu bar icon shows it: a ball
 // bouncing twice and landing. The arcs blend from ink's first colour at the
-// left to its second at the right, where the ball lands in it. Small dots
-// give the arcs the round ends the path's own ends lack.
-func hopMark(c *ui.Context, size float32, ink markInk) {
+// left to its second at the right, where the ball lands in it. While hop
+// plays, the ball jumps. Small dots give the arcs the round ends the path's
+// own ends lack.
+func hopMark(c *ui.Context, size float32, ink markInk, hop markHop) {
 	ui.Box(c).Width(size).Height(size).Draw(func(p *ui.Painter, r ui.Rect) {
 		scale := r.W / markSize
 		at := func(m markPoint) (float32, float32) {
@@ -238,7 +239,12 @@ func hopMark(c *ui.Context, size float32, ink markInk) {
 			p.Fill(circle(ex, ey, stroke/2), inkAt(ex), stroke/2)
 		}
 		p.StrokePathGradient(path, stroke, ui.LinearGradient{From: ink.from, To: ink.to, Angle: 90})
+		lift, hopping := hop.lift(p.Now())
+		if hopping {
+			p.AnimationFrame()
+		}
 		bx, by := at(markBall)
+		by -= float32(lift) * scale
 		ballR := float32(markBallR) * scale
 		p.Fill(circle(bx, by, ballR), inkAt(bx), ballR)
 	})

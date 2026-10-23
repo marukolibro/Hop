@@ -21,7 +21,7 @@ import (
 	"hop/internal/service"
 )
 
-const testProbePort = 17895
+const testProbePort = 17920
 
 // tunnelNode is a node of the "http" type that answers every request with its
 // own name, so a test sees which node a request went through.
@@ -57,11 +57,11 @@ func tunnelNode(t *testing.T, name string) int {
 	return ln.Addr().(*net.TCPAddr).Port
 }
 
-// TestProbeListenerFollowsTheChosenNode checks the path the unlock checks
-// take: the probe listener sends a request through whichever node the probe
-// group has picked, whatever the rules say, and neither the probe group nor
-// the listener shows up in what the dashboard reads.
-func TestProbeListenerFollowsTheChosenNode(t *testing.T) {
+// TestProbeLanesFollowTheChosenGroup checks the path the unlock checks take:
+// each probe lane sends a request through whichever group it has picked,
+// whatever the rules say, two lanes at once without crossing, and neither the
+// lane groups nor the listeners show up in what the dashboard reads.
+func TestProbeLanesFollowTheChosenGroup(t *testing.T) {
 	binary := os.Getenv("HOP_MIHOMO_BINARY")
 	if binary == "" {
 		t.Skip("HOP_MIHOMO_BINARY is not set")
@@ -76,6 +76,8 @@ proxies:
   - {name: "node-b", type: http, server: 127.0.0.1, port: %d}
 proxy-groups:
   - {name: "Proxy", type: select, proxies: ["node-a", "node-b"]}
+  - {name: "Line A", type: select, proxies: ["node-a"]}
+  - {name: "Line B", type: select, proxies: ["node-b"]}
 rules:
   - MATCH,DIRECT
 `, portA, portB)
@@ -107,32 +109,36 @@ rules:
 		}
 	}()
 
-	probe := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			DisableKeepAlives: true,
-			Proxy:             http.ProxyURL(&url.URL{Scheme: "http", Host: net.JoinHostPort("127.0.0.1", fmt.Sprint(testProbePort))}),
-		},
-	}
-	through := func(node string) string {
+	through := func(lane int, group string) string {
 		t.Helper()
-		if err := client.SelectProxy(ctx, model.ProbeGroup, node); err != nil {
-			t.Fatalf("select %s in the probe group: %v", node, err)
+		if err := client.SelectProxy(ctx, model.ProbeGroup(lane), group); err != nil {
+			t.Fatalf("select %s in probe lane %d: %v", group, lane, err)
+		}
+		probe := &http.Client{
+			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				DisableKeepAlives: true,
+				Proxy:             http.ProxyURL(&url.URL{Scheme: "http", Host: net.JoinHostPort("127.0.0.1", fmt.Sprint(testProbePort+lane))}),
+			},
 		}
 		resp, err := probe.Get("http://probe.invalid/")
 		if err != nil {
-			t.Fatalf("probe through %s: %v", node, err)
+			t.Fatalf("probe through %s in lane %d: %v", group, lane, err)
 		}
 		defer resp.Body.Close()
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			t.Fatalf("read the probe reply through %s: %v", node, err)
+			t.Fatalf("read the probe reply through %s: %v", group, err)
 		}
 		return strings.TrimSpace(string(body))
 	}
-	for _, node := range []string{"node-a", "node-b", "node-a"} {
-		if got := through(node); got != node {
-			t.Errorf("a probe sent through %s was answered by %q", node, got)
+	for _, c := range []struct {
+		lane  int
+		group string
+		want  string
+	}{{0, "Line A", "node-a"}, {1, "Line B", "node-b"}, {0, "Line B", "node-b"}, {model.ProbeLanes - 1, "Line A", "node-a"}} {
+		if got := through(c.lane, c.group); got != c.want {
+			t.Errorf("a probe sent through %s in lane %d was answered by %q, want %q", c.group, c.lane, got, c.want)
 		}
 	}
 
@@ -144,10 +150,12 @@ rules:
 	for _, group := range snapshot.Groups {
 		names = append(names, group.Name)
 	}
-	if !slices.Equal(names, []string{"Proxy"}) {
+	if !slices.Equal(names, []string{"Proxy", "Line A", "Line B"}) {
 		t.Errorf("groups = %v, want only the profile's own", names)
 	}
-	if slices.Contains(snapshot.Global.Options, model.ProbeGroup) {
-		t.Errorf("the global group offers the probe group: %v", snapshot.Global.Options)
+	for _, option := range snapshot.Global.Options {
+		if strings.HasPrefix(option, model.ProbeGroupPrefix) {
+			t.Errorf("the global group offers the probe group %s", option)
+		}
 	}
 }

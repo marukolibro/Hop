@@ -124,7 +124,7 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 }
 
 // Snapshot returns the policy groups in the order the profile declares
-// them, without the core's GLOBAL group and Hop's own probe group, and each
+// them, without the core's GLOBAL group and Hop's own probe groups, and each
 // proxy's latest delay.
 func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	raw, err := c.do(ctx, c.timeout, http.MethodGet, "/proxies", nil, http.StatusOK)
@@ -143,7 +143,7 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	groups := make([]model.ProxyGroup, 0, len(global.All))
 	for _, name := range global.All {
 		entry := out.Proxies[name]
-		if !slices.Contains(groupTypes, entry.Type) || name == model.ProbeGroup {
+		if !slices.Contains(groupTypes, entry.Type) || strings.HasPrefix(name, model.ProbeGroupPrefix) {
 			continue
 		}
 		groups = append(groups, model.ProxyGroup{Name: name, Type: entry.Type, Selected: entry.Now, Options: entry.All})
@@ -158,7 +158,7 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 			facts[name] = model.ProxyFacts{Protocol: entry.Type, UDP: entry.UDP}
 		}
 	}
-	globalOptions := slices.DeleteFunc(slices.Clone(global.All), func(name string) bool { return name == model.ProbeGroup })
+	globalOptions := slices.DeleteFunc(slices.Clone(global.All), func(name string) bool { return strings.HasPrefix(name, model.ProbeGroupPrefix) })
 	globalGroupView := model.ProxyGroup{Name: globalGroup, Type: global.Type, Selected: global.Now, Options: globalOptions}
 	return model.Snapshot{Groups: groups, Global: globalGroupView, Delays: delays, Facts: facts}, nil
 }

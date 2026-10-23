@@ -45,9 +45,9 @@ type Instance struct {
 	// NodeDNSAddr is the core's own DNS listener, used only to look up
 	// nodes' servers when a subscription sends them through its hosts.
 	NodeDNSAddr string
-	// ProbePort is the loopback port of the listener the unlock checks go
-	// through; it sends everything to one node picked by Hop, never by the
-	// rules.
+	// ProbePort is the first of model.ProbeLanes loopback ports the unlock
+	// checks go through; each sends everything to the group Hop picked in its
+	// lane, never by the rules.
 	ProbePort int
 	// UsesHelper says this instance may drive the machine's privileged
 	// helper. There is one helper per machine, so only the installed Hop
@@ -57,8 +57,8 @@ type Instance struct {
 
 // Release is the installed Hop. Development is the build run by mygo dev.
 var (
-	Release     = Instance{AppDirName: "hop", MixedPort: 17890, ControllerAddr: "127.0.0.1:19090", NodeDNSAddr: "127.0.0.1:17853", ProbePort: 17893, UsesHelper: true}
-	Development = Instance{AppDirName: "hop-dev", MixedPort: 17892, ControllerAddr: "127.0.0.1:19092", NodeDNSAddr: "127.0.0.1:17855", ProbePort: 17894, UsesHelper: false}
+	Release     = Instance{AppDirName: "hop", MixedPort: 17890, ControllerAddr: "127.0.0.1:19090", NodeDNSAddr: "127.0.0.1:17853", ProbePort: 17900, UsesHelper: true}
+	Development = Instance{AppDirName: "hop-dev", MixedPort: 17892, ControllerAddr: "127.0.0.1:19092", NodeDNSAddr: "127.0.0.1:17855", ProbePort: 17910, UsesHelper: false}
 )
 
 // Config is everything the sidecar core and its controller client need.
@@ -80,7 +80,7 @@ type Config struct {
 	ControllerAddr string
 	// NodeDNSAddr is host:port of the core's DNS listener for node servers.
 	NodeDNSAddr string
-	// ProbePort is the loopback port of the listener the unlock checks use.
+	// ProbePort is the first loopback port of the unlock checks' listeners.
 	ProbePort int
 	// Secret authenticates controller requests; it is kept between starts so
 	// a core TUN mode left running under the helper still answers after Hop

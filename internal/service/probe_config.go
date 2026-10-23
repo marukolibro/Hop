@@ -1,7 +1,6 @@
 package service
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 
@@ -9,9 +8,6 @@ import (
 
 	"hop/internal/model"
 )
-
-// probeListenerName names the core's listener the unlock checks go through.
-const probeListenerName = "hop-probe"
 
 // probeListener is a core listener that hands everything it accepts to one
 // proxy by name, without asking the rules. Its keys are the pinned core's
@@ -24,30 +20,62 @@ type probeListener struct {
 	Proxy  string `yaml:"proxy"`
 }
 
-// probeGroup is a select group over every node and provider, where the check
-// picks the node under test.
+// probeGroup is a select group over the profile's groups, where the check
+// picks the group under test.
 type probeGroup struct {
-	Name       string `yaml:"name"`
-	Type       string `yaml:"type"`
-	IncludeAll bool   `yaml:"include-all"`
+	Name    string   `yaml:"name"`
+	Type    string   `yaml:"type"`
+	Proxies []string `yaml:"proxies"`
 }
 
-// addProbe gives cfg the probe listener on bindAddress:port and the group it
-// sends through, after the profile's own groups. Without a port the config
-// has neither.
+// addProbe gives cfg model.ProbeLanes listeners from bindAddress:port on, and
+// for each the group it sends through, after the profile's own groups. A
+// config without a port, or whose profile has no group to check, has none.
 func addProbe(cfg *runtimeConfig, bindAddress string, port int) error {
 	if port == 0 {
 		return nil
 	}
-	groups, err := appendMapping(cfg.ProxyGroups, probeGroup{Name: model.ProbeGroup, Type: configSelect, IncludeAll: true})
+	names, err := groupNames(cfg.ProxyGroups)
 	if err != nil {
-		return fmt.Errorf("add the probe group: %w", err)
+		return err
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	groups := cfg.ProxyGroups
+	for lane := range model.ProbeLanes {
+		name := model.ProbeGroup(lane)
+		groups, err = appendMapping(groups, probeGroup{Name: name, Type: configSelect, Proxies: names})
+		if err != nil {
+			return fmt.Errorf("add probe group %s: %w", name, err)
+		}
+		cfg.Listeners = append(cfg.Listeners, probeListener{
+			Name: name, Type: "http", Listen: bindAddress, Port: port + lane, Proxy: name,
+		})
 	}
 	cfg.ProxyGroups = groups
-	cfg.Listeners = []probeListener{{
-		Name: probeListenerName, Type: "http", Listen: bindAddress, Port: port, Proxy: model.ProbeGroup,
-	}}
 	return nil
+}
+
+// groupNames lists the names of the groups in a YAML list node, none for a
+// missing one.
+func groupNames(node yaml.Node) ([]string, error) {
+	if node.IsZero() {
+		return nil, nil
+	}
+	var groups []struct {
+		Name string `yaml:"name"`
+	}
+	if err := node.Decode(&groups); err != nil {
+		return nil, fmt.Errorf("read the proxy groups to check: %w", err)
+	}
+	names := make([]string, 0, len(groups))
+	for _, g := range groups {
+		if g.Name != "" && !slices.Contains(names, g.Name) {
+			names = append(names, g.Name)
+		}
+	}
+	return names, nil
 }
 
 // appendMapping returns the YAML list node with item added at its end. A
@@ -60,7 +88,7 @@ func appendMapping(node yaml.Node, item any) (yaml.Node, error) {
 	if out.IsZero() {
 		out = yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
 	} else if out.Kind != yaml.SequenceNode {
-		return yaml.Node{}, errors.New("the subscription's proxy groups are not a list")
+		return yaml.Node{}, fmt.Errorf("the subscription's proxy groups are not a list (kind %d)", node.Kind)
 	}
 	var encoded yaml.Node
 	if err := encoded.Encode(item); err != nil {

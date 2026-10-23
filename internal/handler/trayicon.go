@@ -8,6 +8,7 @@ import (
 	"image/draw"
 	"image/png"
 	"math"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -180,6 +181,26 @@ const (
 	// trayHopSplit is how far through the hop the first bounce ends.
 	trayHopSplit = 0.58
 )
+
+// markHopDuration is how long the logo in the window takes to hop.
+const markHopDuration = 560 * time.Millisecond
+
+// markHop is the hop the logo plays when the route's exit changes; the zero
+// value is none.
+type markHop struct{ started time.Time }
+
+// lift is how high the ball is, in mark units, at now, and whether the hop is
+// still playing.
+func (h markHop) lift(now time.Time) (float64, bool) {
+	if h.started.IsZero() {
+		return 0, false
+	}
+	progress := float64(now.Sub(h.started)) / float64(markHopDuration)
+	if progress < 0 || progress >= 1 {
+		return 0, false
+	}
+	return hopLift(progress), true
+}
 
 // hopLift is how high the ball is, in mark units, at progress (0 to 1)
 // through a hop.

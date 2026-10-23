@@ -10,58 +10,58 @@ import (
 	"hop/internal/model"
 )
 
-// UnlockController is what the unlock check needs from the core: the nodes,
-// and the probe group's choice.
+// UnlockController is what the unlock check needs from the core: the groups,
+// and each probe lane's choice.
 type UnlockController interface {
 	Snapshot(ctx context.Context) (model.Snapshot, error)
 	SelectProxy(ctx context.Context, group string, proxy string) error
 	SelectedProxy(ctx context.Context, group string) (string, error)
 }
 
-// UnlockChecker asks the services whether they work through the probe
-// listener's route.
+// UnlockChecker asks the services whether they work through one probe lane's
+// listener.
 type UnlockChecker interface {
 	Check(ctx context.Context) (model.Unlock, error)
 }
 
-// UnlockReport is one node's result and how far the run is.
+// UnlockReport is one group's result and how far the run is.
 type UnlockReport struct {
-	Node   string
+	Group  string
 	Result model.Unlock
-	// Done counts the nodes checked so far, this one included; Total is how
+	// Done counts the groups checked so far, this one included; Total is how
 	// many the run checks.
 	Done  int
 	Total int
 }
 
 // ErrUnlockRunning is returned when a run is asked for while another one is
-// going: the probe group holds one node at a time.
+// going: the lanes hold one group each.
 var ErrUnlockRunning = errors.New("an unlock check is already running")
 
-// UnlockService finds which services work through which nodes, one node at a
-// time through the probe group.
+// UnlockService finds which services work through which groups: each group's
+// current node, as traffic sent to the group would take. It checks as many
+// groups at once as it has lanes, one checker each.
 type UnlockService struct {
 	controller UnlockController
-	checker    UnlockChecker
+	lanes      []UnlockChecker
 	running    sync.Mutex
 }
 
-// NewUnlockService returns a service picking nodes through controller and
-// checking through checker.
-func NewUnlockService(controller UnlockController, checker UnlockChecker) *UnlockService {
-	return &UnlockService{controller: controller, checker: checker}
+// NewUnlockService returns a service that picks groups through controller and
+// checks through lanes; lane i is the one model.ProbeGroup(i) belongs to.
+func NewUnlockService(controller UnlockController, lanes []UnlockChecker) *UnlockService {
+	return &UnlockService{controller: controller, lanes: lanes}
 }
 
-// Detect checks the nodes behind group, one after the other, and hands each
-// result to report as it comes. Nodes whose last delay test got no answer are
-// left out: they carry nothing, and each would hold the run until its
-// timeout. A service that could not be checked on a node is unknown there, and
-// the reason is logged; the run goes on.
+// Detect checks every group of the profile, lanes at a time, and hands each
+// result to report as it comes (from the lane's goroutine, one at a time). A
+// service that could not be checked on a group is unknown there, and the
+// reason is logged; the run goes on.
 //
-// The run stops with an error when the core cannot take a node, or when the
-// probe group is not on the node a check ran under, which means the core
-// reloaded in between and the result would belong to another node.
-func (s *UnlockService) Detect(ctx context.Context, group string, report func(UnlockReport)) error {
+// The run stops with an error when the core cannot take a group, or when a lane
+// is not on the group a check ran under, which means the core reloaded in
+// between and the result would belong to another group.
+func (s *UnlockService) Detect(ctx context.Context, report func(UnlockReport)) error {
 	if !s.running.TryLock() {
 		return ErrUnlockRunning
 	}
@@ -70,32 +70,68 @@ func (s *UnlockService) Detect(ctx context.Context, group string, report func(Un
 	if err != nil {
 		return err
 	}
-	var nodes []string
-	for _, node := range leafNodes(snapshot, []string{group}) {
-		if delay, tested := snapshot.Delays[node]; tested && delay == 0 {
-			continue
-		}
-		nodes = append(nodes, node)
+	groups := make(chan string, len(snapshot.Groups))
+	for _, g := range snapshot.Groups {
+		groups <- g.Name
 	}
-	for i, node := range nodes {
-		if err := s.controller.SelectProxy(ctx, model.ProbeGroup, node); err != nil {
-			return fmt.Errorf("pick node %q in the probe group: %w", node, err)
-		}
-		result, checkErr := s.checker.Check(ctx)
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		picked, err := s.controller.SelectedProxy(ctx, model.ProbeGroup)
-		if err != nil {
-			return fmt.Errorf("read the probe group after checking node %q: %w", node, err)
-		}
-		if picked != node {
-			return fmt.Errorf("the probe group moved from node %q to %q during its check: the core reloaded", node, picked)
-		}
-		if checkErr != nil {
-			slog.Warn("unlock check incomplete", "node", node, "error", checkErr)
-		}
-		report(UnlockReport{Node: node, Result: result, Done: i + 1, Total: len(nodes)})
+	close(groups)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		done     int
+		firstErr error
+		total    = len(snapshot.Groups)
+	)
+	for lane, checker := range s.lanes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for group := range groups {
+				result, err := s.checkOn(ctx, lane, checker, group)
+				mu.Lock()
+				if err != nil {
+					if firstErr == nil && ctx.Err() == nil {
+						firstErr = err
+						cancel()
+					}
+					mu.Unlock()
+					return
+				}
+				done++
+				report(UnlockReport{Group: group, Result: result, Done: done, Total: total})
+				mu.Unlock()
+			}
+		}()
 	}
-	return nil
+	wg.Wait()
+	if firstErr != nil {
+		return firstErr
+	}
+	return ctx.Err()
+}
+
+// checkOn picks group in lane and checks the services through it.
+func (s *UnlockService) checkOn(ctx context.Context, lane int, checker UnlockChecker, group string) (model.Unlock, error) {
+	laneGroup := model.ProbeGroup(lane)
+	if err := s.controller.SelectProxy(ctx, laneGroup, group); err != nil {
+		return model.Unlock{}, fmt.Errorf("pick group %q in probe lane %d: %w", group, lane, err)
+	}
+	result, checkErr := checker.Check(ctx)
+	if ctx.Err() != nil {
+		return model.Unlock{}, ctx.Err()
+	}
+	picked, err := s.controller.SelectedProxy(ctx, laneGroup)
+	if err != nil {
+		return model.Unlock{}, fmt.Errorf("read probe lane %d after checking group %q: %w", lane, group, err)
+	}
+	if picked != group {
+		return model.Unlock{}, fmt.Errorf("probe lane %d moved from group %q to %q during its check: the core reloaded", lane, group, picked)
+	}
+	if checkErr != nil {
+		slog.Warn("unlock check incomplete", "group", group, "error", checkErr)
+	}
+	return result, nil
 }

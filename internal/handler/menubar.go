@@ -57,9 +57,7 @@ type MenuBar struct {
 	speed *image.RGBA
 	// sample is the latest traffic, drawn when a hop ends.
 	sample model.Traffic
-	// exit is the route's exit the icon last saw; the ball hops when it
-	// changes. hopping says a hop is playing.
-	exit    string
+	// hopping says the ball is hopping in the icon.
 	hopping bool
 }
 
@@ -80,6 +78,7 @@ func NewMenuBar(win *mygo.Window, d *Dashboard) (*MenuBar, error) {
 	tray.OnClick(m.togglePanel)
 	tray.OnRightClick(m.popUpMenu)
 	d.OnTraffic(m.showSpeed)
+	d.OnHop(m.hop)
 	win.OnClose(func(e *mygo.CloseEvent) {
 		if !m.quitting {
 			e.PreventDefault()
@@ -101,26 +100,10 @@ func NewMenuBar(win *mygo.Window, d *Dashboard) (*MenuBar, error) {
 func (m *MenuBar) Update(fn func()) {
 	m.win.Update(func() {
 		fn()
-		m.noticeExit()
 		if m.panel != nil {
 			m.panel.Invalidate()
 		}
 	})
-}
-
-// noticeExit hops the ball when the route's exit changes to another exit. The
-// first exit after a start, and one that returns after the route was empty,
-// are not changes.
-func (m *MenuBar) noticeExit() {
-	exit := ""
-	if route := m.d.view.Route; len(route) > 0 {
-		exit = route[len(route)-1].Name
-	}
-	previous := m.exit
-	m.exit = exit
-	if previous != "" && exit != "" && exit != previous {
-		m.hop()
-	}
 }
 
 // showWindow brings the window back, and Hop's Dock icon with it.

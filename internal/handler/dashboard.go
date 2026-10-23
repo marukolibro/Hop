@@ -65,7 +65,7 @@ type ExitIPService interface {
 
 // UnlockService finds which services work through which nodes.
 type UnlockService interface {
-	Detect(ctx context.Context, group string, report func(service.UnlockReport)) error
+	Detect(ctx context.Context, report func(service.UnlockReport)) error
 }
 
 // SubscriptionService is what the dashboard needs to manage saved profiles:
@@ -336,6 +336,11 @@ type Dashboard struct {
 	// exitIP is the default route's public address, as the last lookup found
 	// it, and the lookup's state.
 	exitIP exitIPState
+	// markHop is the logo's hop, played when the route's exit changes;
+	// hopExit is the exit it last saw, and onHop hears each hop.
+	markHop markHop
+	hopExit string
+	onHop   func()
 	// unlock is what the unlock check found for each node, and its run.
 	unlock unlockState
 	// delayCancel is UI-thread-owned and cancels the previous epoch's delay
@@ -407,6 +412,28 @@ func NewDashboard(services Services, proxyAddress string, settings model.Setting
 	d.connections.list.Key = func(row int) any { return d.visibleConnections()[row].ID }
 	d.stats = services.Traffic.Summary(time.Now())
 	return d
+}
+
+// OnHop makes fn hear every hop of the logo, on the UI thread. Call it before
+// Start.
+func (d *Dashboard) OnHop(fn func()) {
+	d.onHop = fn
+}
+
+// noticeExit hops the logo when the route's exit changes to another exit. The
+// first exit after a start, and one that returns after the route was empty,
+// are not changes. It runs on the UI thread.
+func (d *Dashboard) noticeExit() {
+	exit := d.exitIPTarget().exit
+	previous := d.hopExit
+	d.hopExit = exit
+	if previous == "" || exit == "" || exit == previous {
+		return
+	}
+	d.markHop = markHop{started: time.Now()}
+	if d.onHop != nil {
+		d.onHop()
+	}
 }
 
 // OnTraffic makes fn hear every traffic sample, on the UI thread. Call it
@@ -582,6 +609,7 @@ func (d *Dashboard) loadView(ctx context.Context, win Updater, gen int) {
 		d.view = view
 		d.modeIndex = modeIndexOf(view.Mode)
 		d.activeGroup = keepActiveGroup(view, d.activeGroup)
+		d.noticeExit()
 		d.considerExitIP()
 	})
 }
@@ -875,9 +903,9 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 		}
 		ui.Row(c).Gap(headerGap).AlignItems(ui.Center).Height(headerHeight).Padding(0, right, 0, left).DragWindow().Children(func() {
 			if width >= 760 {
-				brandLockup(c, t, 28)
+				brandLockup(c, t, 28, d.markHop)
 			} else {
-				brandMark(c, t, 28)
+				brandMark(c, t, 28, d.markHop)
 			}
 			pageTabs(c, t, "页面", &d.page, pageLabels, func(int) {})
 			ui.Box(c).Grow(1)
