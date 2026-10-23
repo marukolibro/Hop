@@ -227,11 +227,11 @@ func seaImage(w float32, h float32, dark bool) *image.RGBA {
 	return img
 }
 
-// wallpaperKey names a baked wallpaper: its size in bitmap pixels, whether it
-// is the dark one, and whether it is the dusk theme's.
+// wallpaperKey names a baked wallpaper: its size in bitmap pixels and the
+// palette it was baked from, which tells the theme and the appearance apart.
 type wallpaperKey struct {
-	nx, ny     int
-	dark, dusk bool
+	nx, ny  int
+	palette windowMaterialPalette
 }
 
 // wallpaperCache keeps the bitmap of the last window size, appearance and
@@ -244,9 +244,10 @@ var wallpaperCache struct {
 }
 
 // wallpaperBitmap is the wallpaper of palette as a bitmap for a window of w
-// by h points: the sea's, or the dusk atmosphere.
+// by h points: the sea's, or the dusk atmosphere. The paper theme has no
+// bitmap of window size; drawPaper tiles a small grain instead.
 func wallpaperBitmap(w float32, h float32, palette windowMaterialPalette) *ui.Bitmap {
-	key := wallpaperKey{nx: int(math.Round(float64(w / seaCell))), ny: int(math.Round(float64(h / seaCell))), dark: palette.dark, dusk: !palette.sea}
+	key := wallpaperKey{nx: int(math.Round(float64(w / seaCell))), ny: int(math.Round(float64(h / seaCell))), palette: palette}
 	wallpaperCache.Lock()
 	defer wallpaperCache.Unlock()
 	if wallpaperCache.bitmap == nil || wallpaperCache.key != key {
@@ -262,5 +263,9 @@ func wallpaperBitmap(w float32, h float32, palette windowMaterialPalette) *ui.Bi
 
 // drawWallpaper paints the palette's baked wallpaper behind the window rect r.
 func drawWallpaper(p *ui.Painter, r ui.Rect, palette windowMaterialPalette) {
+	if palette.paper {
+		drawPaper(p, r, palette)
+		return
+	}
 	p.Image(wallpaperBitmap(r.W, r.H, palette), r, ui.FillBox)
 }

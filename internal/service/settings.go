@@ -18,7 +18,7 @@ type SettingsStore interface {
 var Appearances = []model.Appearance{model.AppearanceSystem, model.AppearanceLight, model.AppearanceDark}
 
 // ColorThemes are the material palettes in the order offered in settings.
-var ColorThemes = []model.ColorTheme{model.ThemeOcean, model.ThemeDusk}
+var ColorThemes = []model.ColorTheme{model.ThemeOcean, model.ThemeDusk, model.ThemePaper}
 
 // DelayTimeouts are the delay test timeouts the settings offer, in seconds.
 var DelayTimeouts = []int{2, 3, 5}

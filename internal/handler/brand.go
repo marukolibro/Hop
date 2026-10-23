@@ -13,8 +13,11 @@ type markInk struct {
 }
 
 // brandInk is Hop's gradient, the accent into sky blue, a step brighter in
-// the dark appearance.
+// the dark appearance; a theme with its own accent gets a solid mark.
 func brandInk(t *ui.Theme) markInk {
+	if !hopBlueAccent(t) {
+		return solidInk(t.Accent)
+	}
 	if t.Dark {
 		return markInk{from: accentDark, to: ui.Hex("#67D3FB")}
 	}

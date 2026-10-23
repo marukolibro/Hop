@@ -456,6 +456,7 @@ type ColorTheme string
 const (
 	ThemeOcean ColorTheme = "ocean"
 	ThemeDusk  ColorTheme = "dusk"
+	ThemePaper ColorTheme = "paper"
 )
 
 // DefaultSubscriptionUpdateHours is how often subscriptions refresh on their

@@ -40,8 +40,17 @@ const (
 	neutralLineAlpha float32 = 0.08
 )
 
+// hopBlueAccent says whether t carries Hop's sky-blue accent. A theme with an
+// accent of its own, such as paper's blue, colours its ink and mark with it.
+func hopBlueAccent(t *ui.Theme) bool {
+	return t.Accent == accentLight || t.Accent == accentDark
+}
+
 // accentInk is the accent as text, where a fill's blue would be too faint.
 func accentInk(t *ui.Theme) ui.Color {
+	if !hopBlueAccent(t) {
+		return t.Accent
+	}
 	if t.Dark {
 		return accentInkDark
 	}

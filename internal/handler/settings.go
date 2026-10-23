@@ -17,7 +17,7 @@ import (
 var appearanceLabels = []string{"跟随系统", "浅色", "深色"}
 
 // colorThemeLabels name service.ColorThemes, index for index.
-var colorThemeLabels = []string{"海蓝", "暮紫"}
+var colorThemeLabels = []string{"海蓝", "暮紫", "纸张"}
 
 // timeoutLabels name service.DelayTimeouts, index for index.
 var timeoutLabels = []string{"2 秒", "3 秒", "5 秒"}

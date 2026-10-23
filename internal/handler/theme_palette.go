@@ -18,12 +18,31 @@ type windowMaterialPalette struct {
 	glow   ui.Color
 	// sea is the default colour theme: its backdrop is the sea wallpaper, not
 	// the three light fields above.
-	sea  bool
-	dark bool
+	sea bool
+	// paper is the flat, grained paper theme: its backdrop is one plain sheet.
+	paper bool
+	dark  bool
 }
 
 // materialPalette resolves one validated theme and appearance into colors.
 func materialPalette(dark bool, theme model.ColorTheme) windowMaterialPalette {
+	if theme == model.ThemePaper {
+		// Neutral grey sheet, near-black ink and one blue accent. The greys carry
+		// no hue, so every region of the window reads as the same paper. sky is
+		// the slightly deeper tone of the sidebar and the node area.
+		if dark {
+			return windowMaterialPalette{
+				base: ui.Hex("#161616"), ink: ui.Hex("#EDEDED"), muted: ui.Hex("#A0A0A0"), accent: ui.Hex("#7AA2FF"),
+				sky: ui.Hex("#2C2C2C"), fold: ui.Hex("#1D1D1D"), glow: ui.Hex("#1D1D1D"),
+				paper: true, dark: true,
+			}
+		}
+		return windowMaterialPalette{
+			base: ui.Hex("#F4F4F4"), ink: ui.Hex("#111111"), muted: ui.Hex("#666666"), accent: ui.Hex("#447DFC"),
+			sky: ui.Hex("#DDDDDD"), fold: ui.Hex("#EDEDED"), glow: ui.Hex("#EDEDED"),
+			paper: true,
+		}
+	}
 	if theme == model.ThemeDusk {
 		if dark {
 			return windowMaterialPalette{
