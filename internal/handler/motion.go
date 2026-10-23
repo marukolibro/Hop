@@ -217,10 +217,11 @@ func flowIntensity(bytesPerSecond int64) float32 {
 
 // hopMark draws Hop's mark in ink, as the menu bar icon shows it: a ball
 // bouncing twice and landing. The arcs blend from ink's first colour at the
-// left to its second at the right, where the ball lands in it. While hop
-// plays, the ball jumps. Small dots give the arcs the round ends the path's
+// left to its second at the right, where the ball lands in it. While run
+// plays, the mark draws itself again: the ball throws the tall arc, then the
+// short one, and lands. Small dots give the arcs the round ends the path's
 // own ends lack.
-func hopMark(c *ui.Context, size float32, ink markInk, hop markHop) {
+func hopMark(c *ui.Context, size float32, ink markInk, run markRun) {
 	ui.Box(c).Width(size).Height(size).Draw(func(p *ui.Painter, r ui.Rect) {
 		scale := r.W / markSize
 		at := func(m markPoint) (float32, float32) {
@@ -228,25 +229,53 @@ func hopMark(c *ui.Context, size float32, ink markInk, hop markHop) {
 		}
 		inkAt := func(x float32) ui.Color { return ink.from.Mix(ink.to, (x-r.X)/r.W) }
 		stroke := float32(markStroke) * scale
-		path := &ui.Path{}
-		for _, arc := range markArcs {
-			a, control, end := arc.trimmed()
-			ax, ay := at(a)
-			cx, cy := at(control)
-			ex, ey := at(end)
-			path.MoveTo(ax, ay).QuadTo(cx, cy, ex, ey)
-			p.Fill(circle(ax, ay, stroke/2), inkAt(ax), stroke/2)
-			p.Fill(circle(ex, ey, stroke/2), inkAt(ex), stroke/2)
-		}
-		p.StrokePathGradient(path, stroke, ui.LinearGradient{From: ink.from, To: ink.to, Angle: 90})
-		lift, hopping := hop.lift(p.Now())
-		if hopping {
-			p.AnimationFrame()
-		}
-		bx, by := at(markBall)
-		by -= float32(lift) * scale
 		ballR := float32(markBallR) * scale
-		p.Fill(circle(bx, by, ballR), inkAt(bx), ballR)
+		drawBall := func(m markPoint, alpha float64) {
+			if alpha <= 0 {
+				return
+			}
+			bx, by := at(m)
+			p.Fill(circle(bx, by, ballR), inkAt(bx).Alpha(float32(alpha)), ballR)
+		}
+		// drawTrack strokes both arcs whole, at alpha of their ink.
+		drawTrack := func(alpha float64) {
+			path := &ui.Path{}
+			for _, arc := range markArcs {
+				a, control, end := arc.trimmed()
+				ax, ay := at(a)
+				cx, cy := at(control)
+				ex, ey := at(end)
+				path.MoveTo(ax, ay).QuadTo(cx, cy, ex, ey)
+				p.Fill(circle(ax, ay, stroke/2), inkAt(ax).Alpha(float32(alpha)), stroke/2)
+				p.Fill(circle(ex, ey, stroke/2), inkAt(ex).Alpha(float32(alpha)), stroke/2)
+			}
+			p.StrokePathGradient(path, stroke, ui.LinearGradient{
+				From: ink.from.Alpha(float32(alpha)), To: ink.to.Alpha(float32(alpha)), Angle: 90,
+			})
+		}
+		progress, running := run.progress(p.Now())
+		if !running {
+			drawTrack(1)
+			drawBall(markBall, 1)
+			return
+		}
+		p.AnimationFrame()
+		pose := poseAt(progress)
+		drawTrack(pose.ghost)
+		for i, arc := range markArcs {
+			if pose.drawn[i] <= 0 {
+				continue
+			}
+			// The ink is a row of dots as round as the stroke, in the colour
+			// of the place they lie, so it grows without its gradient moving.
+			for k := 0; k <= runSamples; k++ {
+				pt := arc.at(pose.drawn[i] * arc.end * float64(k) / runSamples)
+				x, y := at(pt)
+				p.Fill(circle(x, y, stroke/2), inkAt(x), stroke/2)
+			}
+		}
+		drawBall(markBall, pose.restAlpha)
+		drawBall(pose.ball, pose.ballAlpha)
 	})
 }
 

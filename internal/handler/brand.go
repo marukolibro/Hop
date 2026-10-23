@@ -59,18 +59,18 @@ func wordmark(c *ui.Context, ink markInk) {
 
 // brandLockup is the mark beside the wordmark, as the window and the panel
 // show Hop's name.
-func brandLockup(c *ui.Context, t *ui.Theme, markSizeDIP float32, hop markHop) {
+func brandLockup(c *ui.Context, t *ui.Theme, markSizeDIP float32, run markRun) {
 	ink := brandInk(t)
 	ui.Row(c).Key("brand").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-		hopMark(c, markSizeDIP, ink, hop)
+		hopMark(c, markSizeDIP, ink, run)
 		wordmark(c, ink)
 	})
 }
 
 // brandMark is the mark alone, for a header too narrow to hold the wordmark
 // beside the page switch.
-func brandMark(c *ui.Context, t *ui.Theme, markSizeDIP float32, hop markHop) {
+func brandMark(c *ui.Context, t *ui.Theme, markSizeDIP float32, run markRun) {
 	ui.Row(c).Key("brand").AlignItems(ui.Center).Children(func() {
-		hopMark(c, markSizeDIP, brandInk(t), hop)
+		hopMark(c, markSizeDIP, brandInk(t), run)
 	})
 }

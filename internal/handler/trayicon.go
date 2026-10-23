@@ -182,24 +182,78 @@ const (
 	trayHopSplit = 0.58
 )
 
-// markHopDuration is how long the logo in the window takes to hop.
-const markHopDuration = 560 * time.Millisecond
+// markRunDuration is how long the logo in the window takes to run its whole
+// course once.
+const markRunDuration = 1100 * time.Millisecond
 
-// markHop is the hop the logo plays when the route's exit changes; the zero
+// The run's timeline, as fractions of markRunDuration: the mark gives up its
+// ink, the ball draws the tall arc, then the short one, and settles where it
+// rests.
+const (
+	runResetEnd  = 0.08
+	runFirstEnd  = 0.52
+	runSecondEnd = 0.90
+	// runGhost is how visible the arcs stay as a track while the ball draws
+	// them again.
+	runGhost = 0.22
+	// runSamples is how many dots ink one arc.
+	runSamples = 48
+)
+
+// markRun is the run the logo plays when the route's exit changes; the zero
 // value is none.
-type markHop struct{ started time.Time }
+type markRun struct{ started time.Time }
 
-// lift is how high the ball is, in mark units, at now, and whether the hop is
+// progress is how far through its course the run is at now, and whether it is
 // still playing.
-func (h markHop) lift(now time.Time) (float64, bool) {
-	if h.started.IsZero() {
+func (r markRun) progress(now time.Time) (float64, bool) {
+	if r.started.IsZero() {
 		return 0, false
 	}
-	progress := float64(now.Sub(h.started)) / float64(markHopDuration)
+	progress := float64(now.Sub(r.started)) / float64(markRunDuration)
 	if progress < 0 || progress >= 1 {
 		return 0, false
 	}
-	return hopLift(progress), true
+	return progress, true
+}
+
+// markPose is the mark partway through its run.
+type markPose struct {
+	// drawn is how much of each arc is inked, from 0 to 1.
+	drawn [2]float64
+	// ghost is how visible the whole track is under the ink, from 0 to 1.
+	ghost float64
+	// ball is where the ball is and ballAlpha how visible; restAlpha is how
+	// visible the ball at rest is, which fades out as the run begins.
+	ball      markPoint
+	ballAlpha float64
+	restAlpha float64
+}
+
+// poseAt is the mark at progress (0 to 1) of its run. The ball follows the
+// arcs the way a thrown ball does, one step of its course after the other, so
+// the ink follows it: a full mark gives up its ink to a faint track, the ball
+// draws the tall arc, then the short one, and settles into its resting place.
+func poseAt(progress float64) markPose {
+	tall, short := markArcs[0], markArcs[1]
+	switch {
+	case progress < runResetEnd:
+		s := progress / runResetEnd
+		return markPose{ghost: 1 - (1-runGhost)*s, ball: tall.a, ballAlpha: s, restAlpha: 1 - s}
+	case progress < runFirstEnd:
+		u := (progress - runResetEnd) / (runFirstEnd - runResetEnd)
+		return markPose{drawn: [2]float64{u, 0}, ghost: runGhost, ball: tall.at(u), ballAlpha: 1}
+	case progress < runSecondEnd:
+		u := (progress - runFirstEnd) / (runSecondEnd - runFirstEnd)
+		return markPose{drawn: [2]float64{1, u}, ghost: runGhost, ball: short.at(u * short.end), ballAlpha: 1}
+	}
+	v := (progress - runSecondEnd) / (1 - runSecondEnd)
+	v = 1 - (1-v)*(1-v)
+	from := short.at(short.end)
+	return markPose{
+		drawn: [2]float64{1, 1}, ghost: runGhost, ballAlpha: 1,
+		ball: markPoint{x: from.x + (markBall.x-from.x)*v, y: from.y + (markBall.y-from.y)*v},
+	}
 }
 
 // hopLift is how high the ball is, in mark units, at progress (0 to 1)

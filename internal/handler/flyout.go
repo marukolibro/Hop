@@ -39,7 +39,7 @@ func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func()) {
 	}
 	panel.Children(func() {
 		entrance(ui.Row(c).Key("top").Gap(gapSmall).AlignItems(ui.Center), 0).Children(func() {
-			brandLockup(c, t, 20, d.markHop)
+			brandLockup(c, t, 20, d.markRun)
 			ui.Box(c).Grow(1)
 			if d.appUpdate.update.Available && d.appUpdate.enabled {
 				// Labelled: a bare arrow here would read as the upload rate.

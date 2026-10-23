@@ -336,9 +336,9 @@ type Dashboard struct {
 	// exitIP is the default route's public address, as the last lookup found
 	// it, and the lookup's state.
 	exitIP exitIPState
-	// markHop is the logo's hop, played when the route's exit changes;
-	// hopExit is the exit it last saw, and onHop hears each hop.
-	markHop markHop
+	// markRun is the logo's run, played when the route's exit changes;
+	// hopExit is the exit it last saw, and onHop hears each change.
+	markRun markRun
 	hopExit string
 	onHop   func()
 	// unlock is what the unlock check found for each node, and its run.
@@ -414,13 +414,13 @@ func NewDashboard(services Services, proxyAddress string, settings model.Setting
 	return d
 }
 
-// OnHop makes fn hear every hop of the logo, on the UI thread. Call it before
+// OnHop makes fn hear every run of the logo, on the UI thread. Call it before
 // Start.
 func (d *Dashboard) OnHop(fn func()) {
 	d.onHop = fn
 }
 
-// noticeExit hops the logo when the route's exit changes to another exit. The
+// noticeExit runs the logo when the route's exit changes to another exit. The
 // first exit after a start, and one that returns after the route was empty,
 // are not changes. It runs on the UI thread.
 func (d *Dashboard) noticeExit() {
@@ -430,7 +430,7 @@ func (d *Dashboard) noticeExit() {
 	if previous == "" || exit == "" || exit == previous {
 		return
 	}
-	d.markHop = markHop{started: time.Now()}
+	d.markRun = markRun{started: time.Now()}
 	if d.onHop != nil {
 		d.onHop()
 	}
@@ -903,9 +903,9 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 		}
 		ui.Row(c).Gap(headerGap).AlignItems(ui.Center).Height(headerHeight).Padding(0, right, 0, left).DragWindow().Children(func() {
 			if width >= 760 {
-				brandLockup(c, t, 28, d.markHop)
+				brandLockup(c, t, 28, d.markRun)
 			} else {
-				brandMark(c, t, 28, d.markHop)
+				brandMark(c, t, 28, d.markRun)
 			}
 			pageTabs(c, t, "页面", &d.page, pageLabels, func(int) {})
 			ui.Box(c).Grow(1)

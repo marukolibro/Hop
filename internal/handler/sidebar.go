@@ -195,7 +195,7 @@ func groupIcon(c *ui.Context, t *ui.Theme, group model.GroupView, size float32) 
 		case isRegional:
 			ui.Text(c, shownFlag(flag)).FontSize(glyph)
 		case group.Kind == model.GroupKindMain:
-			hopMark(c, glyph, solidInk(t.Accent), markHop{})
+			hopMark(c, glyph, solidInk(t.Accent), markRun{})
 		case group.Kind == model.GroupKindAuto:
 			ui.Icon(c, iconBolt).Width(glyph).Height(glyph).TextColor(t.Accent)
 		case group.Kind == model.GroupKindRouting:
