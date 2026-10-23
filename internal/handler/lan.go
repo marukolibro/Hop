@@ -15,6 +15,7 @@ const (
 	lanOpenNoAccount = "设备无需账号密码就能连接"
 	lanOpenWarning   = "同一网络里的任何设备都能使用你的订阅流量,公共 Wi-Fi 下请不要这样用"
 	lanNoNetwork     = "未连接局域网"
+	lanPausedNote    = "增强模式开启期间,局域网访问暂停:增强模式的内核以管理员权限运行,出于安全不对网络开放。关闭增强模式后会自动恢复。"
 	lanProtocolNote  = "HTTP 和 SOCKS5 都支持"
 	lanFirewallNote  = "第一次开启时,系统可能会询问是否允许接收传入连接,请选择允许。只有来自家里或公司局域网的连接会被接受,来自互联网的会被拒绝。"
 )
@@ -145,9 +146,15 @@ func (d *Dashboard) lanRows(c *ui.Context, t *ui.Theme) []func() {
 			ui.Text(c, lanOpenWarning).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(textOn(t, t.Warning))
 		})
 	}
-	rows = append(rows, func() {
-		settingRow(c, t, "代理地址", lanProtocolNote, func() { d.lanAddressList(c, t) })
-	})
+	if l.status.Paused {
+		rows = append(rows, func() {
+			ui.Text(c, lanPausedNote).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(textOn(t, t.Warning))
+		})
+	} else {
+		rows = append(rows, func() {
+			settingRow(c, t, "代理地址", lanProtocolNote, func() { d.lanAddressList(c, t) })
+		})
+	}
 	if asksAccount {
 		account := l.status.Account
 		rows = append(rows, func() {

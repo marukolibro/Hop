@@ -562,6 +562,9 @@ type LANCredential struct {
 // LANStatus is what the settings page shows about LAN access.
 type LANStatus struct {
 	Enabled bool
+	// Paused says LAN access is wanted but not served now: TUN is on, and a
+	// core run as root never serves the network.
+	Paused bool
 	// Account is what a device gives, zero when no account is asked for.
 	Account LANCredential
 	// Addresses are host:port a device on the network can reach the proxy

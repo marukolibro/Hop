@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 	"time"
 
 	"hop/config"
@@ -165,7 +167,7 @@ func TestLANServiceReloadsTheCore(t *testing.T) {
 	}
 
 	credentials := lan.NewCredentials(h.cfg.AppDir)
-	lanService := service.NewLANService(h.lan, credentials, lan.Source{}, h.service, testMixedPort)
+	lanService := service.NewLANService(h.lan, credentials, lan.Source{}, h.service, service.NewTunFlag(), testMixedPort)
 	get := func(host string, user *url.Userinfo) int {
 		t.Helper()
 		proxy := &url.URL{Scheme: "http", Host: net.JoinHostPort(host, fmt.Sprint(testMixedPort)), User: user}
@@ -220,5 +222,37 @@ func TestLANServiceReloadsTheCore(t *testing.T) {
 	}
 	if got := get("127.0.0.1", nil); got != http.StatusOK {
 		t.Errorf("on this computer after LAN access is off: %d, want 200", got)
+	}
+}
+
+// TestLANPausesUnderTun checks what the helper's core is handed: it refuses
+// any config that serves the network, so while TUN is on the config carries no
+// LAN access however the user set it, and the core's own config carries it
+// again once TUN is off.
+func TestLANPausesUnderTun(t *testing.T) {
+	account := model.LANCredential{Username: "hop", Password: "s3cretpw"}
+	build := func(tun bool) map[string]any {
+		t.Helper()
+		settings := service.RuntimeSettings{
+			MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
+			BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop", Mode: model.ModeRule,
+			Tun: tun, LAN: service.LANSettings{Enabled: true, Account: account},
+		}
+		config, err := service.RuntimeConfig([]byte(profileWithoutGroups), model.RulesProvider, nil, settings)
+		if err != nil {
+			t.Fatalf("build config (tun=%v): %v", tun, err)
+		}
+		var doc map[string]any
+		if err := yaml.Unmarshal(config, &doc); err != nil {
+			t.Fatalf("parse the config (tun=%v): %v", tun, err)
+		}
+		return doc
+	}
+	if doc := build(true); doc["allow-lan"] != false || doc["authentication"] != nil || doc["bind-address"] != "127.0.0.1" {
+		t.Errorf("under TUN the config serves the network: allow-lan=%v authentication=%v bind-address=%v",
+			doc["allow-lan"], doc["authentication"], doc["bind-address"])
+	}
+	if doc := build(false); doc["allow-lan"] != true || doc["authentication"] == nil {
+		t.Errorf("without TUN the config leaves out the LAN access: allow-lan=%v authentication=%v", doc["allow-lan"], doc["authentication"])
 	}
 }

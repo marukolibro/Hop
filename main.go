@@ -164,7 +164,7 @@ func run() (err error) {
 	mygo.Theme.SetSource(handler.AppearanceSource(userSettings.Appearance))
 	// The LAN access the user left on is part of the first config the core
 	// starts with.
-	lanService := service.NewLANService(lanState, lan.NewCredentials(cfg.AppDir), lan.Source{}, profiles, cfg.MixedPort)
+	lanService := service.NewLANService(lanState, lan.NewCredentials(cfg.AppDir), lan.Source{}, profiles, tunFlag, cfg.MixedPort)
 	if err := lanService.Prepare(userSettings.AllowLAN, !userSettings.LANNoPassword); err != nil {
 		return err
 	}

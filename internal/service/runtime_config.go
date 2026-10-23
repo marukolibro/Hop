@@ -114,7 +114,12 @@ func baseConfig(s RuntimeSettings) runtimeConfig {
 		ExternalController: s.ControllerAddr,
 		Secret:             s.ControllerSecret,
 	}
-	applyLAN(&cfg, s.LAN)
+	// Under TUN the core is the helper's, run as root, and the helper refuses
+	// any config that serves the network: LAN access waits until TUN is off,
+	// when the next config carries it again.
+	if !s.Tun {
+		applyLAN(&cfg, s.LAN)
+	}
 	if s.Tun {
 		cfg.Tun = hopTun()
 		cfg.Sniffer = hopSniffer()
