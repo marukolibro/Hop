@@ -99,7 +99,7 @@ echo "installed $dest/$binary ($MIHOMO_VERSION)"
 
 # The core's LICENSE, as it stands at the pinned tag, ships beside it: the
 # file of the tree the bundled binary was built from is the one that governs
-# it (GPL-3.0 for v1.19.32; the project's main branch carries an MIT text
+# it (GPL-3.0 for v1.19.33; the project's main branch carries an MIT text
 # instead, which the release tags do not).
 curl --fail --location --silent --show-error \
 	--output "$dest/LICENSE" \

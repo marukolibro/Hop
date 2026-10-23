@@ -6,8 +6,8 @@ tool github.com/egoist/mygo/cmd/mygo
 
 require (
 	github.com/coder/websocket v1.8.15
-	github.com/egoist/mygo v0.6.0
-	github.com/metacubex/mihomo v1.19.32
+	github.com/egoist/mygo v0.6.2
+	github.com/metacubex/mihomo v1.19.33
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.43.0
@@ -35,7 +35,7 @@ require (
 	github.com/metacubex/randv2 v0.2.0 // indirect
 	github.com/metacubex/sing v0.5.8 // indirect
 	github.com/metacubex/sing-shadowsocks v0.2.13 // indirect
-	github.com/metacubex/tls v0.1.8 // indirect
+	github.com/metacubex/tls v0.1.9 // indirect
 	github.com/oasisprotocol/deoxysii v0.0.0-20220228165953-2091330c22b7 // indirect
 	github.com/samber/lo v1.53.0 // indirect
 	github.com/sina-ghaderi/poly1305 v0.0.0-20220724002748-c5926b03988b // indirect

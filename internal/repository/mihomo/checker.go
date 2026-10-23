@@ -11,7 +11,7 @@ import (
 )
 
 // versionPattern finds the release in the output of `mihomo -v`, such as
-// "Mihomo Meta v1.19.32 darwin arm64 with go1.26.8 ...".
+// "Mihomo Meta v1.19.33 darwin arm64 with go1.26.8 ...".
 var versionPattern = regexp.MustCompile(`v\d+\.\d+\.\d+`)
 
 const versionTimeout = 10 * time.Second

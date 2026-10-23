@@ -69,7 +69,7 @@ type RuntimeLocker interface {
 // GeodataService downloads the geo databases Hop's rules use, checks them
 // with the core before anything replaces a good file, and makes the running
 // core read them. The core loads geodata once, at start, so the last step is
-// a restart, not a config reload: mihomo v1.19.32's ApplyConfig builds rules
+// a restart, not a config reload: mihomo v1.19.33's ApplyConfig builds rules
 // from its cached matchers and never re-reads the files.
 type GeodataService struct {
 	source    GeodataDownloader

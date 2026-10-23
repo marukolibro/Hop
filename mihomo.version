@@ -1,17 +1,17 @@
 # The mihomo core Hop ships, from https://github.com/MetaCubeX/mihomo/releases.
 # scripts/fetch-mihomo.sh downloads these assets and refuses any whose SHA-256
 # differs, so upgrading means changing the version and every hash together.
-MIHOMO_VERSION=v1.19.32
-MIHOMO_SHA256_DARWIN_ARM64=3312a6780652c622890fd4357c6a853bbf865464fd047ac7b7f52dab8de18652
+MIHOMO_VERSION=v1.19.33
+MIHOMO_SHA256_DARWIN_ARM64=060b64b0f2c9a310831db0fe4adb2878de67bfa606c311813c1f13966aa504b6
 # Intel Macs get the "compatible" build too, which runs on CPUs without AVX2;
 # mygo build combines it with the arm64 core into the universal app.
-MIHOMO_SHA256_DARWIN_AMD64=18b382df77bded2ad0fb3db27db5636cb15b20729d5ba995a357eeb9b46bf507
+MIHOMO_SHA256_DARWIN_AMD64=eefe967b74312f70b64efa0dfa54929d00c7af8e94416e1b12df09863a40f35b
 # The "compatible" build runs on CPUs without AVX2.
-MIHOMO_SHA256_WINDOWS_AMD64=974a4d7ad69aed27aa2e8f91d61113573c14dadb14562c63e58effabf59816f0
+MIHOMO_SHA256_WINDOWS_AMD64=7aaf636a4f2172dcd8ec34ac4f52797b059195e5afd6409508c963e545f8864d
 
 # Geodata the generated configs can need: the files the core itself
 # downloads by default (its geox-url, verified against the pinned core
-# v1.19.32), taken from one commit of meta-rules-dat's release branch so the
+# v1.19.33), taken from one commit of meta-rules-dat's release branch so the
 # pin holds while upstream re-rolls its "latest" release every day. Moving the
 # pin means changing the commit and both hashes together.
 GEODATA_COMMIT=2a9d2876677099ee55b84aedb0e140b699e492cf

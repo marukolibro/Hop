@@ -25,7 +25,7 @@ const (
 var tagPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 
 // ErrInvalidTag is returned for a tag that is not a plain release version.
-var ErrInvalidTag = errors.New("core release tag is not a plain version like v1.19.32")
+var ErrInvalidTag = errors.New("core release tag is not a plain version like v1.19.33")
 
 // Store is the directory of downloaded cores under Hop's data directory.
 type Store struct {

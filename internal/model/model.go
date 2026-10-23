@@ -370,7 +370,7 @@ const (
 
 // CoreInfo describes the mihomo core that is running.
 type CoreInfo struct {
-	// Version is what the core itself reports, such as "v1.19.32".
+	// Version is what the core itself reports, such as "v1.19.33".
 	Version string
 	Origin  CoreOrigin
 }

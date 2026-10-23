@@ -110,7 +110,7 @@ func baseConfig(s RuntimeSettings) runtimeConfig {
 }
 
 // tunConfig is the core's TUN listener. Its keys are the pinned core's own
-// (config.RawTun in v1.19.32), checked against its source.
+// (config.RawTun in v1.19.33), checked against its source.
 type tunConfig struct {
 	Enable              bool     `yaml:"enable"`
 	Device              string   `yaml:"device"`
@@ -124,7 +124,7 @@ type tunConfig struct {
 }
 
 // snifferConfig reads the domain a connection is for out of its first
-// bytes. Its keys are the pinned core's own (config.RawSniffer in v1.19.32).
+// bytes. Its keys are the pinned core's own (config.RawSniffer in v1.19.33).
 type snifferConfig struct {
 	Enable bool `yaml:"enable"`
 	// OverrideDestination replaces the address an app connected to with the
