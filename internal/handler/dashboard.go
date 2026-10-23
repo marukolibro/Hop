@@ -63,6 +63,11 @@ type ExitIPService interface {
 	Lookup(ctx context.Context) (model.ExitIP, error)
 }
 
+// UnlockService finds which services work through which nodes.
+type UnlockService interface {
+	Detect(ctx context.Context, group string, report func(service.UnlockReport)) error
+}
+
 // SubscriptionService is what the dashboard needs to manage saved profiles:
 // subscriptions kept whole, one of them in use.
 type SubscriptionService interface {
@@ -179,6 +184,7 @@ type Services struct {
 	Tun           TunService
 	LoginItem     LoginItem
 	ExitIP        ExitIPService
+	Unlock        UnlockService
 }
 
 // Updater runs fn on the window's UI thread, as mygo.Window does.
@@ -330,6 +336,8 @@ type Dashboard struct {
 	// exitIP is the default route's public address, as the last lookup found
 	// it, and the lookup's state.
 	exitIP exitIPState
+	// unlock is what the unlock check found for each node, and its run.
+	unlock unlockState
 	// delayCancel is UI-thread-owned and cancels the previous epoch's delay
 	// probes.
 	delayCancel context.CancelFunc
@@ -766,6 +774,7 @@ const (
 	actionSwitchNode          action = "切换节点失败"
 	actionSwitchMode          action = "切换出站模式失败"
 	actionTestLatency         action = "测速失败"
+	actionCheckUnlock         action = "解锁检测失败"
 	actionUseSubscription     action = "使用订阅失败"
 	actionAddSubscription     action = "添加订阅失败"
 	actionEditSubscription    action = "修改订阅失败"

@@ -223,6 +223,42 @@ type Delay struct {
 	Measured bool
 }
 
+// ProbeGroup is the select group Hop adds to every config, listing every
+// node, which the probe listener sends its traffic through; the unlock check
+// picks the node under test in it. It is Hop's own, so it never shows as a
+// group.
+const ProbeGroup = "hop-probe"
+
+// UnlockState is what a check found about a service through a node.
+type UnlockState uint8
+
+const (
+	// UnlockUnknown: the check could not tell, such as a request that failed.
+	UnlockUnknown UnlockState = iota
+	// UnlockBlocked: the service refuses this node's address.
+	UnlockBlocked
+	// UnlockPartial: the service works in part, such as Netflix showing only
+	// its own productions.
+	UnlockPartial
+	// UnlockAvailable: the service works.
+	UnlockAvailable
+)
+
+// UnlockResult is one service's check through a node. Region is the ISO 3166
+// alpha-2 code the service placed the node in, "" when it gave none.
+type UnlockResult struct {
+	State  UnlockState
+	Region string
+}
+
+// Unlock is what the checks found about the services Hop looks at, through
+// one node.
+type Unlock struct {
+	ChatGPT UnlockResult
+	Netflix UnlockResult
+	YouTube UnlockResult
+}
+
 // NodeView is a proxy as the node grid shows it, its name taken apart.
 type NodeView struct {
 	// Name is the proxy's full name, which selecting it sends to the core.

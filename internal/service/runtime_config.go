@@ -30,6 +30,9 @@ type RuntimeSettings struct {
 	// NodeDNSListen is host:port of the core's own DNS listener, opened only
 	// when a subscription points its nodes' servers at other names.
 	NodeDNSListen string
+	// ProbePort is the loopback port of the listener the unlock checks go
+	// through; 0 leaves the probe listener and its group out of the config.
+	ProbePort int
 }
 
 // TunDevice is the interface name Hop's TUN claims. It is fixed, so the
@@ -75,6 +78,9 @@ type runtimeConfig struct {
 	DNS                dnsConfig `yaml:"dns"`
 	// Hosts pins the subscription's own node servers, see nodeEntries.
 	Hosts map[string]yaml.Node `yaml:"hosts,omitempty"`
+	// Listeners is the probe listener, see addProbe; a subscription's own
+	// listeners are never taken.
+	Listeners []probeListener `yaml:"listeners,omitempty"`
 
 	Proxies        yaml.Node `yaml:"proxies,omitempty"`
 	ProxyGroups    yaml.Node `yaml:"proxy-groups,omitempty"`
@@ -325,12 +331,18 @@ func RuntimeConfig(subscription []byte, rules model.RuleSource, custom []model.C
 		if err != nil {
 			return nil, err
 		}
+		if err := addProbe(&cfg, s.BindAddress, s.ProbePort); err != nil {
+			return nil, err
+		}
 		return marshalConfig(cfg)
 	}
 	if rules != model.RulesHop {
 		return nil, fmt.Errorf("unknown rule source %q", rules)
 	}
 	if err := applyHopTemplate(&cfg, p, custom); err != nil {
+		return nil, err
+	}
+	if err := addProbe(&cfg, s.BindAddress, s.ProbePort); err != nil {
 		return nil, err
 	}
 	return marshalConfig(cfg)

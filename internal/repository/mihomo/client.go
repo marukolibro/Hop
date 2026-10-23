@@ -124,7 +124,8 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 }
 
 // Snapshot returns the policy groups in the order the profile declares
-// them, without the core's GLOBAL group, and each proxy's latest delay.
+// them, without the core's GLOBAL group and Hop's own probe group, and each
+// proxy's latest delay.
 func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	raw, err := c.do(ctx, c.timeout, http.MethodGet, "/proxies", nil, http.StatusOK)
 	if err != nil {
@@ -142,7 +143,7 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	groups := make([]model.ProxyGroup, 0, len(global.All))
 	for _, name := range global.All {
 		entry := out.Proxies[name]
-		if !slices.Contains(groupTypes, entry.Type) {
+		if !slices.Contains(groupTypes, entry.Type) || name == model.ProbeGroup {
 			continue
 		}
 		groups = append(groups, model.ProxyGroup{Name: name, Type: entry.Type, Selected: entry.Now, Options: entry.All})
@@ -157,7 +158,8 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 			facts[name] = model.ProxyFacts{Protocol: entry.Type, UDP: entry.UDP}
 		}
 	}
-	globalGroupView := model.ProxyGroup{Name: globalGroup, Type: global.Type, Selected: global.Now, Options: global.All}
+	globalOptions := slices.DeleteFunc(slices.Clone(global.All), func(name string) bool { return name == model.ProbeGroup })
+	globalGroupView := model.ProxyGroup{Name: globalGroup, Type: global.Type, Selected: global.Now, Options: globalOptions}
 	return model.Snapshot{Groups: groups, Global: globalGroupView, Delays: delays, Facts: facts}, nil
 }
 
@@ -184,6 +186,19 @@ func (c *Client) TestProxyDelay(ctx context.Context, proxy string, testURL strin
 		return 0, fmt.Errorf("decode mihomo delay response (proxy=%q body=%q): %w", proxy, raw, err)
 	}
 	return out.Delay, nil
+}
+
+// SelectedProxy returns the proxy group now uses.
+func (c *Client) SelectedProxy(ctx context.Context, group string) (string, error) {
+	raw, err := c.do(ctx, c.timeout, http.MethodGet, "/proxies/"+url.PathEscape(group), nil, http.StatusOK)
+	if err != nil {
+		return "", err
+	}
+	var out proxyEntry
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return "", fmt.Errorf("decode mihomo proxy response (group=%q body=%q): %w", group, raw, err)
+	}
+	return out.Now, nil
 }
 
 // SelectProxy makes group use proxy.

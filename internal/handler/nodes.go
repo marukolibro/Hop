@@ -96,6 +96,7 @@ func (d *Dashboard) groupHeader(c *ui.Context, t *ui.Theme) {
 			})
 		})
 		slidingSwitch(c, "节点排序", &d.nodeOrder, nodeOrderLabels, pageSwitchStyle(t, nodeOrderSegmentWidth), func(int) {})
+		d.unlockControls(c, t, group.Name)
 		d.testButton(c, t, group.Name)
 	})
 }
@@ -208,6 +209,7 @@ func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, 
 			ui.Text(c, latency).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(latencyInk).
 				FontFeatures("tnum").NoWrap().ContentTransition(ui.ContentTransition{Numeric: true})
 		})
+		d.unlockRow(c, t, node)
 	})
 }
 

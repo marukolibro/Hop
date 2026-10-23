@@ -84,6 +84,11 @@ running in a webview, and the same code runs on macOS and Windows.
 - **The exit's address.** Click to copy the public IP and country traffic
   leaves by. Hop looks it up once through its own proxy when the exit changes
   and keeps it in memory only.
+- **Unlock check.** **解锁检测** tries ChatGPT, Netflix and YouTube Premium
+  through each node of the group in turn and marks the ones that work on its
+  tile, with the region the service saw. It goes through a listener of its own
+  on the loopback, so your rules and your current route stay as they are. The
+  results are kept until Hop quits.
 - **Three modes.** Rule, Global and Direct, with a note on what each does.
 
 ### System integration
@@ -229,6 +234,7 @@ ready-made terminal command.
 | Mixed (HTTP and SOCKS5) proxy | `127.0.0.1:17890` |
 | Core controller | `127.0.0.1:19090` |
 | Core DNS, only for subscriptions that route node names through it | `127.0.0.1:17853` |
+| The unlock check's own listener, always sent through the node under test | `127.0.0.1:17893` |
 | Data, mode 0600 | `~/Library/Application Support/hop/` on macOS, `%AppData%\hop` on Windows |
 
 The ports sit away from the ones other Clash clients use.
@@ -257,8 +263,8 @@ The ports sit away from the ones other Clash clients use.
   **More info → Run anyway**.
 - **Enhanced mode will not turn on.** Another VPN or Clash client holds the
   default routes; turn its TUN off first. Hop never takes routes over.
-- **Another client uses the same ports.** Hop's own are `17890`, `19090` and
-  `17853`, apart from other clients', so both can run at once.
+- **Another client uses the same ports.** Hop's own are `17890`, `19090`,
+  `17853` and `17893`, apart from other clients', so both can run at once.
 - **Latency looks high.** Hop uses the provider's nearest entry when the
   subscription names one; re-test after switching subscription or node.
 

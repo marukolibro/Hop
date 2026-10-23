@@ -30,6 +30,7 @@ import (
 	"hop/internal/repository/routetable"
 	"hop/internal/repository/subscription"
 	"hop/internal/repository/sysproxy"
+	"hop/internal/repository/unlock"
 	"hop/internal/service"
 )
 
@@ -131,6 +132,7 @@ func run() (err error) {
 		BootstrapGroupName: bootstrapGroup,
 		Mode:               mode,
 		NodeDNSListen:      cfg.NodeDNSAddr,
+		ProbePort:          cfg.ProbePort,
 	}
 	client := mihomo.NewClient(cfg.ControllerAddr, cfg.Secret, mihomo.ConfigPath(cfg.HomeDir), &http.Client{}, controllerTimeout)
 	helperClient, geodataHelper, helperInstaller := helperAccess(instance)
@@ -275,6 +277,7 @@ func run() (err error) {
 		Tun:           tun,
 		LoginItem:     mygo.App,
 		ExitIP:        service.NewExitIPService(exitip.NewClient(exitip.TraceURL, hopProxyClient(cfg.MixedPort))),
+		Unlock:        service.NewUnlockService(client, unlock.NewClient(probeClient(cfg.ProbePort))),
 	}, net.JoinHostPort(bindAddress, strconv.Itoa(cfg.MixedPort)), userSettings, appVersion)
 	// The dashboard hears what supervision does after a crash before the
 	// core starts, so the first crash cannot go unreported.
@@ -374,6 +377,14 @@ func windowVibrancy() mygo.Vibrancy {
 // the system proxy or any other client's.
 func hopProxyClient(mixedPort int) *http.Client {
 	return &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(hopProxyURL(mixedPort))}}
+}
+
+// probeClient reaches the internet through Hop's probe listener, which sends
+// everything to the node the unlock check picked, whatever the rules say.
+// Keep-alives are off: a connection kept from one node's check must not carry
+// the next node's.
+func probeClient(probePort int) *http.Client {
+	return &http.Client{Transport: &http.Transport{DisableKeepAlives: true, Proxy: http.ProxyURL(hopProxyURL(probePort))}}
 }
 
 // hopProxyURL is Hop's own mixed port, where its core accepts HTTP proxies.
