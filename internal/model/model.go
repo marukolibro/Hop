@@ -542,10 +542,31 @@ type Settings struct {
 	Tun bool
 	// MenuBarSpeed shows the live speed beside the menu bar mark.
 	MenuBarSpeed bool
+	// AllowLAN lets other devices on the network use Hop's proxy port.
+	AllowLAN bool
+	// LANNoPassword lets them in without an account; the zero value asks for
+	// one, so settings saved before this existed stay safe.
+	LANNoPassword bool
 	// WindowClarity is how much backdrop shows through the base veil, from
 	// WindowClarityMin to WindowClarityMax. It applies only where the window
 	// has a material; solid windows ignore it.
 	WindowClarity int
+}
+
+// LANCredential is the account other devices give to use Hop's proxy port.
+type LANCredential struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// LANStatus is what the settings page shows about LAN access.
+type LANStatus struct {
+	Enabled bool
+	// Account is what a device gives, zero when no account is asked for.
+	Account LANCredential
+	// Addresses are host:port a device on the network can reach the proxy
+	// at, none while this computer is on no network.
+	Addresses []string
 }
 
 // Custom rule types, as the config file writes them.

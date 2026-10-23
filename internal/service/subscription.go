@@ -95,6 +95,8 @@ type SubscriptionService struct {
 	// tun says whether TUN is on: every config built while a core runs keeps
 	// the tun section, or a reload would quietly drop TUN.
 	tun *TunFlag
+	// lan is the LAN access every config built here carries.
+	lan *LANState
 	// mu serializes every read and write: the core and the store are only ever
 	// changed one operation at a time, and no read races a commit sweeping old
 	// bodies.
@@ -105,11 +107,11 @@ type SubscriptionService struct {
 // settings, validates it with validator, applies it through applier and
 // reads the mode the core runs in through core. customRules are matched
 // ahead of every profile's own rules. tun is the flag saying whether TUN is
-// on.
-func NewSubscriptionService(downloader Downloader, store SubscriptionStore, customRules CustomRuleStore, applier ConfigApplier, validator ConfigValidator, core ModeReader, settings RuntimeSettings, tun *TunFlag) *SubscriptionService {
+// on, and lan the LAN access.
+func NewSubscriptionService(downloader Downloader, store SubscriptionStore, customRules CustomRuleStore, applier ConfigApplier, validator ConfigValidator, core ModeReader, settings RuntimeSettings, tun *TunFlag, lan *LANState) *SubscriptionService {
 	return &SubscriptionService{
 		downloader: downloader, store: store, customRules: customRules,
-		applier: applier, validator: validator, core: core, settings: settings, tun: tun,
+		applier: applier, validator: validator, core: core, settings: settings, tun: tun, lan: lan,
 	}
 }
 
@@ -943,6 +945,7 @@ func (s *SubscriptionService) runtimeConfig(subscription []byte, rules model.Rul
 	if err != nil {
 		return nil, fmt.Errorf("stored custom rules: %w", err)
 	}
+	settings.LAN = s.lan.Get()
 	return RuntimeConfig(subscription, rules, custom, settings)
 }
 

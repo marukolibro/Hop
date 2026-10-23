@@ -26,6 +26,7 @@ import (
 	"hop/internal/repository/exitip"
 	"hop/internal/repository/geodata"
 	"hop/internal/repository/helper"
+	"hop/internal/repository/lan"
 	"hop/internal/repository/mihomo"
 	"hop/internal/repository/profile"
 	"hop/internal/repository/routetable"
@@ -138,6 +139,7 @@ func run() (err error) {
 	client := mihomo.NewClient(cfg.ControllerAddr, cfg.Secret, mihomo.ConfigPath(cfg.HomeDir), &http.Client{}, controllerTimeout)
 	helperClient, geodataHelper, helperInstaller := helperAccess(instance)
 	tunFlag := service.NewTunFlag()
+	lanState := service.NewLANState()
 	profiles := service.NewSubscriptionService(
 		subscription.NewFetcher(&http.Client{Timeout: downloadTimeout}),
 		store,
@@ -151,7 +153,21 @@ func run() (err error) {
 		client,
 		settings,
 		tunFlag,
+		lanState,
 	)
+
+	settingsService := service.NewSettingsService(store)
+	userSettings, err := settingsService.Load()
+	if err != nil {
+		return err
+	}
+	mygo.Theme.SetSource(handler.AppearanceSource(userSettings.Appearance))
+	// The LAN access the user left on is part of the first config the core
+	// starts with.
+	lanService := service.NewLANService(lanState, lan.NewCredentials(cfg.AppDir), lan.Source{}, profiles, cfg.MixedPort)
+	if err := lanService.Prepare(userSettings.AllowLAN, !userSettings.LANNoPassword); err != nil {
+		return err
+	}
 
 	startupConfig, err := profiles.StartupConfig()
 	if err != nil {
@@ -187,12 +203,6 @@ func run() (err error) {
 		tunFlag,
 	)
 
-	settingsService := service.NewSettingsService(store)
-	userSettings, err := settingsService.Load()
-	if err != nil {
-		return err
-	}
-	mygo.Theme.SetSource(handler.AppearanceSource(userSettings.Appearance))
 	appUpdateService := service.NewAppUpdateService()
 	customRulesService := service.NewCustomRulesService(store, profiles)
 	geodataService := service.NewGeodataService(
@@ -279,6 +289,7 @@ func run() (err error) {
 		LoginItem:     mygo.App,
 		ExitIP:        service.NewExitIPService(exitip.NewClient(exitip.TraceURL, hopProxyClient(cfg.MixedPort))),
 		Unlock:        service.NewUnlockService(client, unlockLanes(cfg.ProbePort)),
+		LAN:           lanService,
 	}, net.JoinHostPort(bindAddress, strconv.Itoa(cfg.MixedPort)), userSettings, appVersion)
 	// The dashboard hears what supervision does after a crash before the
 	// core starts, so the first crash cannot go unreported.

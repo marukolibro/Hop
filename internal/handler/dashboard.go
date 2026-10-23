@@ -63,6 +63,13 @@ type ExitIPService interface {
 	Lookup(ctx context.Context) (model.ExitIP, error)
 }
 
+// LANService lets other devices on the network use the proxy port.
+type LANService interface {
+	Status() (model.LANStatus, error)
+	Apply(ctx context.Context, enabled bool, requireAccount bool) error
+	ResetAccount(ctx context.Context) error
+}
+
 // UnlockService finds which services work through which nodes.
 type UnlockService interface {
 	Detect(ctx context.Context, report func(service.UnlockReport)) error
@@ -185,6 +192,7 @@ type Services struct {
 	LoginItem     LoginItem
 	ExitIP        ExitIPService
 	Unlock        UnlockService
+	LAN           LANService
 }
 
 // Updater runs fn on the window's UI thread, as mygo.Window does.
@@ -309,6 +317,7 @@ type Dashboard struct {
 	appUpdate    appUpdateState
 	sysProxy     sysProxyState
 	tun          tunState
+	lan          lanUIState
 	// autoBusy is set while the background check refreshes what is due; it
 	// locks the controls like any other mutation.
 	autoBusy bool
@@ -562,6 +571,7 @@ func (d *Dashboard) Start(ctx context.Context, win Updater) {
 	go d.loadCore(ctx, win)
 	go d.startSystemProxy(ctx, win, d.settings.settings.SystemProxy)
 	go d.startTun(ctx, win)
+	go d.readLAN(win)
 	go d.watchNetState(ctx, win)
 	d.openAtLogin = d.services.LoginItem.OpenAtLogin()
 	d.startWatchers(ctx, win)
@@ -803,6 +813,7 @@ const (
 	actionSwitchMode          action = "切换出站模式失败"
 	actionTestLatency         action = "测速失败"
 	actionCheckUnlock         action = "解锁检测失败"
+	actionLAN                 action = "设置局域网访问失败"
 	actionUseSubscription     action = "使用订阅失败"
 	actionAddSubscription     action = "添加订阅失败"
 	actionEditSubscription    action = "修改订阅失败"

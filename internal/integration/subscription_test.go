@@ -169,6 +169,8 @@ type harness struct {
 	client  *mihomo.Client
 	store   *profile.Store
 	service *service.SubscriptionService
+	// lan is the LAN access every config the service builds carries.
+	lan *service.LANState
 }
 
 // newHarness builds the harness around appDir, opening the store there.
@@ -195,8 +197,9 @@ func newHarness(t *testing.T, appDir string) *harness {
 		MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
 		BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop", Mode: model.ModeRule,
 	}
+	lanState := service.NewLANState()
 	return &harness{
-		cfg: cfg, client: client, store: store,
+		cfg: cfg, client: client, store: store, lan: lanState,
 		service: service.NewSubscriptionService(
 			subscription.NewFetcher(&http.Client{Timeout: 10 * time.Second}),
 			store,
@@ -206,6 +209,7 @@ func newHarness(t *testing.T, appDir string) *harness {
 			client,
 			settings,
 			service.NewTunFlag(),
+			lanState,
 		),
 	}
 }

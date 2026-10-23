@@ -193,6 +193,7 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 					d.appVersionRow(c, t),
 				)
 				settingsGroup(c, t, "通用", general...)
+				settingsGroup(c, t, "局域网", d.lanRows(c, t)...)
 				settingsGroup(c, t, "订阅",
 					func() {
 						settingRow(c, t, "自动更新", "按间隔刷新已保存的订阅，本地配置不刷新；失败后等下一个间隔再试", func() {

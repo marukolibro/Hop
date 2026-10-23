@@ -35,7 +35,17 @@ func (d *Dashboard) watchNetState(ctx context.Context, win Updater) {
 		if tunErr != nil {
 			slog.Warn("could not read the TUN state", "error", tunErr)
 		}
-		win.Update(func() { d.applyNetState(proxy, proxyErr, tun, tunErr) })
+		var lanStatus model.LANStatus
+		var lanErr error
+		if d.services.LAN != nil {
+			lanStatus, lanErr = d.services.LAN.Status()
+		}
+		win.Update(func() {
+			d.applyNetState(proxy, proxyErr, tun, tunErr)
+			if d.services.LAN != nil && !d.lan.busy {
+				d.applyLANStatus(lanStatus, lanErr)
+			}
+		})
 	}
 }
 

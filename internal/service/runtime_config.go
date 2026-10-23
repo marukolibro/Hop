@@ -33,6 +33,10 @@ type RuntimeSettings struct {
 	// ProbePort is the loopback port of the listener the unlock checks go
 	// through; 0 leaves the probe listener and its group out of the config.
 	ProbePort int
+	// LAN is whether other devices on the network may use the proxy port.
+	// Every config the subscription service builds takes the live value; a
+	// config built from settings directly has it as given.
+	LAN LANSettings
 }
 
 // TunDevice is the interface name Hop's TUN claims. It is fixed, so the
@@ -78,6 +82,11 @@ type runtimeConfig struct {
 	DNS                dnsConfig `yaml:"dns"`
 	// Hosts pins the subscription's own node servers, see nodeEntries.
 	Hosts map[string]yaml.Node `yaml:"hosts,omitempty"`
+	// Authentication, SkipAuthPrefixes and LanAllowedIPs are the LAN access,
+	// see applyLAN; a subscription's own are never taken.
+	Authentication   []string `yaml:"authentication,omitempty"`
+	SkipAuthPrefixes []string `yaml:"skip-auth-prefixes,omitempty"`
+	LanAllowedIPs    []string `yaml:"lan-allowed-ips,omitempty"`
 	// Listeners is the probe listener, see addProbe; a subscription's own
 	// listeners are never taken.
 	Listeners []probeListener `yaml:"listeners,omitempty"`
@@ -105,6 +114,7 @@ func baseConfig(s RuntimeSettings) runtimeConfig {
 		ExternalController: s.ControllerAddr,
 		Secret:             s.ControllerSecret,
 	}
+	applyLAN(&cfg, s.LAN)
 	if s.Tun {
 		cfg.Tun = hopTun()
 		cfg.Sniffer = hopSniffer()

@@ -58,6 +58,19 @@ on this machine while developing Hop. Hop must never interfere with it.
   the installed Hop's TUN runs under it.
   The integration tests use `17891`/`19091`/`17854`/`17920`-`17927`. Check a port is free before
   adding one.
+- LAN access (`service/lan.go`) is the one thing that opens the mixed port to
+  the network, and only while the user turned it on (`Settings.AllowLAN`, off
+  by default). `LANState` is the live value every config built by
+  `SubscriptionService.runtimeConfig` carries, like `TunFlag`: `applyLAN` sets
+  `allow-lan`, `bind-address: "*"`, `lan-allowed-ips` to loopback and the
+  private ranges only, and, unless the user chose no password
+  (`Settings.LANNoPassword`, so older settings stay safe), `authentication`
+  with a random password kept in `lan-credential` (0600) and
+  `skip-auth-prefixes` for `127.0.0.1` and `::1`, so the system proxy and Hop's
+  own requests need no account. Everything else (the controller, the core's
+  DNS, the probe listeners) names `127.0.0.1` itself and never follows
+  `bind-address`; `TestLANAccess` checks that against a real core. Never widen
+  `lanAllowedSources`, and never open any other port to the network.
 - The unlock check (`service/unlock.go`, `repository/unlock`) needs a request
   through one chosen group, which the controller cannot make: its delay test
   is a HEAD that also overwrites the proxy's delay history. So every config

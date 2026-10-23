@@ -89,6 +89,13 @@ running in a webview, and the same code runs on macOS and Windows.
   ones that work on the group's tile, with the region the service saw. It goes
   through listeners of its own on the loopback, so your rules and your current
   route stay as they are. The results are kept until Hop quits.
+- **LAN access.** **Settings → 局域网** lets phones and other computers on the
+  same network use Hop's proxy: they enter this computer's address (shown with
+  a copy button) as an HTTP or SOCKS5 proxy. Off by default. While on, devices
+  must give an account (a random password Hop makes, which you can reset) unless
+  you turn that off, and only sources on private networks are answered, never
+  the internet. Hop's own controller and unlock-check ports stay on this
+  computer.
 - **Three modes.** Rule, Global and Direct, with a note on what each does.
 
 ### System integration
@@ -250,6 +257,10 @@ The ports sit away from the ones other Clash clients use.
   own helper.
 - The system proxy and TUN are off by default, change only when you turn them
   on, and are put back when Hop quits.
+- Hop listens on this computer alone until you turn on LAN access. Then only the
+  proxy port opens to the network, only to private-network sources, and with an
+  account unless you turn that off; the controller, the core's DNS and the
+  unlock check's ports always stay on the loopback.
 - The exit's address is looked up with one request to Cloudflare
   (`1.1.1.1/cdn-cgi/trace`) through Hop's own proxy, kept in memory, and never
   written to disk or a log.
