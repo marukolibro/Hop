@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/metacubex/mihomo/common/convert"
@@ -38,9 +39,76 @@ func readProfile(raw []byte) (subscriptionProfile, error) {
 		if err := requireProxies(doc); err != nil {
 			return subscriptionProfile{}, err
 		}
+		if err := expandAnchors(doc); err != nil {
+			return subscriptionProfile{}, err
+		}
 		return clashProfile(doc)
 	}
 	return linkListProfile(raw)
+}
+
+// Limits on expanding a profile's YAML aliases, which a hand-written profile
+// stays far under: they stop a profile whose aliases refer to themselves, or
+// multiply each other, from filling memory.
+const (
+	maxAliasDepth = 64
+	maxAliasNodes = 1 << 20
+)
+
+// expandAnchors replaces every alias in the profile's sections with a copy of
+// the node it names, and drops the anchors. Hop writes each section it keeps
+// on its own, without the sections it drops, so an alias left in place would
+// name an anchor that no longer exists: a template under a key of the
+// profile's own, merged into the groups with "<<: *name", is the usual case.
+func expandAnchors(doc map[string]yaml.Node) error {
+	nodes := 0
+	for key, node := range doc {
+		if err := expandAliases(&node, 0, &nodes); err != nil {
+			return fmt.Errorf("read the YAML anchors under %q: %w", key, err)
+		}
+		doc[key] = node
+	}
+	return nil
+}
+
+// expandAliases expands the aliases in node and below it, in place. depth is
+// how many aliases deep node is, and nodes counts the nodes expanded so far.
+func expandAliases(node *yaml.Node, depth int, nodes *int) error {
+	*nodes++
+	if *nodes > maxAliasNodes {
+		return errors.New("the aliases expand to too many nodes")
+	}
+	if node.Kind == yaml.AliasNode {
+		if node.Alias == nil {
+			return fmt.Errorf("the alias %q names no anchor", node.Value)
+		}
+		if depth >= maxAliasDepth {
+			return errors.New("the aliases refer to each other too deeply")
+		}
+		*node = copyNode(node.Alias)
+		return expandAliases(node, depth+1, nodes)
+	}
+	node.Anchor = ""
+	for _, child := range node.Content {
+		if err := expandAliases(child, depth, nodes); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// copyNode is a deep copy of node, so expanding an alias never changes the
+// node it names.
+func copyNode(node *yaml.Node) yaml.Node {
+	out := *node
+	if len(node.Content) > 0 {
+		out.Content = make([]*yaml.Node, len(node.Content))
+		for i, child := range node.Content {
+			c := copyNode(child)
+			out.Content[i] = &c
+		}
+	}
+	return out
 }
 
 // clashProfile reads the nodes of a Clash profile.
