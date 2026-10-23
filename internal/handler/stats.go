@@ -22,19 +22,19 @@ func (d *Dashboard) statsPage(c *ui.Context, t *ui.Theme) {
 		})
 		return
 	}
+	// Like the connections and log pages, the statistics fill the window and
+	// start at the page gutter, so the heading stays where the other pages put it.
 	ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
-		ui.Row(c).Justify(ui.Center).Padding(28, pageGutter(c), 40, pageGutter(c)).Children(func() {
-			ui.Column(c).Grow(1).MaxWidth(settingsWidth).Gap(20).Children(func() {
-				pageHeadingRow(c, t, "流量统计", "每一段流量,都清晰有迹", func() {
-					captionText(c, t, "截至今天")
-				})
-				statsTotals(c, t, view)
-				horizontalHairline(c, t)
-				statsChartCard(c, t, view.Days)
-				if len(view.Sources) > 0 {
-					statsSources(c, t, view.Sources, d.subscription.view.ActiveID)
-				}
+		ui.Column(c).Padding(28, pageGutter(c), 40, pageGutter(c)).Gap(20).Children(func() {
+			pageHeadingRow(c, t, "流量统计", "每一段流量,都清晰有迹", func() {
+				captionText(c, t, "截至今天")
 			})
+			statsTotals(c, t, view)
+			horizontalHairline(c, t)
+			statsChartCard(c, t, view.Days)
+			if len(view.Sources) > 0 {
+				statsSources(c, t, view.Sources, d.subscription.view.ActiveID)
+			}
 		})
 	})
 }
