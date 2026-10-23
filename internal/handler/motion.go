@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/plugins/glass"
+	"github.com/egoist/mygo/plugins/loading"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/chart"
 
@@ -242,18 +243,10 @@ func entrance(e ui.Element, step int) ui.Element {
 	return e.Opacity(v).Translate(0, (1-v)*entranceShift)
 }
 
-// spinner turns while something runs.
+// spinner turns while something runs: MyGo's Atom, three rings tumbling
+// inside a circle, drawn in color.
 func spinner(c *ui.Context, size float32, color ui.Color) {
-	ui.Box(c).Width(size).Height(size).Draw(func(p *ui.Painter, r ui.Rect) {
-		turn := float64(p.Now().UnixMilli()%900) / 900 * 2 * math.Pi
-		cx, cy, rad := r.X+r.W/2, r.Y+r.H/2, r.W/2-1.5
-		for k := range 8 {
-			a := turn + float64(k)*math.Pi/4
-			x, y := cx+rad*float32(math.Cos(a)), cy+rad*float32(math.Sin(a))
-			p.Fill(circle(x, y, 1.4), color.Alpha(float32(k+1)/8), 1.4)
-		}
-		p.AnimationFrame()
-	})
+	loading.Atom(c, loading.Options{Size: size, Color: color}).Label("处理中")
 }
 
 // sparkArea draws history across r, download filled, upload as a line.
