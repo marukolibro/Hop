@@ -6,6 +6,7 @@ import (
 	"context"
 	"log/slog"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -821,18 +822,22 @@ func (d *Dashboard) View(c *ui.Context) {
 	root.Children(func() {
 		d.header(c, t)
 		d.notice(c, t)
-		switch d.page {
-		case pageConnections:
-			d.connectionsPage(c, t)
-		case pageStats:
-			d.statsPage(c, t)
-		case pageLogs:
-			d.logsPage(c, t)
-		case pageSettings:
-			d.settingsPage(c, t)
-		default:
-			d.nodesPage(c, t)
-		}
+		// One surface per page, keyed by the page, so landing on another page is a
+		// new element that enters.
+		ui.Column(c).Key("page-" + strconv.Itoa(d.page)).Grow(1).Basis(0).MinHeight(0).Transition(pageTransition).Children(func() {
+			switch d.page {
+			case pageConnections:
+				d.connectionsPage(c, t)
+			case pageStats:
+				d.statsPage(c, t)
+			case pageLogs:
+				d.logsPage(c, t)
+			case pageSettings:
+				d.settingsPage(c, t)
+			default:
+				d.nodesPage(c, t)
+			}
+		})
 	})
 	// The subscription and settings dialogs sit over whatever page shows.
 	d.editorDialog(c, t)

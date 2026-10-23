@@ -213,7 +213,7 @@ func (d *Dashboard) customRuleRow(c *ui.Context, t *ui.Theme, index int, rule mo
 // customRuleDialog is the add form over a dimmed window.
 func (d *Dashboard) customRuleDialog(c *ui.Context, t *ui.Theme) {
 	r := &d.rules
-	ui.DialogBase(c, &r.editorOpen, func(backdrop, panel ui.Element) {
+	animatedDialog(c, "rule", &r.editorOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(dialogScrim)
 		panel.Width(dialogWidth).Padding(pagePadding).Gap(gapLarge).Radius(radiusPanel).
 			Background(overlaySurface(t)).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)

@@ -25,6 +25,15 @@ const (
 	entranceStep          = 45 * time.Millisecond
 	entranceShift float32 = 10
 
+	// A dialog opens quickly and eases out, with no overshoot: it rises from a
+	// slightly smaller panel, never from a point, and the scrim fades beside it.
+	// Opacity and position share one ease-out, and closing runs the same way.
+	overlayTime              = 180 * time.Millisecond
+	dialogEnterScale float32 = 0.96
+	dialogEnterShift float32 = 6
+	pageEnterTime            = 240 * time.Millisecond
+	pageEnterShift   float32 = 8
+
 	// The page switch: segments fit two CJK labels at 14 with air around
 	// them, the track a floating pill 30 tall inside 36; below the narrow
 	// breakpoint the segments tighten so the width still fits.
@@ -233,6 +242,38 @@ func hopMark(c *ui.Context, size float32, ink markInk) {
 		ballR := float32(markBallR) * scale
 		p.Fill(circle(bx, by, ballR), inkAt(bx), ballR)
 	})
+}
+
+// pageTransition fades a page in as the page switch lands on it, rising a few
+// points. Changes inside the page, and resizing the window, do not animate.
+var pageTransition = ui.ElementTransition{
+	Duration: pageEnterTime, Colors: true,
+	Enter: &ui.Motion{Opacity: 0, Y: pageEnterShift},
+}
+
+// animatedDialog is ui.DialogBase with an entrance and an exit. DialogBase
+// builds nothing once *open is false, so the dialog's presence is a number of
+// its own that eases toward 1 while it is open and toward 0 after: the dialog
+// stays built until it reaches 0, fading with the scrim and sinking back to a
+// slightly smaller panel. Opacity and scale share one ease-out, closing runs
+// the opening backwards, and a click on the scrim or Escape still closes it at
+// once.
+func animatedDialog(c *ui.Context, key string, open *bool, fn func(backdrop ui.Element, panel ui.Element)) {
+	target := float32(0)
+	if *open {
+		target = 1
+	}
+	presence := ui.Box(c).Key("presence-"+key).AnimateTo("presence", target, ui.Animation{Duration: overlayTime, Ease: ui.EaseOut})
+	shown := *open || presence > 0
+	ui.DialogBase(c, &shown, func(backdrop ui.Element, panel ui.Element) {
+		fn(backdrop, panel)
+		backdrop.Opacity(presence)
+		scale := dialogEnterScale + (1-dialogEnterScale)*presence
+		panel.Opacity(presence).Scale(scale, scale).Translate(0, (1-presence)*dialogEnterShift).Disabled(!*open)
+	})
+	if !shown {
+		*open = false
+	}
 }
 
 // entrance plays once, as the element first shows: it rises into place and

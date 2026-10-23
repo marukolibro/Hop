@@ -172,7 +172,7 @@ func (d *Dashboard) tunDialog(c *ui.Context, t *ui.Theme) {
 		description = "增强模式会接管全部流量,需要更新 Hop 的增强组件。" + tunPrivilegePrompt + ",之后可随时在设置里卸载。"
 		submit = "更新并开启"
 	}
-	ui.DialogBase(c, &s.installOpen, func(backdrop, panel ui.Element) {
+	animatedDialog(c, "tun", &s.installOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(dialogScrim)
 		panel.Width(dialogWidth).Padding(pagePadding).Gap(gapLarge).Radius(radiusPanel).
 			Background(overlaySurface(t)).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)

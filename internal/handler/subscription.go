@@ -788,7 +788,7 @@ func warningLine(c *ui.Context, t *ui.Theme, message string) {
 // editorDialog is the add/edit form over a dimmed window.
 func (d *Dashboard) editorDialog(c *ui.Context, t *ui.Theme) {
 	s := &d.subscription
-	ui.DialogBase(c, &s.editorOpen, func(backdrop, panel ui.Element) {
+	animatedDialog(c, "subscription", &s.editorOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(dialogScrim)
 		panel.Width(dialogWidth).Padding(pagePadding).Gap(gapLarge).Radius(radiusPanel).
 			Background(overlaySurface(t)).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)
@@ -995,7 +995,7 @@ func fileCause(err error) error {
 // the one in use goes and others remain.
 func (d *Dashboard) deleteDialog(c *ui.Context, t *ui.Theme) {
 	s := &d.subscription
-	ui.DialogBase(c, &s.deleteOpen, func(backdrop, panel ui.Element) {
+	animatedDialog(c, "delete", &s.deleteOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(dialogScrim)
 		panel.Width(dialogWidth).Padding(pagePadding).Gap(gapLarge).Radius(radiusPanel).
 			Background(overlaySurface(t)).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)
