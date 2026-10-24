@@ -1,7 +1,7 @@
 {
   "name": "Hop",
   "identifier": "io.github.marukolibro.hop",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "out": "build",
   "updates": {
     "publicKey": "qIKeKUovG7mr/iygM3lK+eFJU9DIyyFkHYAbV73GcVU=",
