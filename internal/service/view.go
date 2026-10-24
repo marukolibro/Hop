@@ -47,7 +47,20 @@ var (
 	multiplierPattern = regexp.MustCompile(`(?i)^\d+(\.\d+)?\s*[x×]$`)
 	// planKeywords mark entries providers add to the proxy list to show
 	// account details; they are not proxies.
-	planKeywords = []string{"剩余", "流量", "到期", "过期", "重置", "官网", "expire", "traffic", "reset"}
+	planKeywords = []string{
+		"剩余", "流量", "到期", "过期", "重置", "官网", "套餐", "客服", "公告", "已用", "有效期",
+		"expire", "traffic", "reset",
+	}
+	// planShapes find account details by their form, for providers that
+	// write them without any keyword, such as "61.10 GB | 200 GB": a data
+	// amount (a unit with B, so "1Gbps" or "10G" bandwidth notes are not
+	// one), a date, or a web address. A bare domain is not one: a
+	// self-hosted node may be named after its server.
+	planShapes = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\d+(\.\d+)?\s*[kmgtp]i?b\b`),
+		regexp.MustCompile(`\d{4}\s*[-/.年]\s*\d{1,2}\s*[-/.月]\s*\d{1,2}`),
+		regexp.MustCompile(`(?i)https?://|www\.`),
+	}
 )
 
 // BuildView turns a snapshot of the core into what the dashboard shows for
@@ -295,7 +308,10 @@ func isPlanNote(name string) bool {
 		return false
 	}
 	lower := strings.ToLower(name)
-	return slices.ContainsFunc(planKeywords, func(k string) bool { return strings.Contains(lower, k) })
+	if slices.ContainsFunc(planKeywords, func(k string) bool { return strings.Contains(lower, k) }) {
+		return true
+	}
+	return slices.ContainsFunc(planShapes, func(p *regexp.Regexp) bool { return p.MatchString(name) })
 }
 
 // planNotes collects the account details providers list as proxies, once
