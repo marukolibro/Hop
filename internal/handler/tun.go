@@ -37,7 +37,20 @@ func (d *Dashboard) startTun(ctx context.Context, win Updater) {
 			return
 		}
 		d.applyTunStatus(status)
+		if d.helperUpdateWanted(status) {
+			d.tun.installOpen = true
+		}
 	})
+}
+
+// helperUpdateWanted says whether the update dialog opens by itself at start:
+// the user had TUN on, and the installed helper is another version, so main's
+// startup left TUN off until it is replaced. Asking now keeps TUN from
+// staying off with no sign of why; the replacement itself still waits for the
+// user's click and administrator password.
+func (d *Dashboard) helperUpdateWanted(status model.TunStatus) bool {
+	return d.settings.settings.Tun && status.HelperInstalled && status.HelperOutdated &&
+		!status.CoreRunning && !status.Taken
 }
 
 // applyTunStatus shows the state the service reports. TUN is on exactly when
