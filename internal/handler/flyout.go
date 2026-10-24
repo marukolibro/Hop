@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"math"
 	"strings"
 	"time"
 
@@ -11,11 +12,16 @@ import (
 )
 
 const (
-	flyoutWidth   = 340
+	flyoutWidth = 340
+	// flyoutHeight is the first panel's height, before it fits its content.
 	flyoutHeight  = 640
 	flyoutPadding = gapLarge
 	fastestCount  = 5
 	quickRowH     = 32
+	quickRowGap   = 2
+	// quickRowsMax is how many routes show before the list scrolls: the
+	// panel grows with the routes up to it.
+	quickRowsMax = 10
 	// quickTestEvery keeps opening the panel again and again from testing
 	// every time.
 	quickTestEvery = 2 * time.Minute
@@ -28,16 +34,31 @@ const (
 
 // flyoutView is the menu bar panel: where traffic goes and how fast, the
 // mode, and the routes to switch to, without opening the window.
-// Its sections rise into place one after another as it opens.
-func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func()) {
+// Its sections rise into place one after another as it opens. It is as tall
+// as its content: fit hears the height the last frame laid out, and the
+// route list scrolls past quickRowsMax routes.
+func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func(), fit func(height int)) {
 	c.SetTheme(d.theme(c))
 	t := c.Theme()
 	c.Root().Background(ui.Transparent)
-	panel := ui.Column(c).Fill().Padding(flyoutPadding).Gap(14)
+	panel := ui.Column(c).Fill().Padding(flyoutPadding)
+	var border float32
 	if !c.Vibrancy() {
-		panel.Background(t.Background).Radius(radiusPanel).Border(1, t.Border)
+		border = 1
+		panel.Background(t.Background).Radius(radiusPanel).Border(border, t.Border)
 	}
 	panel.Children(func() {
+		content := ui.Column(c).Key("content").Gap(14).Shrink(0)
+		if h := content.LayoutBounds().H; h > 0 {
+			fit(int(math.Ceil(float64(h + 2*(flyoutPadding+border)))))
+		}
+		d.flyoutContent(c, t, content, openWindow, quit)
+	})
+}
+
+// flyoutContent is the panel's sections, top to bottom, inside content.
+func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element, openWindow func(), quit func()) {
+	content.Children(func() {
 		entrance(ui.Row(c).Key("top").Gap(gapSmall).AlignItems(ui.Center), 0).Children(func() {
 			brandLockup(c, t, 20, d.markRun)
 			ui.Box(c).Grow(1)
@@ -58,27 +79,25 @@ func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func()) {
 			d.flyoutSpeeds(c, t)
 		})
 		entrance(ui.Column(c).Key("mode"), 3).Gap(gapTight).Children(func() {
+			// The panel is too narrow for all five pills on one line, so the
+			// three modes, one of which is always on, fill the first, and the
+			// two traffic switches split the second.
 			ui.Row(c).Key("pills").Gap(gapTight).AlignItems(ui.Center).Children(func() {
 				for i := range modeLabels {
-					d.modePill(c, t, i)
+					d.modePill(c, t, i).Grow(1).Basis(0)
 				}
-				ui.Box(c).Grow(1)
-				d.systemProxyPill(c, t)
 			})
-			// The TUN pill sits on its own line: the panel is narrow, and
-			// the two traffic switches read together on the right.
-			ui.Row(c).Key("tun").Gap(gapTight).AlignItems(ui.Center).Children(func() {
-				ui.Box(c).Grow(1)
-				if note := d.tunHint(); note != "" {
+			ui.Row(c).Key("switches").Gap(gapTight).AlignItems(ui.Center).Children(func() {
+				d.systemProxyPill(c, t).Grow(1).Basis(0)
+				d.tunPill(c, t).Grow(1).Basis(0)
+			})
+			for _, note := range []string{d.systemProxyHint(), d.tunHint()} {
+				if note != "" {
 					mutedText(c, t, note).MaxLines(1)
 				}
-				d.tunPill(c, t)
-			})
-			if note := d.systemProxyHint(); note != "" {
-				mutedText(c, t, note).MaxLines(1).AlignSelf(ui.End)
 			}
 		})
-		entrance(ui.Column(c).Key("routes"), 4).Gap(2).Grow(1).Basis(0).MinHeight(0).
+		entrance(ui.Column(c).Key("routes"), 4).Gap(gapSmall).
 			Disabled(d.controlsLocked()).Children(func() {
 			d.quickRoutes(c, t)
 		})
@@ -170,8 +189,8 @@ func (d *Dashboard) quickRoutes(c *ui.Context, t *ui.Theme) {
 		mutedText(c, t, "还没有测速结果。点「测速」看看哪个节点最快。")
 		return
 	}
-	ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
-		ui.Column(c).Gap(2).Children(func() {
+	ui.Scroll(c).MaxHeight(quickRowsMax*(quickRowH+quickRowGap) - quickRowGap).Children(func() {
+		ui.Column(c).Gap(quickRowGap).Children(func() {
 			for _, route := range routes {
 				d.quickRow(c, t, group, route)
 			}

@@ -43,9 +43,12 @@ type MenuBar struct {
 	win  *mygo.Window
 	d    *Dashboard
 	// panel is the open panel, or nil.
-	panel    *mygo.Window
-	closedAt time.Time
-	quitting bool
+	panel *mygo.Window
+	// panelHeight is the height the panel last fitted its content to, so
+	// the next one opens at it; 0 before any panel opened.
+	panelHeight int
+	closedAt    time.Time
+	quitting    bool
 	// mark is the plain icon; shown is the speed the icon shows now, ""
 	// for the plain mark.
 	mark  []byte
@@ -133,12 +136,15 @@ func (m *MenuBar) togglePanel() {
 	if time.Since(m.closedAt) < reopenGuard {
 		return
 	}
+	if m.panelHeight == 0 {
+		m.panelHeight = flyoutHeight
+	}
 	m.panel = mygo.NewFlyout(mygo.FlyoutOptions{
 		Tray:      m.tray,
 		Placement: mygo.PlacementBottom,
 		Gap:       4,
 		Width:     flyoutWidth,
-		Height:    flyoutHeight,
+		Height:    m.panelHeight,
 		Focusable: true,
 		Shadow:    true,
 		// The panel is its own window, not an NSPopover: its material
@@ -147,7 +153,7 @@ func (m *MenuBar) togglePanel() {
 		Vibrancy:     flyoutVibrancy(),
 		CornerRadius: flyoutCornerRadius,
 		Content: ui.View(func(c *ui.Context) {
-			m.d.flyoutView(c, m.showWindow, mygo.App.Quit)
+			m.d.flyoutView(c, m.showWindow, mygo.App.Quit, m.fitPanel)
 		}),
 	})
 	m.panel.OnClosed(func() {
@@ -155,6 +161,18 @@ func (m *MenuBar) togglePanel() {
 		m.closedAt = time.Now()
 	})
 	m.d.testQuickRoutes()
+}
+
+// fitPanel makes the open panel height tall, as its content asks. It runs on
+// the UI thread while a frame is built, so the resize goes to a goroutine,
+// which ends once the main thread applied it, after the frame.
+func (m *MenuBar) fitPanel(height int) {
+	if m.panel == nil || height == m.panelHeight {
+		return
+	}
+	m.panelHeight = height
+	panel := m.panel
+	go panel.SetContentSize(flyoutWidth, height)
 }
 
 // flyoutVibrancy is the material behind the panel: the popover material on
