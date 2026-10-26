@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
@@ -13,7 +13,11 @@ import (
 
 // appUpdateCheckEvery is how often a running Hop checks for a new version
 // after the first check of the session.
-const appUpdateCheckEvery = 24 * time.Hour
+const appUpdateCheckEvery = 6 * time.Hour
+
+// ErrNoAppUpdate is returned by Install when the release feed no longer
+// offers a version newer than the running one.
+var ErrNoAppUpdate = errors.New("no newer version is published")
 
 // appUpdateCheckTimeout bounds one manifest check, including the GitHub API
 // hop a tagged feed takes. Downloads are separate and may take longer.
@@ -25,13 +29,11 @@ const appUpdateCheckTimeout = 30 * time.Second
 // it downloads, and replaces the app bundle. It fetches GitHub with the
 // standard library's default client, directly, not through Hop's proxy.
 type AppUpdateService struct {
-	// mu guards the check clock and the update Check found. checkMu
-	// serializes the checks themselves.
+	// mu guards the check clock. checkMu serializes the checks themselves.
 	mu             sync.Mutex
 	checkMu        sync.Mutex
 	checkedThisRun bool
 	lastCheck      time.Time
-	found          *mygo.Update
 }
 
 // NewAppUpdateService returns a service over mygo.Updater.
@@ -64,7 +66,8 @@ func (s *AppUpdateService) DisabledReason() string {
 
 // Due reports whether the automatic check should run: the first pass of
 // this session always checks, then the in-memory last check keeps it to
-// once a day. The time is not stored, so a restart checks once more.
+// every few hours, since a proxy client stays open for days. The time is not
+// stored, so a restart checks once more.
 func (s *AppUpdateService) Due() (bool, error) {
 	if !s.Enabled() {
 		return false, nil
@@ -90,36 +93,43 @@ func (s *AppUpdateService) Check(ctx context.Context) (model.AppUpdate, error) {
 	s.lastCheck = time.Now()
 	s.mu.Unlock()
 
-	s.checkMu.Lock()
-	defer s.checkMu.Unlock()
-	ctx, cancel := context.WithTimeout(ctx, appUpdateCheckTimeout)
-	defer cancel()
-	update, err := mygo.Updater.Check(ctx)
+	update, err := s.fetch(ctx)
 	if err != nil {
 		return model.AppUpdate{}, err
 	}
-	s.mu.Lock()
-	s.found = update
-	s.mu.Unlock()
 	if update == nil {
 		return model.AppUpdate{}, nil
 	}
 	return model.AppUpdate{Available: true, Version: update.Version, Notes: update.Notes}, nil
 }
 
-// Install downloads and installs the update version that Check found,
-// reporting the bytes downloaded. It replaces the app bundle but does not
-// quit or relaunch: the caller uses mygo.App.Relaunch so the normal quit
-// releases the system proxy and any helper core first.
-func (s *AppUpdateService) Install(ctx context.Context, version string, progress func(downloaded int64, total int64)) error {
+// fetch asks mygo's updater for a newer release; nil means the app is up to
+// date.
+func (s *AppUpdateService) fetch(ctx context.Context) (*mygo.Update, error) {
+	s.checkMu.Lock()
+	defer s.checkMu.Unlock()
+	ctx, cancel := context.WithTimeout(ctx, appUpdateCheckTimeout)
+	defer cancel()
+	return mygo.Updater.Check(ctx)
+}
+
+// Install downloads and installs the newest version, reporting the bytes
+// downloaded. It checks again first: an app left open for days still holds
+// the offer of an older check, and a release published since then must not be
+// passed over. It returns ErrNoAppUpdate when nothing newer is published. It
+// replaces the app bundle but does not quit or relaunch: the caller uses
+// mygo.App.Relaunch so the normal quit releases the system proxy and any
+// helper core first.
+func (s *AppUpdateService) Install(ctx context.Context, progress func(downloaded int64, total int64)) error {
 	if !s.Enabled() {
 		return mygo.ErrUpdatesDisabled
 	}
-	s.mu.Lock()
-	update := s.found
-	s.mu.Unlock()
-	if update == nil || update.Version != version {
-		return fmt.Errorf("no checked update is named %q", version)
+	update, err := s.fetch(ctx)
+	if err != nil {
+		return err
+	}
+	if update == nil {
+		return ErrNoAppUpdate
 	}
 	return update.Install(ctx, progress)
 }

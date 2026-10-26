@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/internal/service"
 )
 
 // appUpdateState is the version row's and the flyout's share of the app
@@ -51,10 +52,12 @@ func (d *Dashboard) beginAppCheck() {
 	}()
 }
 
-// beginAppInstall downloads and installs the found release through mygo's
-// updater, reporting the bytes downloaded, then relaunches with mygo's
-// normal quit. Installation before the swap changes nothing; a failure
-// leaves the app as it is and the offer in place.
+// beginAppInstall downloads and installs the newest release through mygo's
+// updater, which checks again first so an offer left from days ago never
+// installs an older version. It reports the bytes downloaded, then relaunches
+// with mygo's normal quit. Installation before the swap changes nothing; a
+// failure leaves the app as it is and the offer in place, unless the feed no
+// longer offers anything.
 func (d *Dashboard) beginAppInstall() {
 	s := &d.appUpdate
 	if !s.enabled || s.updating || s.checking || !s.update.Available || d.controlsLocked() {
@@ -62,14 +65,16 @@ func (d *Dashboard) beginAppInstall() {
 	}
 	s.updating = true
 	s.progressDone, s.progressTotal = 0, 0
-	version := s.update.Version
 	ctx, win := d.opCtx, d.opWin
 	go func() {
-		err := d.services.AppUpdate.Install(ctx, version, func(downloaded int64, total int64) {
+		err := d.services.AppUpdate.Install(ctx, func(downloaded int64, total int64) {
 			win.Update(func() { s.progressDone, s.progressTotal = downloaded, total })
 		})
 		win.Update(func() {
 			s.updating = false
+			if errors.Is(err, service.ErrNoAppUpdate) {
+				s.update = model.AppUpdate{}
+			}
 			if err != nil {
 				d.fail(actionInstallAppUpdate, err)
 				return

@@ -149,7 +149,7 @@ type AppUpdateService interface {
 	DisabledReason() string
 	Due() (bool, error)
 	Check(ctx context.Context) (model.AppUpdate, error)
-	Install(ctx context.Context, version string, progress func(downloaded int64, total int64)) error
+	Install(ctx context.Context, progress func(downloaded int64, total int64)) error
 }
 
 // SystemProxyService points the system proxy at Hop and back, never over
