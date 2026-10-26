@@ -158,12 +158,9 @@ func statusToggle(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onClick
 	return b
 }
 
-// modePill is the pill of the i'th outbound mode. It waits for the core to
-// report its mode and for any subscription mutation to finish, so an apply
-// cannot carry the mode the user just left back in.
+// modePill is the pill of the i'th outbound mode.
 func (d *Dashboard) modePill(c *ui.Context, t *ui.Theme, i int) ui.Element {
-	disabled := d.view.Mode == "" || d.subscription.mutations > 0 || d.core.busy
-	return togglePill(c, t, pillSpec{label: modeLabels[i], on: d.modeIndex == i, disabled: disabled}, func() {
+	return togglePill(c, t, pillSpec{label: modeLabels[i], on: d.modeIndex == i, disabled: d.modeLocked()}, func() {
 		if d.modeIndex == i {
 			return
 		}

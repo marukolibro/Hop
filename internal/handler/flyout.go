@@ -29,7 +29,9 @@ const (
 	// numbers change.
 	compactSpeedWidth = 88
 	// flyoutGaugeSize is the exit gauge, smaller than the window's.
-	flyoutGaugeSize float32 = 44
+	flyoutGaugeSize float32 = 52
+	// flyoutPlotHeight is the traffic plot beside the speeds.
+	flyoutPlotHeight float32 = 28
 )
 
 // flyoutView is the menu bar panel: where traffic goes and how fast, the
@@ -40,6 +42,14 @@ const (
 func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func(), fit func(height int)) {
 	c.SetTheme(d.theme(c))
 	t := c.Theme()
+	if c.Vibrancy() {
+		// Over the panel's material the palette's border is a frame; every
+		// outline in the panel takes the translucent line instead.
+		over := *t
+		over.Border = flyoutLine(t)
+		c.SetTheme(&over)
+		t = c.Theme()
+	}
 	c.Root().Background(ui.Transparent)
 	panel := ui.Column(c).Fill().Padding(flyoutPadding)
 	var border float32
@@ -72,13 +82,16 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 			statusDot(c, d.statusColor(t), d.proxying())
 			mutedText(c, t, d.statusText())
 		})
-		entrance(ui.Column(c).Key("route"), 1).Gap(10).Padding(12, 14).Radius(radiusPanel).Background(t.Surface).Border(1, t.Border).Children(func() {
+		// The exit and the traffic are one card, tinted with the theme's accent
+		// as the window's hero is.
+		entrance(ui.Column(c).Key("route"), 1).Gap(gapSmall).Padding(gapMedium).Radius(radiusPanel).
+			LinearGradient(heroFace(t, overlaySurface(t))).Border(1, t.Border).Children(func() {
 			d.flyoutRoute(c, t)
+			if len(d.view.Route) > 0 {
+				d.flyoutSpeeds(c, t)
+			}
 		})
-		entrance(ui.Column(c).Key("speed"), 2).Children(func() {
-			d.flyoutSpeeds(c, t)
-		})
-		entrance(ui.Column(c).Key("mode"), 3).Gap(gapTight).Children(func() {
+		entrance(ui.Column(c).Key("mode"), 3).Gap(gapSmall).Children(func() {
 			// The panel is too narrow for all five pills on one line, so the
 			// three modes, one of which is always on, fill the first, and the
 			// two traffic switches split the second.
@@ -122,15 +135,15 @@ func (d *Dashboard) flyoutRoute(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// flyoutSpeeds shows both speeds on one line, rolling as they change,
-// beside the last two minutes of traffic.
+// flyoutSpeeds shows both speeds on one line, rolling as they change, beside
+// the last two minutes of traffic.
 func (d *Dashboard) flyoutSpeeds(c *ui.Context, t *ui.Theme) {
 	history := d.history
 	down, up, base := t.Accent, uploadColor(t), t.Border
-	ui.Row(c).Gap(gapLarge).AlignItems(ui.Center).Children(func() {
-		compactSpeed(c, t, "↓", formatRate(d.last.Down), down)
+	ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+		compactSpeed(c, t, "↓", formatRate(d.last.Down), accentInk(t))
 		compactSpeed(c, t, "↑", formatRate(d.last.Up), up)
-		ui.Box(c).Grow(1).Height(28).Label("Traffic").Description("Download and upload speed over the last two minutes").Draw(func(p *ui.Painter, r ui.Rect) {
+		ui.Box(c).Grow(1).Basis(0).Height(flyoutPlotHeight).Label("Traffic").Description("Download and upload speed over the last two minutes").Draw(func(p *ui.Painter, r ui.Rect) {
 			p.Line(r.X, r.Y+r.H-0.5, r.X+r.W, r.Y+r.H-0.5, 1, base)
 			sparkArea(p, r, history, down, up)
 		})

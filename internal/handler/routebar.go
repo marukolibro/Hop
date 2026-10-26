@@ -165,6 +165,6 @@ func routeVia(route []model.RouteHop) string {
 func headline(c *ui.Context, t *ui.Theme, text string, delay model.Delay) {
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, text).FontSize(fontHeadline).FontWeight(weightSemibold).LetterSpacing(-0.2).MaxLines(1).ContentTransition(ui.ContentTransition{})
-		delayLabel(c, t, delay, fontBody)
+		heroDelay(c, t, delay)
 	})
 }
