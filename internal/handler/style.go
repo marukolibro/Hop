@@ -18,7 +18,9 @@ const (
 	fontBody      float32 = 13
 	fontEmphasis  float32 = 14
 	fontHeadline  float32 = 18
-	fontStat      float32 = 30
+	// fontExit is the hero's exit name.
+	fontExit float32 = 22
+	fontStat float32 = 30
 
 	weightMedium   = 500
 	weightSemibold = 600

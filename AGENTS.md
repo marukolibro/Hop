@@ -199,22 +199,38 @@ All sizes come from `internal/handler/style.go`, and the control metrics
 (`switchHeight`, `opticalLift`) from `motion.go`; do not introduce raw numbers
 for font sizes, weights, gaps or radii in views.
 
-- Layout: the main window follows the user's finished glass design. The base is the window's own colour; header,
-  hero, subscription strip, sidebar and node area are tonal veils
-  separated by full-width hairlines, and the content reaches the window's
-  bottom edge (there is no status bar). The body is the sidebar | one vertical
-  hairline | content. Node tiles and the lists, charts and tables on the
-  other pages are translucent cards, as the design shows. Dialogs, picker
-  popups, tooltips, toasts and the menu-bar flyout stay opaque cards.
-- The hero is the ring gauge with the exit's flag (outer arc download, inner
-  upload, both easing to the traffic and then resting), the exit's name and
-  latency, the `经 …` line, its exit IP, its facts as chips, the sparkline
-  with its `最近 2 分钟` caption and idle state, the speeds behind a hairline,
-  and the mode row. It has no current-line caption. The flyout keeps its own
-  gauge and plot.
-- The subscription strip adds the `Hop 智能规则` tag right after the profile
-  picker only while the active profile runs Hop's rules; a profile that keeps
-  its provider's rules shows no tag.
+- Layout: the main window follows the user's finished glass design. The base is the window's own colour; the header
+  and the sidebar are tonal veils, the content column carries a lighter one,
+  separated by full-width and full-height hairlines, and the content reaches the
+  window's bottom edge (there is no status bar). Under the header the body is
+  the sidebar | one vertical hairline | content. The sidebar runs the window's
+  height: the subscription in use on a card at its top (picker, the `Hop 智能规则`
+  tag only while the profile runs Hop's rules, usage, expiry, refresh and
+  manage), the groups, and the core's state at its foot. The content column
+  is the hero card, the group's header, the region filters and one grid of
+  node tiles. Node tiles and the lists, charts and tables on the other pages
+  are translucent cards, as the design shows. Dialogs, picker popups, tooltips,
+  toasts and the menu-bar flyout stay opaque cards.
+- The hero is one card: the panel glass with the theme's own accent mixed in
+  (`heroFace`, so it follows every palette and appearance; never a fixed
+  colour), in the window's ink: the ring gauge with the exit's flag (outer arc
+  download, inner upload, both easing to the traffic and then resting), the
+  exit's name with its latency pill, the `经 …` line, its exit IP and its
+  facts as chips; on the right the speeds with the outbound mode switch, over
+  the sparkline with its `最近 2 分钟` caption and idle state. The right part
+  wraps under the exit in a narrow window and drops the plot below
+  `heroPlotMinPane`. It has no current-line caption. The flyout has the same
+  card (`heroFace`) around its own smaller gauge and plot, then the three modes as pills and
+  the two traffic switches as pills on the next line.
+- Node tiles: the chosen tile is filled with the accent (`onAccentTheme` is
+  its ink) and carries a check; there is no choice ring. The region filters
+  (`regionChips`: the groups and DIRECT as 线路 first, then 全部, then one per
+  region) choose what the grid shows. Until the user chooses, a group that
+  has groups and DIRECT shows them (`activeFilter`), so the first view is
+  short; 全部 lists every option in titled sections, the groups first, never
+  one flat list. The filters sit in one row: the regions that do not fit are
+  under 更多 (`splitRegionChips`); a filter left over from another group is
+  that group's default.
 - Type: 11 caption, 12 secondary, 13 body/controls and page tabs, 14 tile
   and section titles, 18 page headings, 22 the hero's exit, 30 the stats
   total. Weights 500/600/700 only. Numbers use `FontFeatures("tnum")`.

@@ -365,7 +365,10 @@ type Dashboard struct {
 	delaysBeforeTest map[string]model.Delay
 	// nodeOrder is how the node grid orders its tiles, one of the nodeOrder
 	// constants; it is not kept between starts.
-	nodeOrder   int
+	nodeOrder int
+	// nodeRegion is the filter over the node grid, one of the nodeFilter
+	// values; it is not kept between starts.
+	nodeRegion  string
 	last        model.Traffic
 	history     model.TrafficHistory
 	connections connectionsState

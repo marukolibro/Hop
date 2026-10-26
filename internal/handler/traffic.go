@@ -8,20 +8,9 @@ import (
 	"hop/internal/model"
 )
 
-// The hero's plot: sparkHeight is its whole height, sparkCaptionH the top
-// strip that holds the caption, and sparkFloor its narrowest width. The
-// plot takes all the room the exit text and the speeds leave; below
-// sparkMinWidth the row's fixed parts would leave it less than its floor,
-// so the hero hides it instead.
-const (
-	sparkHeight   float32 = 40
-	sparkCaptionH float32 = 14
-	sparkFloor    float32 = 120
-	// The row's fixed parts: page padding (48), the gauge (56), the exit
-	// (210), the speeds (110) and three 24 gaps make 496; with the floor,
-	// 616.
-	sparkMinWidth float32 = 616
-)
+// The hero's plot: sparkCaptionH is the top strip that holds the caption.
+// The plot takes the width of the column it sits in.
+const sparkCaptionH float32 = 14
 
 // readout is a throughput split into the number and its unit.
 type readout struct {
@@ -59,15 +48,15 @@ func formatNumber(v float64) string {
 	return fmt.Sprintf("%.2f", v)
 }
 
-// sparkline is the last two minutes of traffic, filling all the room the
-// exit text and the speeds leave. The newest sample sits at the right edge;
-// a window without real traffic keeps its baseline and says so.
-func (d *Dashboard) sparkline(c *ui.Context, t *ui.Theme) {
+// sparkline is the last two minutes of traffic, height tall and as wide as
+// its column. The newest sample sits at the right edge; a window without
+// real traffic keeps its baseline and says so.
+func (d *Dashboard) sparkline(c *ui.Context, t *ui.Theme, height float32) {
 	history := d.history
 	down, up, base := t.Accent, uploadColor(t), t.Border
 	idle := historyPeak(history) < idleRate
-	ui.Row(c).Key("sparkSlot").Grow(1).Basis(0).MinWidth(sparkFloor).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-		ui.Box(c).Key("spark").Grow(1).Basis(0).Height(sparkHeight).
+	ui.Row(c).Key("sparkSlot").Height(height).AlignItems(ui.Center).Children(func() {
+		ui.Box(c).Key("spark").Grow(1).Basis(0).Height(height).
 			Label("Traffic").Description("Download and upload speed over the last two minutes").Draw(func(p *ui.Painter, r ui.Rect) {
 			p.Line(r.X, r.Y+r.H-0.5, r.X+r.W, r.Y+r.H-0.5, 1, base)
 			if idle {

@@ -10,73 +10,69 @@ import (
 )
 
 const (
-	heroGaugeSize float32 = 56
-	// heroModeGap separates the exit/gauge/plot block from the mode row, so the
-	// switch clears the exit's chips; the row's own bottom padding keeps the
-	// space to the hairline below it.
-	heroModeGap      float32 = 16
-	heroExitWidth    float32 = 235
-	heroExitWidthMid float32 = 210
-	heroSpeedsWidth  float32 = 145
-	heroSpeedsNarrow float32 = 110
+	heroGaugeSize float32 = 100
+	heroRadius    float32 = 16
+	heroPadY      float32 = 20
+	heroPadX      float32 = 22
+	heroGap       float32 = 18
+	// heroLiveBasis is the width the speeds, the mode and the plot ask for
+	// before the card wraps them under the exit; heroPlotMinPane is the
+	// narrowest pane that still leaves the plot a useful width beside the
+	// exit.
+	heroLiveBasis   float32 = 300
+	heroPlotMinPane float32 = 700
+	heroPlotHeight  float32 = 64
+	heroModeSegment float32 = 46
+	heroDelayHeight float32 = 20
+	// heroDelayFill washes the latency pill in the accent.
+	heroDelayFill float32 = 0.14
 )
 
-// routeBar is the design's hero: the ring gauge with the exit's flag, the
-// exit with its route, public address and facts, the sparkline that fills
-// the room left, the two speeds behind a hairline, and the outbound mode
-// below. The gauge's arcs ease to the traffic and then rest.
+// routeBar is the nodes page's hero: one card tinted with the theme's
+// accent, with the ring gauge and the exit on the left (its name and latency,
+// the groups it passes, its public address and its facts) and on the right
+// the two speeds with the outbound mode, over the last two minutes of
+// traffic. The gauge's arcs ease to the traffic and then rest. The right part
+// wraps under the exit in a narrow window.
 func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 	route := d.view.Route
 	width, _ := c.Size()
-	hero := ui.Column(c).Key("hero").Gap(heroModeGap).Padding(pagePadding, pagePadding, 0, pagePadding).
-		Background(heroFill(t))
-	hero.Children(func() {
-		ui.Row(c).Key("routeTop").Gap(pagePadding).AlignItems(ui.Center).Children(func() {
+	pane := width - sidebarWidthFor(width) - hairlineWidth - 2*pagePadding
+	ui.Row(c).Key("hero").Wrap().Gap(pagePadding).GapY(gapLarge).AlignItems(ui.Center).
+		Padding(heroPadY, heroPadX).Radius(heroRadius).LinearGradient(heroFace(t, glassPanel(t))).
+		Border(hairlineWidth, glassMaterialLine(t)).Shadow(0, 3, 12, 0, glassCardShadow(t)).Children(func() {
+		ui.Row(c).Key("routeTop").Gap(heroGap).AlignItems(ui.Center).Children(func() {
 			if len(route) > 0 {
 				routeGauge(c, t, route[len(route)-1], heroGaugeSize, d.last)
 			}
-			exitWidth := heroExitWidthMid
-			if width >= 1050 {
-				exitWidth = heroExitWidth
-			}
-			d.heroExit(c, t, route, exitWidth)
-			if width >= sparkMinWidth {
-				d.sparkline(c, t)
-			} else {
-				ui.Box(c).Grow(1)
-			}
-			speedsWidth := heroSpeedsNarrow
-			if width >= 1050 {
-				speedsWidth = heroSpeedsWidth
-			}
-			d.heroSpeeds(c, t, speedsWidth)
+			d.heroExit(c, t, route)
 		})
-		d.routeFooter(c, t)
+		ui.Column(c).Key("live").Grow(1).Basis(heroLiveBasis).MinWidth(0).Gap(gapMedium).Children(func() {
+			d.heroReadout(c, t)
+			if pane >= heroPlotMinPane {
+				d.sparkline(c, t, heroPlotHeight)
+			}
+		})
 	})
-	horizontalHairline(c, t)
 }
 
 // heroExit names the exit, the groups it passes, its public address and its
 // facts.
-func (d *Dashboard) heroExit(c *ui.Context, t *ui.Theme, route []model.RouteHop, width float32) {
-	exit := ui.Column(c).Key("exit").Gap(gapTight).Width(width)
+func (d *Dashboard) heroExit(c *ui.Context, t *ui.Theme, route []model.RouteHop) {
+	exit := ui.Column(c).Key("exit").Gap(gapTight).Width(exitWidth)
 	exit.Children(func() {
 		if len(route) == 0 {
 			mutedText(c, t, "导入订阅后,这里会显示流量经过的线路")
 			return
 		}
 		hop := route[len(route)-1]
-		node := hop.Node
-		ui.Row(c).Key("routeTitle").Gap(10).AlignItems(ui.Baseline).Children(func() {
-			if flag := shownFlag(node.Flag); flag != "" && !hop.Group && node.Via == "" {
-				ui.Text(c, flag).FontSize(21)
-			}
+		ui.Row(c).Key("routeTitle").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 			// The row stays as wide as its content, so the delay follows the
 			// name; a long name shrinks and truncates instead of pushing it
 			// to the column's edge.
-			ui.Text(c, heroExitName(hop)).FontSize(22).FontWeight(weightSemibold).LetterSpacing(-0.5).
+			ui.Text(c, heroExitName(hop)).FontSize(fontExit).FontWeight(weightSemibold).LetterSpacing(-0.5).
 				MaxLines(1).Shrink(1)
-			delayLabel(c, t, node.Delay, fontSecondary)
+			heroDelay(c, t, hop.Node.Delay)
 		})
 		if via := heroVia(route, hop); via != "" {
 			mutedText(c, t, via).MaxLines(1)
@@ -86,8 +82,16 @@ func (d *Dashboard) heroExit(c *ui.Context, t *ui.Theme, route []model.RouteHop,
 	})
 }
 
-// heroExitName is the exit's name without the flag, which the title shows
-// separately.
+// heroDelay is the exit's latency on a pill washed in the accent.
+func heroDelay(c *ui.Context, t *ui.Theme, delay model.Delay) {
+	ui.Box(c).Key("delay").Height(heroDelayHeight).Padding(0, gapSmall).Radius(heroDelayHeight / 2).Center().
+		Background(t.Accent.Alpha(heroDelayFill)).Children(func() {
+		ui.Text(c, delayText(delay)).FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(delayColor(t, delay)).
+			FontFeatures("tnum").NoWrap().Translate(0, -opticalLift).ContentTransition(ui.ContentTransition{Numeric: true})
+	})
+}
+
+// heroExitName is the exit's name, with the flag before it when it has one.
 func heroExitName(hop model.RouteHop) string {
 	node := hop.Node
 	switch {
@@ -97,13 +101,12 @@ func heroExitName(hop model.RouteHop) string {
 		return "机场信息节点"
 	case node.Via != "":
 		return "直连"
-	default:
-		name := strings.TrimSpace(node.Region + " " + node.Title)
-		if name == "" {
-			return node.Name
-		}
-		return name
 	}
+	name := strings.TrimSpace(node.Region + " " + node.Title)
+	if name == "" {
+		name = node.Name
+	}
+	return strings.TrimSpace(shownFlag(node.Flag) + " " + name)
 }
 
 // heroVia is the line under the exit's name: the groups it passes, or that
@@ -140,52 +143,61 @@ func heroChips(c *ui.Context, t *ui.Theme, hop model.RouteHop) {
 	})
 }
 
-// heroSpeeds is the download and upload column, separated from the plot by
-// a hairline. The download arrow takes the accent, upload the muted ink.
-func (d *Dashboard) heroSpeeds(c *ui.Context, t *ui.Theme, width float32) {
-	ui.Row(c).Key("speeds").AlignItems(ui.Center).Children(func() {
-		ui.Box(c).Width(hairlineWidth).Height(44).Background(t.Border)
-		ui.Column(c).Width(width-1).Padding(0, 0, 0, 22).Gap(6).Children(func() {
+// heroReadout is the download and upload speeds with the outbound mode
+// beside them.
+func (d *Dashboard) heroReadout(c *ui.Context, t *ui.Theme) {
+	ui.Row(c).Key("readout").Wrap().Gap(gapLarge).GapY(gapSmall).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Key("speeds").Gap(gapLarge).AlignItems(ui.Center).Children(func() {
 			heroSpeedLine(c, t, "↓", formatRate(d.last.Down), accentInk(t))
 			heroSpeedLine(c, t, "↑", formatRate(d.last.Up), uploadColor(t))
+		})
+		ui.Box(c).Grow(1)
+		d.modeSwitch(c, pageSwitchStyle(t, heroModeSegment))
+	})
+}
+
+// modeLocked says the outbound mode cannot change yet: the core has not
+// reported its mode, or a subscription mutation or core change is running, so
+// an apply could carry the mode the user just left back in.
+func (d *Dashboard) modeLocked() bool {
+	return d.view.Mode == "" || d.subscription.mutations > 0 || d.core.busy
+}
+
+// modeSwitch chooses the outbound mode as one sliding switch.
+func (d *Dashboard) modeSwitch(c *ui.Context, style switchStyle) {
+	disabled := d.modeLocked()
+	mode := ui.Box(c).Key("mode").Disabled(disabled).Tooltip(modeHints[d.modeIndex])
+	if disabled {
+		mode.Opacity(disabledOpacity)
+	}
+	mode.Children(func() {
+		slidingSwitch(c, "出站模式", &d.modeIndex, modeLabels, style, func(i int) {
+			d.setMode(service.Modes[i])
 		})
 	})
 }
 
 func heroSpeedLine(c *ui.Context, t *ui.Theme, arrow string, r readout, color ui.Color) {
-	ui.Row(c).Key(arrow).Gap(6).AlignItems(ui.End).Children(func() {
+	ui.Row(c).Key(arrow).Gap(gapTight).AlignItems(ui.End).Children(func() {
 		ui.Text(c, arrow).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(color)
-		ui.Text(c, r.value).FontSize(18).FontWeight(weightMedium).LetterSpacing(-0.4).
+		ui.Text(c, r.value).FontSize(fontHeadline).FontWeight(weightMedium).LetterSpacing(-0.4).
 			FontFeatures("tnum").ContentTransition(ui.ContentTransition{Numeric: true})
 		captionText(c, t, r.unit)
 	})
 }
 
-// routeFooter is the mode switch with what it does, and the core's state.
-func (d *Dashboard) routeFooter(c *ui.Context, t *ui.Theme) {
-	disabled := d.view.Mode == "" || d.subscription.mutations > 0 || d.core.busy
-	ui.Row(c).Key("controls").Gap(gapMedium).AlignItems(ui.Center).Padding(0, 0, 19, 0).Children(func() {
-		mode := ui.Box(c).Key("mode").Disabled(disabled).Tooltip(modeHints[d.modeIndex])
-		if disabled {
-			mode.Opacity(disabledOpacity)
-		}
-		mode.Children(func() {
-			slidingSwitch(c, "出站模式", &d.modeIndex, modeLabels, pageSwitchStyle(t, modeSegmentWidth), func(i int) {
-				d.setMode(service.Modes[i])
-			})
-		})
-		ui.Box(c).Grow(1)
-		dotColor, title := t.Success, "内核运行中"
-		switch d.status {
-		case statusFailed:
-			dotColor, title = t.Danger, "内核未连接"
-		case statusConnected:
-		default:
-			dotColor, title = t.TextMuted, "内核连接中"
-		}
-		ui.Row(c).Key("coreStatus").Gap(gapTight).AlignItems(ui.Center).Children(func() {
-			ui.Box(c).Width(5).Height(5).Radius(2.5).Background(dotColor)
-			captionText(c, t, title).NoWrap()
-		})
+// coreStatus is the core's state: a dot and a few words.
+func (d *Dashboard) coreStatus(c *ui.Context, t *ui.Theme) {
+	dotColor, title := t.Success, "内核运行中"
+	switch d.status {
+	case statusFailed:
+		dotColor, title = t.Danger, "内核未连接"
+	case statusConnected:
+	default:
+		dotColor, title = t.TextMuted, "内核连接中"
+	}
+	ui.Row(c).Key("coreStatus").Gap(gapTight).AlignItems(ui.Center).Children(func() {
+		ui.Box(c).Width(5).Height(5).Radius(2.5).Background(dotColor)
+		captionText(c, t, title).NoWrap()
 	})
 }

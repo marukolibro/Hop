@@ -12,6 +12,14 @@ import (
 // The theme provides a stable colored backdrop above native vibrancy; the
 // veil is painted above it, keeping all text and controls sharp.
 const (
+	// flyoutLineDark is the flyout's hairline over its panel material in the
+	// dark appearance.
+	flyoutLineDark float32 = 0.16
+	// heroFaceAngle runs the hero's tint from the top left corner; heroTintNear
+	// and heroTintFar are how much accent the gradient carries at its ends.
+	heroFaceAngle          float32 = 115
+	heroTintNear           float32 = 0.16
+	heroTintFar            float32 = 0.04
 	glassHeaderAlpha       float32 = 0.16
 	glassHeroAlpha         float32 = 0.10
 	glassSubscriptionAlpha float32 = 0.18
@@ -174,11 +182,20 @@ func heroFill(t *ui.Theme) ui.Color {
 	return t.Surface
 }
 
-func subscriptionFill(t *ui.Theme) ui.Color {
-	if onGlass(t) {
-		return glassFill(t, glassSubscriptionAlpha)
+// heroFace is the hero card's face: panel with the theme's accent mixed in,
+// stronger at one corner, so the card follows every theme.
+func heroFace(t *ui.Theme, panel ui.Color) ui.LinearGradient {
+	return ui.LinearGradient{Angle: heroFaceAngle, From: panel.Mix(t.Accent, heroTintNear), To: panel.Mix(t.Accent, heroTintFar)}
+}
+
+// flyoutLine is the flyout's hairline over its panel material: in the dark
+// appearance the palette's opaque navy border would be a black frame on the
+// grey material, so a translucent light line takes its place.
+func flyoutLine(t *ui.Theme) ui.Color {
+	if t.Dark {
+		return ui.RGBA(255, 255, 255, flyoutLineDark)
 	}
-	return t.Surface
+	return t.Border
 }
 
 func sidebarFill(t *ui.Theme) ui.Color {

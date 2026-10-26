@@ -347,45 +347,47 @@ func (d *Dashboard) beginDeleteSubmit() {
 	})
 }
 
-// subscriptionBar sits under the route: the subscription in use with a picker
-// that switches among the saved ones offline, a refresh of it, and the door to
-// managing every subscription.
-func (d *Dashboard) subscriptionBar(c *ui.Context, t *ui.Theme) {
+// sidebarSubscription heads the sidebar: the subscription in use with a picker,
+// what its account has left, and the actions that belong to it.
+func (d *Dashboard) sidebarSubscription(c *ui.Context, t *ui.Theme) {
 	s := &d.subscription
 	if !s.loaded {
 		return
 	}
+	card := ui.Column(c).Key("sidebarSubscription").Gap(gapMedium).Padding(gapMedium).Radius(radiusPanel).
+		Background(glassPanel(t)).Border(hairlineWidth, glassMaterialLine(t)).Shadow(0, 3, 12, 0, glassCardShadow(t))
 	active, ok := s.active()
 	if !ok {
-		d.noSubscriptionBar(c, t)
+		card.Children(func() { d.noSubscription(c, t) })
 		return
 	}
+	width, _ := c.Size()
+	barWidth := sidebarWidthFor(width) - 4*gapMedium
 	now := time.Now()
 	busy := s.busy(active.ID)
-	ui.Column(c).Gap(gapSmall).Padding(10, pagePadding).Background(subscriptionFill(t)).Children(func() {
-		ui.Row(c).Wrap().Gap(gapLarge).GapY(gapSmall).AlignItems(ui.Center).Children(func() {
+	card.Children(func() {
+		ui.Row(c).Wrap().Gap(gapSmall).GapY(gapTight).AlignItems(ui.Center).Children(func() {
 			d.activeSelect(c, t)
 			// The tag names Hop's own rule set only: a profile that keeps
 			// its provider's rules has nothing extra to say here.
 			if active.Rules == model.RulesHop {
 				chip(c, t, "Hop 智能规则", accentInk(t))
 			}
-			if active.Source == model.SourceRemote {
-				switch {
-				case active.HasUsage:
-					subscriptionUsage(c, t, active.Usage, now)
-				case len(d.view.Plan) > 0:
-					ui.Row(c).Gap(gapLarge).AlignItems(ui.Center).Children(func() {
-						for _, note := range d.view.Plan {
-							label, value := splitPlanNote(note)
-							planNote(c, t, label, value)
-						}
-					})
+		})
+		switch {
+		case active.Source != model.SourceRemote:
+			mutedText(c, t, service.LocalProfileName).NoWrap()
+		case active.HasUsage:
+			subscriptionUsage(c, t, active.Usage, now, barWidth)
+		case len(d.view.Plan) > 0:
+			ui.Column(c).Gap(gapTight).Children(func() {
+				for _, note := range d.view.Plan {
+					label, value := splitPlanNote(note)
+					planNote(c, t, label, value)
 				}
-			} else {
-				mutedText(c, t, service.LocalProfileName).NoWrap()
-			}
-			ui.Box(c).Grow(1)
+			})
+		}
+		ui.Row(c).Wrap().Gap(gapLarge).GapY(gapTight).AlignItems(ui.Center).Children(func() {
 			if active.Source == model.SourceRemote {
 				label := "刷新"
 				if busy {
@@ -401,29 +403,23 @@ func (d *Dashboard) subscriptionBar(c *ui.Context, t *ui.Theme) {
 			warningLine(c, t, active.LastError)
 		}
 	})
-	horizontalHairline(c, t)
 }
 
-// noSubscriptionBar is what the nodes page shows before any subscription
-// exists: adding the first one uses it at once.
-func (d *Dashboard) noSubscriptionBar(c *ui.Context, t *ui.Theme) {
+// noSubscription is what the card shows before any subscription exists:
+// adding the first one uses it at once.
+func (d *Dashboard) noSubscription(c *ui.Context, t *ui.Theme) {
 	s := &d.subscription
-	ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Padding(10, pagePadding).
-		Background(subscriptionFill(t)).Children(func() {
-		ui.Icon(c, iconLink).Width(iconLead).Height(iconLead).TextColor(t.TextMuted)
-		mutedText(c, t, "还没有使用中的订阅").Grow(1)
-		button(c, buttonSpec{label: "添加并使用", icon: iconPlus, style: primaryButton(t),
-			disabled: d.controlsLocked()}, func() {
-			d.openEditor(editorAdd, "")
-		})
-		textButton(c, t, "管理订阅", iconList, false, false, func() { s.managing = true })
+	mutedText(c, t, "还没有使用中的订阅")
+	button(c, buttonSpec{label: "添加并使用", icon: iconPlus, style: primaryButton(t),
+		disabled: d.controlsLocked()}, func() {
+		d.openEditor(editorAdd, "")
 	})
-	horizontalHairline(c, t)
+	textButton(c, t, "管理订阅", iconList, false, false, func() { s.managing = true })
 }
 
-// subscriptionUsage is the design's compact account line: used of total, a
-// thin bar, and the days left.
-func subscriptionUsage(c *ui.Context, t *ui.Theme, usage model.Usage, now time.Time) {
+// subscriptionUsage is the account at a glance: used of total, a thin bar
+// barWidth wide, and the days left.
+func subscriptionUsage(c *ui.Context, t *ui.Theme, usage model.Usage, now time.Time, barWidth float32) {
 	used := usage.Upload + usage.Download
 	usedReadout := formatBytes(used)
 	value := usedReadout.value + " " + usedReadout.unit
@@ -433,10 +429,10 @@ func subscriptionUsage(c *ui.Context, t *ui.Theme, usage model.Usage, now time.T
 		value += " / " + total.value + " " + total.unit
 		ratio = min(1, float32(used)/float32(usage.Total))
 	}
-	ui.Row(c).Key("usage").Gap(10).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, value).FontSize(fontSecondary).TextColor(t.TextMuted).FontFeatures("tnum").NoWrap()
+	ui.Column(c).Key("usage").Gap(gapTight).Children(func() {
+		ui.Text(c, value).FontSize(fontSecondary).TextColor(t.TextMuted).FontFeatures("tnum").MaxLines(1)
 		if usage.Total > 0 {
-			stripUsageBar(c, t, ratio)
+			stripUsageBar(c, t, ratio, barWidth)
 		}
 		if !usage.Expire.IsZero() {
 			left := usage.Expire.Sub(now)
@@ -444,13 +440,13 @@ func subscriptionUsage(c *ui.Context, t *ui.Theme, usage model.Usage, now time.T
 			if left < expiryWarning {
 				color = t.Warning
 			}
-			ui.Text(c, remainingText(left)).FontSize(fontSecondary).TextColor(color).NoWrap()
+			ui.Text(c, remainingText(left)).FontSize(fontSecondary).TextColor(color).MaxLines(1)
 		}
 	})
 }
 
-func stripUsageBar(c *ui.Context, t *ui.Theme, ratio float32) {
-	const width, height float32 = 70, 3
+func stripUsageBar(c *ui.Context, t *ui.Theme, ratio float32, width float32) {
+	const height float32 = 4
 	trackFill := t.SurfacePressed
 	if onGlass(t) {
 		trackFill = glassFill(t, glassTrackAlpha)

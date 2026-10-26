@@ -13,17 +13,20 @@ const (
 	sidebarItemH    float32 = 48
 	sidebarHeaderH  float32 = 30
 	sidebarIconSize float32 = 22
+	// sidebarPadTop is the space above the subscription card.
+	sidebarPadTop float32 = 14
 )
 
-// sidebarWidthFor follows the design's three workspace widths.
+// sidebarWidthFor follows the design's three workspace widths; the widest
+// holds a group's name and its exit in full.
 func sidebarWidthFor(window float32) float32 {
 	switch {
 	case window < 760:
 		return 155
 	case window < 1050:
-		return 190
+		return 200
 	default:
-		return 213
+		return 248
 	}
 }
 
@@ -46,16 +49,18 @@ type sidebarRow struct {
 	isTop bool
 }
 
-// groupSidebar lists every group by what it is for, with where each sends
-// traffic now. The highlight springs to the group chosen.
+// groupSidebar is the window's left column: the subscription in use, every
+// group by what it is for with where each sends traffic now, and the core's
+// state at the foot. The highlight springs to the group chosen.
 func (d *Dashboard) groupSidebar(c *ui.Context, t *ui.Theme) {
 	width, _ := c.Size()
 	sidebarWidth := sidebarWidthFor(width)
 	rows := sidebarRows(d.view.Groups)
-	sidebar := ui.Column(c).Width(sidebarWidth).MinHeight(0).Gap(gapSmall).
-		Padding(18, 12, 0, 12).Background(sidebarFill(t))
+	sidebar := ui.Column(c).Width(sidebarWidth).MinHeight(0).Gap(gapMedium).
+		Padding(sidebarPadTop, gapMedium, gapMedium, gapMedium).Background(sidebarFill(t))
 	sidebar.Children(func() {
-		ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
+		d.sidebarSubscription(c, t)
+		ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Disabled(d.controlsLocked()).Children(func() {
 			list := ui.Box(c).Padding(0, 0, gapSection, 0)
 			activeY, found := float32(0), false
 			y := float32(0)
@@ -96,7 +101,19 @@ func (d *Dashboard) groupSidebar(c *ui.Context, t *ui.Theme) {
 				})
 			})
 		})
+		horizontalHairline(c, t)
+		ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Padding(0, gapSmall).Children(func() {
+			d.coreStatus(c, t)
+			ui.Box(c).Grow(1)
+			captionText(c, t, proxyPort(d.proxyAddress)).FontFeatures("tnum").NoWrap().
+				Tooltip("代理地址 " + d.proxyAddress)
+		})
 	})
+}
+
+// proxyPort is the port of a host:port address, what follows its last colon.
+func proxyPort(address string) string {
+	return address[strings.LastIndex(address, ":")+1:]
 }
 
 // sidebarRows lays the groups out under their section titles, keeping the
