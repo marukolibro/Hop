@@ -18,6 +18,7 @@ import (
 
 	"hop/internal/model"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 const (
@@ -158,12 +159,12 @@ func (d *Dashboard) loadSource(ctx context.Context, win Updater, id string, seq 
 		e := &s.editor
 		index := slices.Index(service.RuleSources, input.Rules)
 		if index < 0 {
-			e.err = fmt.Sprintf("这个订阅保存的分流规则（%s）无法识别。", input.Rules)
+			e.err = locales.SubUnknownRules(string(input.Rules))
 			return
 		}
 		sourceIndex := slices.Index(service.ProfileSources, input.Source)
 		if sourceIndex < 0 {
-			e.err = fmt.Sprintf("这个配置保存的来源（%s）无法识别。", input.Source)
+			e.err = locales.SubUnknownSource(string(input.Source))
 			return
 		}
 		e.original, e.sourceLoaded, e.rulesIndex, e.sourceIndex = input, true, index, sourceIndex
@@ -181,11 +182,11 @@ func (d *Dashboard) loadSource(ctx context.Context, win Updater, id string, seq 
 // plain http or https address.
 func subscriptionURLProblem(url string) string {
 	if url == "" {
-		return "请输入订阅地址。"
+		return locales.SubEnterAddress()
 	}
 	parsed, err := neturl.Parse(url)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return "订阅地址需要以 http:// 或 https:// 开头。"
+		return locales.SubAddressScheme()
 	}
 	return ""
 }
@@ -223,15 +224,15 @@ func (d *Dashboard) beginEditorSubmit() {
 	switch source {
 	case model.SourceLocal:
 		if e.content != "" && strings.TrimSpace(e.content) == "" {
-			e.err = "配置内容不能只有空白。"
+			e.err = locales.SubConfigBlank()
 			return
 		}
 		if e.editingID == "" && e.content == "" {
-			e.err = "请粘贴配置内容，或选择一个配置文件。"
+			e.err = locales.SubConfigMissing()
 			return
 		}
 		if len(e.content) > service.MaxProfileSize {
-			e.err = fmt.Sprintf("配置文件不能超过 %d MB。", service.MaxProfileSize>>20)
+			e.err = locales.SubConfigTooLarge(service.MaxProfileSize >> 20)
 			return
 		}
 		input.Content = []byte(e.content)
@@ -309,7 +310,7 @@ func (d *Dashboard) beginDeleteSubmit() {
 	replacement := ""
 	if needReplacement {
 		if dlg.replacement == "" {
-			dlg.err = "请选择替代订阅。"
+			dlg.err = locales.SubChooseReplacement()
 			return
 		}
 		replacement = dlg.replacement
@@ -371,12 +372,12 @@ func (d *Dashboard) sidebarSubscription(c *ui.Context, t *ui.Theme) {
 			// The tag names Hop's own rule set only: a profile that keeps
 			// its provider's rules has nothing extra to say here.
 			if active.Rules == model.RulesHop {
-				chip(c, t, "Hop 智能规则", accentInk(t))
+				chip(c, t, locales.SubRuleSmart(), accentInk(t))
 			}
 		})
 		switch {
 		case active.Source != model.SourceRemote:
-			mutedText(c, t, service.LocalProfileName).NoWrap()
+			mutedText(c, t, service.LocalProfileName()).NoWrap()
 		case active.HasUsage:
 			subscriptionUsage(c, t, active.Usage, now, barWidth)
 		case len(d.view.Plan) > 0:
@@ -389,15 +390,15 @@ func (d *Dashboard) sidebarSubscription(c *ui.Context, t *ui.Theme) {
 		}
 		ui.Row(c).Wrap().Gap(gapLarge).GapY(gapTight).AlignItems(ui.Center).Children(func() {
 			if active.Source == model.SourceRemote {
-				label := "刷新"
+				label := locales.Refresh()
 				if busy {
-					label = "刷新中"
+					label = locales.Refreshing()
 				}
 				textButton(c, t, label, iconRefresh, d.controlsLocked(), busy, func() {
 					d.refreshSubscription(active.ID)
 				})
 			}
-			textButton(c, t, "管理订阅", iconList, false, false, func() { s.managing = true })
+			textButton(c, t, locales.SubManage(), iconList, false, false, func() { s.managing = true })
 		})
 		if active.LastError != "" {
 			warningLine(c, t, active.LastError)
@@ -409,12 +410,12 @@ func (d *Dashboard) sidebarSubscription(c *ui.Context, t *ui.Theme) {
 // adding the first one uses it at once.
 func (d *Dashboard) noSubscription(c *ui.Context, t *ui.Theme) {
 	s := &d.subscription
-	mutedText(c, t, "还没有使用中的订阅")
-	button(c, buttonSpec{label: "添加并使用", icon: iconPlus, style: primaryButton(t),
+	mutedText(c, t, locales.SubNoneInUse())
+	button(c, buttonSpec{label: locales.SubAddAndUse(), icon: iconPlus, style: primaryButton(t),
 		disabled: d.controlsLocked()}, func() {
 		d.openEditor(editorAdd, "")
 	})
-	textButton(c, t, "管理订阅", iconList, false, false, func() { s.managing = true })
+	textButton(c, t, locales.SubManage(), iconList, false, false, func() { s.managing = true })
 }
 
 // subscriptionUsage is the account at a glance: used of total, a thin bar
@@ -465,7 +466,7 @@ func (d *Dashboard) activeSelect(c *ui.Context, t *ui.Theme) {
 	s := &d.subscription
 	sel := ui.SelectBase(c, &s.activeChoice)
 	b := sel.Trigger
-	b.Label("当前订阅").Height(switchHeight).Padding(0).Radius(0).Border(0, ui.Transparent).
+	b.Label(locales.SubCurrent()).Height(switchHeight).Padding(0).Radius(0).Border(0, ui.Transparent).
 		Gap(7).Justify(ui.Start).Background(ui.Transparent).
 		Cursor(ui.CursorPointer).Disabled(d.controlsLocked())
 	ink := t.Text
@@ -529,27 +530,27 @@ func (d *Dashboard) managePage(c *ui.Context, t *ui.Theme) {
 	gutter := pageGutter(c)
 	ui.Column(c).Grow(1).Basis(0).MinHeight(0).Padding(pagePadding, 0, 0, 0).Children(func() {
 		toolbar(c, func() {
-			button(c, buttonSpec{label: "返回节点", icon: iconBack, style: mainSoftButton(t)}, func() { s.managing = false })
+			button(c, buttonSpec{label: locales.SubBackToNodes(), icon: iconBack, style: mainSoftButton(t)}, func() { s.managing = false })
 			ui.Box(c).Grow(1)
-			label := "全部刷新"
+			label := locales.SubRefreshAll()
 			if s.listBusy {
-				label = "刷新中"
+				label = locales.Refreshing()
 			}
 			refreshable := slices.ContainsFunc(s.view.Items, func(item model.SubscriptionSummary) bool {
 				return item.Source == model.SourceRemote
 			})
 			button(c, buttonSpec{label: label, icon: iconRefresh, style: mainSoftButton(t),
 				disabled: s.mutations > 0 || !refreshable || d.modeBusy, busy: s.listBusy}, d.refreshAllSubscriptions)
-			button(c, buttonSpec{label: "添加订阅", icon: iconPlus, style: primaryButton(t),
+			button(c, buttonSpec{label: locales.SubAdd(), icon: iconPlus, style: primaryButton(t),
 				disabled: d.controlsLocked()}, func() {
 				d.openEditor(editorAdd, "")
 			})
 		})
 		ui.Row(c).Gap(gapSmall).AlignItems(ui.End).Padding(0, gutter, gapTight, gutter).Children(func() {
-			ui.Text(c, "订阅").FontSize(fontHeadline).FontWeight(weightSemibold)
-			mutedText(c, t, fmt.Sprintf("%d 个", len(s.view.Items))).FontFeatures("tnum")
+			ui.Text(c, locales.Subscriptions()).FontSize(fontHeadline).FontWeight(weightSemibold)
+			mutedText(c, t, locales.SubCount(len(s.view.Items))).FontFeatures("tnum")
 		})
-		mutedText(c, t, "独立保存，按需切换。添加订阅不会改变当前线路。").
+		mutedText(c, t, locales.SubPageNote()).
 			Padding(0, gutter, gapLarge, gutter)
 		ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
 			ui.Column(c).Gap(gapMedium).Padding(scrollTrim, gutter, scrollEnd, gutter).Children(func() {
@@ -569,9 +570,9 @@ func (d *Dashboard) managePage(c *ui.Context, t *ui.Theme) {
 func (d *Dashboard) manageEmpty(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Key("空").Grow(1).Center().Gap(gapMedium).Padding(emptyPadY, pagePadding).Children(func() {
 		ui.Icon(c, iconLink).Width(iconEmpty).Height(iconEmpty).TextColor(t.TextMuted)
-		ui.Text(c, "还没有订阅").FontSize(fontEmphasis).FontWeight(weightSemibold)
-		mutedText(c, t, "添加一个订阅，开始选择线路。")
-		button(c, buttonSpec{label: "添加并使用", icon: iconPlus, style: primaryButton(t),
+		ui.Text(c, locales.SubEmptyTitle()).FontSize(fontEmphasis).FontWeight(weightSemibold)
+		mutedText(c, t, locales.SubEmptyNote())
+		button(c, buttonSpec{label: locales.SubAddAndUse(), icon: iconPlus, style: primaryButton(t),
 			disabled: d.controlsLocked()}, func() {
 			d.openEditor(editorAdd, "")
 		})
@@ -605,15 +606,15 @@ func (d *Dashboard) subscriptionCard(c *ui.Context, t *ui.Theme, item model.Subs
 				captionText(c, t, subscriptionOrigin(item)).MaxLines(1)
 			})
 			if !isActive {
-				button(c, buttonSpec{label: "使用", style: mainSoftButton(t), disabled: locked}, func() {
+				button(c, buttonSpec{label: locales.Use(), style: mainSoftButton(t), disabled: locked}, func() {
 					d.useSubscription(item.ID)
 				})
 			}
 			if item.Source == model.SourceRemote {
 				busy := s.busy(item.ID)
-				label := "刷新"
+				label := locales.Refresh()
 				if busy {
-					label = "刷新中"
+					label = locales.Refreshing()
 				}
 				button(c, buttonSpec{label: label, icon: iconRefresh, style: mainSoftButton(t), disabled: locked, busy: busy}, func() {
 					d.refreshSubscription(item.ID)
@@ -632,7 +633,7 @@ func (d *Dashboard) subscriptionCard(c *ui.Context, t *ui.Theme, item model.Subs
 // short local label for one stored from a file or paste.
 func subscriptionOrigin(item model.SubscriptionSummary) string {
 	if item.Source == model.SourceLocal {
-		return service.LocalProfileName
+		return service.LocalProfileName()
 	}
 	return item.Host
 }
@@ -659,7 +660,7 @@ func cardSource(c *ui.Context, t *ui.Theme, isActive bool, source model.Subscrip
 func activeBadge(c *ui.Context, t *ui.Theme) {
 	ui.Row(c).Key("使用中").Gap(gapLine).AlignItems(ui.Center).Children(func() {
 		ui.Icon(c, iconCheck).Width(iconInline).Height(iconInline).TextColor(t.Accent)
-		ui.Text(c, "使用中").FontSize(fontCaption).FontWeight(weightMedium).TextColor(accentInk(t)).NoWrap()
+		ui.Text(c, locales.BadgeInUse()).FontSize(fontCaption).FontWeight(weightMedium).TextColor(accentInk(t)).NoWrap()
 	})
 }
 
@@ -667,19 +668,19 @@ func activeBadge(c *ui.Context, t *ui.Theme) {
 // or local content, delete.
 func (d *Dashboard) cardMenu(c *ui.Context, t *ui.Theme, item model.SubscriptionSummary, disabled bool) {
 	id := item.ID
-	editLabel := "编辑订阅"
+	editLabel := locales.SubEdit()
 	if item.Source == model.SourceLocal {
-		editLabel = "编辑配置"
+		editLabel = locales.SubEditConfig()
 	}
-	iconMenuButton(c, item.Name+"的更多操作", iconMore, mainSoftButton(t), disabled, func(m *ui.Menu) {
-		if m.Item("重命名").Disabled(disabled).Chosen() {
+	iconMenuButton(c, locales.SubMoreActions(item.Name), iconMore, mainSoftButton(t), disabled, func(m *ui.Menu) {
+		if m.Item(locales.Rename()).Disabled(disabled).Chosen() {
 			d.openEditor(editorRename, id)
 		}
 		if m.Item(editLabel).Disabled(disabled).Chosen() {
 			d.openEditor(editorEdit, id)
 		}
 		m.Separator()
-		if m.Item("删除订阅").Disabled(disabled).Chosen() {
+		if m.Item(locales.SubDelete()).Disabled(disabled).Chosen() {
 			d.openDelete(id)
 		}
 	})
@@ -710,7 +711,7 @@ func (d *Dashboard) cardMetrics(c *ui.Context, t *ui.Theme, item model.Subscript
 func usageMetric(c *ui.Context, t *ui.Theme, usage model.Usage) {
 	used := usage.Upload + usage.Download
 	ui.Column(c).Key("已用流量").Grow(1.4).Basis(0).MinWidth(cardUsageBarWidth).Gap(gapTight).Children(func() {
-		metricLabel(c, t, "已用流量")
+		metricLabel(c, t, locales.SubMetricUsed())
 		ui.Row(c).Gap(gapTight).AlignItems(ui.End).Children(func() {
 			usedReadout := formatBytes(used)
 			ui.Text(c, usedReadout.value+" "+usedReadout.unit).FontSize(fontSecondary).FontWeight(weightSemibold).
@@ -736,7 +737,7 @@ func expiryMetric(c *ui.Context, t *ui.Theme, expire time.Time) {
 		color = t.Warning
 	}
 	ui.Column(c).Key("到期时间").Grow(1).Basis(0).MinWidth(cardExpiryMinWidth).Gap(gapTight).Children(func() {
-		metricLabel(c, t, "到期时间")
+		metricLabel(c, t, locales.SubMetricExpires())
 		ui.Row(c).Gap(gapTight).AlignItems(ui.End).Children(func() {
 			ui.Text(c, expire.Format(usageDateStyle)).FontSize(fontSecondary).FontWeight(weightSemibold).
 				FontFeatures("tnum").NoWrap()
@@ -747,7 +748,7 @@ func expiryMetric(c *ui.Context, t *ui.Theme, expire time.Time) {
 
 func updatedMetric(c *ui.Context, t *ui.Theme, at time.Time) {
 	ui.Column(c).Key("最近成功更新").Grow(0.8).Basis(0).MinWidth(cardUpdateMinWidth).Gap(gapTight).Children(func() {
-		metricLabel(c, t, "最近成功更新")
+		metricLabel(c, t, locales.SubMetricUpdated())
 		ui.Text(c, updatedText(at, time.Now())).FontSize(fontSecondary).FontWeight(weightSemibold).NoWrap()
 	})
 }
@@ -801,81 +802,81 @@ func (d *Dashboard) editorForm(c *ui.Context, t *ui.Theme) {
 	source := service.ProfileSources[e.sourceIndex]
 	local := source == model.SourceLocal
 	first := len(s.view.Items) == 0
-	title, description, submit := "添加订阅", "保存一个订阅或本地配置，不改变当前正在使用的线路。", "添加"
+	title, description, submit := locales.SubAdd(), locales.SubAddHint(), locales.Add()
 	switch e.intent {
 	case editorAdd:
 		if first {
-			description, submit = "添加第一个配置，并将它设为当前使用。", "添加并使用"
+			description, submit = locales.SubAddFirstHint(), locales.SubAddAndUse()
 		}
 	case editorRename:
-		title, description, submit = "重命名", "名称可以自由修改。内容保持不变。", "保存修改"
+		title, description, submit = locales.Rename(), locales.SubRenameHint(), locales.SaveChanges()
 	case editorEdit:
 		if local {
-			title, description, submit = "编辑配置", "可以修改名称、分流规则和配置内容。新内容校验成功后才替换旧内容。", "保存修改"
+			title, description, submit = locales.SubEditConfig(), locales.SubEditConfigHint(), locales.SaveChanges()
 		} else {
-			title, description, submit = "编辑订阅", "可以修改名称、地址和分流规则。新地址校验成功后才替换旧内容。", "保存修改"
+			title, description, submit = locales.SubEdit(), locales.SubEditHint(), locales.SaveChanges()
 		}
 	}
-	hint := "名称留空时使用来源域名。"
-	localHint := "粘贴 Clash 配置或节点链接，也可以从文件读取。内容保存在本机，原文件移动或删除都不影响。"
+	hint := locales.SubNameHint()
+	localHint := locales.SubPasteHint()
 	urlPlaceholder := "https://provider.example.com/subscribe"
 	if !e.sourceLoaded {
-		hint = "正在读取已保存的配置…"
-		urlPlaceholder = "正在读取订阅信息…"
+		hint = locales.SubReadingSaved()
+		urlPlaceholder = locales.SubReadingDetails()
 	}
 	if e.editingID != "" && local {
-		localHint = "留空则保持现有配置；粘贴内容或选择文件会替换全部内容。"
+		localHint = locales.SubEditKeepHint()
 	}
 	ui.Column(c).Gap(gapSection).Children(func() {
 		ui.Column(c).Gap(gapSmall).Children(func() {
 			ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, title).FontSize(fontHeadline).FontWeight(weightSemibold).Grow(1)
-				iconButton(c, "关闭", iconClose, softButton(t), func() { s.editorOpen = false })
+				iconButton(c, locales.Close(), iconClose, softButton(t), func() { s.editorOpen = false })
 			})
 			mutedText(c, t, description)
 		})
 		ui.Column(c).Gap(gapSmall).Children(func() {
-			fieldLabel(c, t, "配置名称", "选填")
-			ui.TextInput(c, &e.name).Label("配置名称").Placeholder("例如：备用线路").
+			fieldLabel(c, t, locales.SubFieldName(), locales.Optional())
+			ui.TextInput(c, &e.name).Label(locales.SubFieldName()).Placeholder(locales.SubNamePlaceholder()).
 				Background(dialogField(t)).Disabled(e.busy || e.fileBusy)
 			if e.intent != editorRename {
-				fieldLabel(c, t, "来源", "")
+				fieldLabel(c, t, locales.SubFieldSource(), "")
 				ui.Box(c).Disabled(e.busy || e.fileBusy || e.editingID != "" || !e.sourceLoaded).Children(func() {
-					slidingSwitch(c, "source", &e.sourceIndex, sourceLabels, dialogSwitchStyle(t, sourceSegmentWidth), func(i int) {
+					slidingSwitch(c, "source", &e.sourceIndex, sourceLabels(), dialogSwitchStyle(t, sourceSegmentWidth), func(i int) {
 						e.err = ""
 						e.rulesIndex = slices.Index(service.RuleSources, defaultRules(service.ProfileSources[i]))
 					})
 				})
 				if e.editingID != "" {
-					captionText(c, t, "来源创建后不可更改；需要另一种来源时请新建一个配置。")
+					captionText(c, t, locales.SubSourceLocked())
 				}
 				if local {
-					nameHint := "选择文件时会自动填入文件名；名称留空时显示为「" + service.LocalProfileName + "」。"
+					nameHint := locales.SubLocalNameHint(service.LocalProfileName())
 					ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-						button(c, buttonSpec{label: "选择文件…", icon: iconFile, style: mainSoftButton(t),
+						button(c, buttonSpec{label: locales.SubChooseFile(), icon: iconFile, style: mainSoftButton(t),
 							disabled: e.busy || e.fileBusy || !e.sourceLoaded, busy: e.fileBusy}, func() {
 							d.chooseLocalFile(e.seq)
 						})
 						if e.fileName != "" {
-							mutedText(c, t, "已读取 "+e.fileName).MaxLines(1)
+							mutedText(c, t, locales.SubFileRead(e.fileName)).MaxLines(1)
 						} else {
-							mutedText(c, t, "支持 .yaml、.yml、.txt、.conf，或任意文件")
+							mutedText(c, t, locales.SubFileTypes())
 						}
 					})
-					fieldLabel(c, t, "配置内容", fmt.Sprintf("上限 %d MB", service.MaxProfileSize>>20))
-					ui.TextArea(c, &e.content).Label("配置内容").
-						Placeholder("粘贴 Clash 配置或节点链接…").Height(localEditorHeight).
+					fieldLabel(c, t, locales.SubFieldContent(), locales.SubContentLimit(service.MaxProfileSize>>20))
+					ui.TextArea(c, &e.content).Label(locales.SubFieldContent()).
+						Placeholder(locales.SubContentPlaceholder()).Height(localEditorHeight).
 						Background(dialogField(t)).Disabled(e.busy || e.fileBusy || !e.sourceLoaded)
 					captionText(c, t, localHint)
 					captionText(c, t, nameHint)
 				} else {
-					fieldLabel(c, t, "订阅地址", "")
-					ui.TextInput(c, &e.url).Label("订阅地址").Placeholder(urlPlaceholder).
+					fieldLabel(c, t, locales.SubFieldAddress(), "")
+					ui.TextInput(c, &e.url).Label(locales.SubFieldAddress()).Placeholder(urlPlaceholder).
 						Background(dialogField(t)).
 						Disabled(e.busy || e.fileBusy || !e.sourceLoaded).OnSubmit(d.submitEditor)
 					captionText(c, t, hint)
 				}
-				fieldLabel(c, t, "分流规则", "")
+				fieldLabel(c, t, locales.SubFieldRules(), "")
 				labels, hints := ruleTexts(service.ProfileSources[e.sourceIndex])
 				ui.Box(c).Disabled(e.busy || e.fileBusy || !e.sourceLoaded).Children(func() {
 					slidingSwitch(c, "rules", &e.rulesIndex, labels, dialogSwitchStyle(t, ruleSegmentWidth), func(int) {})
@@ -893,7 +894,7 @@ func (d *Dashboard) editorForm(c *ui.Context, t *ui.Theme) {
 			submitDisabled = submitDisabled || strings.TrimSpace(e.url) == ""
 		}
 		ui.Row(c).Gap(gapSmall).Justify(ui.End).Children(func() {
-			button(c, buttonSpec{label: "取消", style: softButton(t), disabled: e.busy}, func() { s.editorOpen = false })
+			button(c, buttonSpec{label: locales.Cancel(), style: softButton(t), disabled: e.busy}, func() { s.editorOpen = false })
 			button(c, buttonSpec{label: submit, style: primaryButton(t), busy: e.busy,
 				disabled: submitDisabled}, d.submitEditor)
 		})
@@ -912,18 +913,18 @@ func (d *Dashboard) chooseLocalFile(seq int) {
 	e.fileBusy, e.err = true, ""
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
-			Title:       "选择配置文件",
-			ButtonLabel: "选择",
+			Title:       locales.SubFileDialogTitle(),
+			ButtonLabel: locales.Choose(),
 			Filters: []mygo.FileFilter{
-				{Name: "配置文件", Extensions: []string{"yaml", "yml", "txt", "conf"}},
-				{Name: "所有文件", Extensions: []string{"*"}},
+				{Name: locales.SubFileFilterConfig(), Extensions: []string{"yaml", "yml", "txt", "conf"}},
+				{Name: locales.SubFileFilterAll(), Extensions: []string{"*"}},
 			},
 		})
 		var content []byte
 		var name, problem string
 		switch {
 		case err != nil:
-			problem = "打开文件选择器失败：" + err.Error()
+			problem = locales.SubFileDialogFailed(err.Error())
 		case len(paths) > 0:
 			name = filepath.Base(paths[0])
 			content, err = readLocalConfig(paths[0])
@@ -960,19 +961,19 @@ func readLocalConfig(path string) (content []byte, err error) {
 	name := filepath.Base(path)
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("打开「%s」失败：%w", name, fileCause(err))
+		return nil, fmt.Errorf("%s%w", locales.FileOpenFailed(name), fileCause(err))
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("关闭「%s」失败：%w", name, fileCause(closeErr)))
+			err = errors.Join(err, fmt.Errorf("%s%w", locales.FileCloseFailed(name), fileCause(closeErr)))
 		}
 	}()
 	content, err = io.ReadAll(io.LimitReader(file, service.MaxProfileSize+1))
 	if err != nil {
-		return nil, fmt.Errorf("读取「%s」失败：%w", name, fileCause(err))
+		return nil, fmt.Errorf("%s%w", locales.FileReadFailed(name), fileCause(err))
 	}
 	if len(content) > service.MaxProfileSize {
-		return nil, fmt.Errorf("「%s」超过 %d MB，未读取。", name, service.MaxProfileSize>>20)
+		return nil, errors.New(locales.FileTooLarge(name, service.MaxProfileSize>>20))
 	}
 	return content, nil
 }
@@ -1011,37 +1012,37 @@ func (d *Dashboard) deleteForm(c *ui.Context, t *ui.Theme) {
 	wasActive := dlg.id == s.view.ActiveID
 	lastOne := wasActive && len(others) == 0
 	needReplacement := wasActive && !lastOne
-	description := "确定删除「" + dlg.name + "」？不会影响当前正在使用的订阅。"
-	submit := "删除"
+	description := locales.SubDeleteConfirm(dlg.name)
+	submit := locales.Delete()
 	switch {
 	case needReplacement:
-		description = "「" + dlg.name + "」正在使用。请选择替代订阅，切换成功后再删除。"
-		submit = "切换并删除"
+		description = locales.SubDeleteActive(dlg.name)
+		submit = locales.SubSwitchAndDelete()
 	case lastOne:
-		description = "「" + dlg.name + "」是最后一个订阅。删除后将回到未配置状态，不再通过此订阅代理。"
-		submit = "停用并删除"
+		description = locales.SubDeleteLast(dlg.name)
+		submit = locales.SubStopAndDelete()
 	}
 	ui.Column(c).Gap(gapSection).Children(func() {
 		ui.Column(c).Gap(gapSmall).Children(func() {
 			ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, iconTrash).Width(iconTitle).Height(iconTitle).TextColor(t.Danger)
-				ui.Text(c, "删除订阅").FontSize(fontHeadline).FontWeight(weightSemibold).Grow(1)
-				iconButton(c, "关闭", iconClose, softButton(t), func() { s.deleteOpen = false })
+				ui.Text(c, locales.SubDelete()).FontSize(fontHeadline).FontWeight(weightSemibold).Grow(1)
+				iconButton(c, locales.Close(), iconClose, softButton(t), func() { s.deleteOpen = false })
 			})
 			mutedText(c, t, description)
 		})
 		if needReplacement {
 			ui.Column(c).Key("替代").Gap(gapSmall).Children(func() {
-				fieldLabel(c, t, "切换到另一个订阅", "")
+				fieldLabel(c, t, locales.SubSwitchTo(), "")
 				subscriptionPicker(c, t, others, &dlg.replacement)
-				captionText(c, t, "切换成功后再删除，不会自动替你选择线路。")
+				captionText(c, t, locales.SubDeleteAfterSwitch())
 			})
 		}
 		if dlg.err != "" {
 			ui.Text(c, dlg.err).FontSize(fontSecondary).TextColor(t.Danger)
 		}
 		ui.Row(c).Gap(gapSmall).Justify(ui.End).Children(func() {
-			button(c, buttonSpec{label: "取消", style: softButton(t), disabled: dlg.busy}, func() { s.deleteOpen = false })
+			button(c, buttonSpec{label: locales.Cancel(), style: softButton(t), disabled: dlg.busy}, func() { s.deleteOpen = false })
 			button(c, buttonSpec{label: submit, style: dangerButton(t), busy: dlg.busy,
 				disabled: dlg.busy || (needReplacement && dlg.replacement == "")}, d.submitDelete)
 		})
@@ -1049,31 +1050,19 @@ func (d *Dashboard) deleteForm(c *ui.Context, t *ui.Theme) {
 }
 
 // sourceLabels name service.ProfileSources, index for index.
-var sourceLabels = []string{"订阅链接", "本地配置"}
+func sourceLabels() []string { return []string{locales.SubSourceLink(), locales.SubSourceLocal()} }
 
-// ruleLabels name service.RuleSources for a subscription, index for index;
-// ruleHints say what each does, in the same order. localRuleLabels and
-// localRuleHints say the same of a local config, which has no provider: most
-// are a self-hosted server's node links, with no rules of their own.
-var (
-	ruleLabels = []string{"机场规则", "Hop 智能规则"}
-	ruleHints  = []string{
-		"沿用订阅自带的策略组和规则。节点列表类订阅没有规则，会改用「Hop 智能规则」。",
-		"只用订阅的节点：被墙和境外网站走代理，国内网站直连，名单里没有的按 IP 所在地判断；AI、流媒体、Telegram 等自动分组。",
-	}
-	localRuleLabels = []string{"配置自带规则", "Hop 智能规则"}
-	localRuleHints  = []string{
-		"沿用配置里的策略组和规则。只有节点链接时没有规则，会改用「Hop 智能规则」。",
-		"只用配置里的节点：被墙和境外网站走代理，国内网站直连，名单里没有的按 IP 所在地判断；AI、流媒体、Telegram 等自动分组。适合自建服务器。",
-	}
-)
-
-// ruleTexts are the rule switch's labels and hints for a profile from source.
+// ruleTexts are the labels of service.RuleSources for a profile from source,
+// index for index, and what each does, in the same order. A local config has
+// no provider: most are a self-hosted server's node links, with no rules of
+// their own.
 func ruleTexts(source model.SubscriptionSource) ([]string, []string) {
 	if source == model.SourceLocal {
-		return localRuleLabels, localRuleHints
+		return []string{locales.SubRuleOwn(), locales.SubRuleSmart()},
+			[]string{locales.SubRuleHintLocalOwn(), locales.SubRuleHintLocalSmart()}
 	}
-	return ruleLabels, ruleHints
+	return []string{locales.SubRuleProvider(), locales.SubRuleSmart()},
+		[]string{locales.SubRuleHintProvider(), locales.SubRuleHintSmart()}
 }
 
 // ruleChip says whose rules a subscription runs with: the provider's in the
@@ -1081,7 +1070,7 @@ func ruleTexts(source model.SubscriptionSource) ([]string, []string) {
 func ruleChip(c *ui.Context, t *ui.Theme, source model.SubscriptionSource, rules model.RuleSource) {
 	switch rules {
 	case model.RulesHop:
-		chip(c, t, "Hop 智能规则", accentInk(t))
+		chip(c, t, locales.SubRuleSmart(), accentInk(t))
 	default:
 		labels, _ := ruleTexts(source)
 		chip(c, t, labels[0], t.TextMuted)
@@ -1116,7 +1105,7 @@ func fieldLabel(c *ui.Context, t *ui.Theme, text string, note string) {
 func subscriptionPicker(c *ui.Context, t *ui.Theme, items []model.SubscriptionSummary, chosen *string) {
 	sel := ui.SelectBase(c, chosen)
 	b := sel.Trigger
-	b.Label("选择订阅").Height(switchHeight).Grow(1).Padding(0, gapSmall, 0, pickerPadX).
+	b.Label(locales.SubSelect()).Height(switchHeight).Grow(1).Padding(0, gapSmall, 0, pickerPadX).
 		Radius(radiusControl).Background(dialogField(t)).Border(1, t.Border).Gap(gapSmall).
 		Justify(ui.SpaceBetween).Cursor(ui.CursorPointer)
 	b.Children(func() {
@@ -1124,7 +1113,7 @@ func subscriptionPicker(c *ui.Context, t *ui.Theme, items []model.SubscriptionSu
 			ui.Text(c, label).FontSize(fontBody).FontWeight(weightMedium).MaxLines(1).
 				Grow(1).Basis(0).Translate(0, -opticalLift)
 		} else {
-			ui.Text(c, "请选择订阅").FontSize(fontBody).TextColor(t.TextMuted).
+			ui.Text(c, locales.SubChoosePrompt()).FontSize(fontBody).TextColor(t.TextMuted).
 				Grow(1).Basis(0).NoWrap().Translate(0, -opticalLift)
 		}
 		ui.Icon(c, iconChevron).Width(iconInline).Height(iconInline).TextColor(t.TextMuted)
@@ -1184,18 +1173,18 @@ func usageColor(t *ui.Theme, ratio float32) ui.Color {
 // updatedText says how long ago the subscription was downloaded.
 func updatedText(at time.Time, now time.Time) string {
 	if at.IsZero() {
-		return "更新时间未知,刷新一次即可显示"
+		return locales.SubUpdatedUnknown()
 	}
 	ago := now.Sub(at)
 	switch {
 	case ago < time.Minute:
-		return "刚刚更新"
+		return locales.SubUpdatedNow()
 	case ago < time.Hour:
-		return fmt.Sprintf("%d 分钟前更新", int(ago.Minutes()))
+		return locales.SubUpdatedMinutes(int(ago.Minutes()))
 	case ago < dayLength:
-		return fmt.Sprintf("%d 小时前更新", int(ago.Hours()))
+		return locales.SubUpdatedHours(int(ago.Hours()))
 	default:
-		return fmt.Sprintf("%d 天前更新", int(ago/dayLength))
+		return locales.SubUpdatedDays(int(ago / dayLength))
 	}
 }
 
@@ -1203,11 +1192,11 @@ func updatedText(at time.Time, now time.Time) string {
 func remainingText(left time.Duration) string {
 	switch {
 	case left <= 0:
-		return "已到期"
+		return locales.SubExpired()
 	case left < dayLength:
-		return "今天到期"
+		return locales.SubExpiresToday()
 	default:
-		return fmt.Sprintf("剩余 %d 天", int(left/dayLength))
+		return locales.SubDaysLeft(int(left / dayLength))
 	}
 }
 

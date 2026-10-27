@@ -10,24 +10,25 @@ import (
 
 	"hop/internal/model"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 // ruleTypeLabels name service.CustomRuleTypes, index for index; ruleTypeHints
 // say what each matches, in the same order.
-var (
-	ruleTypeLabels = []string{"域名后缀", "完整域名", "域名关键词", "IP 段", "应用"}
-	ruleTypeHints  = []string{
-		"匹配这个域名及其子域名，例如 example.com",
-		"只匹配这个域名本身，例如 api.example.com",
-		"域名里含有这段文字就匹配，例如 example",
-		"匹配这个地址段，连接不会为此解析域名，例如 192.0.2.0/24",
-		"按本机进程名匹配，例如 Telegram",
-	}
-	ruleValuePlaceholders = []string{"example.com", "api.example.com", "example", "192.0.2.0/24", "Telegram"}
-)
+func ruleTypeLabels() []string {
+	return []string{locales.RuleTypeSuffix(), locales.RuleTypeDomain(), locales.RuleTypeKeyword(), locales.RuleTypeCidr(), locales.RuleTypeProcess()}
+}
+
+func ruleTypeHints() []string {
+	return []string{locales.RuleHintSuffix(), locales.RuleHintDomain(), locales.RuleHintKeyword(), locales.RuleHintCidr(), locales.RuleHintProcess()}
+}
+
+var ruleValuePlaceholders = []string{"example.com", "api.example.com", "example", "192.0.2.0/24", "Telegram"}
 
 // ruleTargetLabels name service.CustomRuleTargets, index for index.
-var ruleTargetLabels = []string{"直连", "代理", "拒绝"}
+func ruleTargetLabels() []string {
+	return []string{locales.RouteDirect(), locales.RouteProxy(), locales.RouteReject()}
+}
 
 // customRulesState is the stored rules and the add dialog.
 type customRulesState struct {
@@ -101,12 +102,12 @@ func (d *Dashboard) submitRuleEditor() {
 	}
 	value := strings.TrimSpace(e.value)
 	if value == "" {
-		e.err = "请输入要匹配的内容。"
+		e.err = locales.RuleEnterContent()
 		return
 	}
 	if e.typeIndex < 0 || e.typeIndex >= len(service.CustomRuleTypes) ||
 		e.targetIndex < 0 || e.targetIndex >= len(service.CustomRuleTargets) {
-		e.err = "请选择规则类型和去向。"
+		e.err = locales.RuleChooseTypeTarget()
 		return
 	}
 	e.err = ""
@@ -176,17 +177,17 @@ func (d *Dashboard) customRulesRows(c *ui.Context, t *ui.Theme) []func() {
 	}
 	rows = append(rows, func() {
 		ui.Row(c).Key("rules-add").Gap(gapLarge).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
-			note := "规则按顺序匹配，排在订阅规则之前。"
+			note := locales.RulesOrderNote()
 			switch {
 			case r.failed:
-				note = "读取自定义规则失败。"
+				note = locales.RulesReadFailed()
 			case !r.loaded:
-				note = "正在读取自定义规则…"
+				note = locales.RulesReading()
 			case len(r.rules) == 0:
-				note = "还没有自定义规则，流量按当前的规则分流。"
+				note = locales.RulesEmpty()
 			}
 			mutedText(c, t, note).Grow(1)
-			button(c, buttonSpec{label: "添加规则", icon: iconPlus, style: primaryButton(t),
+			button(c, buttonSpec{label: locales.RuleAdd(), icon: iconPlus, style: primaryButton(t),
 				disabled: d.controlsLocked() || !r.loaded, busy: r.busy}, d.openRuleEditor)
 		})
 	})
@@ -204,7 +205,7 @@ func (d *Dashboard) customRuleRow(c *ui.Context, t *ui.Theme, index int, rule mo
 			})
 			chip(c, t, ruleTargetLabel(rule.Target), ruleTargetColor(t, rule.Target))
 			ui.Box(c).Disabled(d.controlsLocked()).Children(func() {
-				iconButton(c, "删除规则 "+rule.Value, iconTrash, dangerButton(t), func() { d.deleteRule(index) })
+				iconButton(c, locales.RuleDelete(rule.Value), iconTrash, dangerButton(t), func() { d.deleteRule(index) })
 			})
 		})
 	}
@@ -224,38 +225,38 @@ func (d *Dashboard) customRuleDialog(c *ui.Context, t *ui.Theme) {
 func (d *Dashboard) customRuleForm(c *ui.Context, t *ui.Theme) {
 	r := &d.rules
 	e := &r.editor
-	typeIndex := max(0, min(e.typeIndex, len(ruleTypeLabels)-1))
-	hint := ruleTypeHints[typeIndex]
+	typeIndex := max(0, min(e.typeIndex, len(ruleTypeLabels())-1))
+	hint := ruleTypeHints()[typeIndex]
 	placeholder := ruleValuePlaceholders[typeIndex]
 	ui.Column(c).Gap(gapSection).Children(func() {
 		ui.Column(c).Gap(gapSmall).Children(func() {
 			ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "添加规则").FontSize(fontHeadline).FontWeight(weightSemibold).Grow(1)
-				iconButton(c, "关闭", iconClose, softButton(t), func() { r.editorOpen = false })
+				ui.Text(c, locales.RuleAdd()).FontSize(fontHeadline).FontWeight(weightSemibold).Grow(1)
+				iconButton(c, locales.Close(), iconClose, softButton(t), func() { r.editorOpen = false })
 			})
-			mutedText(c, t, "规则排在订阅规则之前，先于它们匹配；局域网直连规则仍然最先。")
+			mutedText(c, t, locales.RuleDialogNote())
 		})
 		ui.Column(c).Gap(gapSmall).Children(func() {
 			d.ruleSuggestionRow(c, t)
-			fieldLabel(c, t, "类型", "")
+			fieldLabel(c, t, locales.RuleFieldType(), "")
 			ui.Box(c).Disabled(r.busy).Children(func() {
-				slidingSwitch(c, "rule-type", &e.typeIndex, ruleTypeLabels, dialogSwitchStyle(t, 68), func(int) { e.err = "" })
+				slidingSwitch(c, "rule-type", &e.typeIndex, ruleTypeLabels(), dialogSwitchStyle(t, 68), func(int) { e.err = "" })
 			})
 			captionText(c, t, hint)
-			fieldLabel(c, t, "内容", "")
-			ui.TextInput(c, &e.value).Label("规则内容").Placeholder(placeholder).
+			fieldLabel(c, t, locales.RuleFieldContent(), "")
+			ui.TextInput(c, &e.value).Label(locales.RuleContentLabel()).Placeholder(placeholder).
 				Background(dialogField(t)).Disabled(r.busy).OnSubmit(d.submitRuleEditor)
-			fieldLabel(c, t, "去向", "")
+			fieldLabel(c, t, locales.RuleFieldTarget(), "")
 			ui.Box(c).Disabled(r.busy).Children(func() {
-				slidingSwitch(c, "rule-target", &e.targetIndex, ruleTargetLabels, dialogSwitchStyle(t, 64), func(int) { e.err = "" })
+				slidingSwitch(c, "rule-target", &e.targetIndex, ruleTargetLabels(), dialogSwitchStyle(t, 64), func(int) { e.err = "" })
 			})
 			if e.err != "" {
 				ui.Text(c, e.err).FontSize(fontSecondary).TextColor(t.Danger)
 			}
 		})
 		ui.Row(c).Gap(gapSmall).Justify(ui.End).Children(func() {
-			button(c, buttonSpec{label: "取消", style: softButton(t), disabled: r.busy}, func() { r.editorOpen = false })
-			button(c, buttonSpec{label: "添加", style: primaryButton(t), busy: r.busy,
+			button(c, buttonSpec{label: locales.Cancel(), style: softButton(t), disabled: r.busy}, func() { r.editorOpen = false })
+			button(c, buttonSpec{label: locales.Add(), style: primaryButton(t), busy: r.busy,
 				disabled: r.busy || strings.TrimSpace(e.value) == ""}, d.submitRuleEditor)
 		})
 	})
@@ -269,7 +270,7 @@ func (d *Dashboard) ruleSuggestionRow(c *ui.Context, t *ui.Theme) {
 	if len(e.suggestions) == 0 {
 		return
 	}
-	fieldLabel(c, t, "按这条连接", "")
+	fieldLabel(c, t, locales.RuleFromConnection(), "")
 	ui.Row(c).Gap(gapSmall).Wrap().Children(func() {
 		for _, suggestion := range e.suggestions {
 			style := softButton(t)
@@ -286,7 +287,7 @@ func (d *Dashboard) ruleSuggestionRow(c *ui.Context, t *ui.Theme) {
 // ruleTypeLabel names a stored rule's type.
 func ruleTypeLabel(typ string) string {
 	if i := slices.Index(service.CustomRuleTypes, typ); i >= 0 {
-		return ruleTypeLabels[i]
+		return ruleTypeLabels()[i]
 	}
 	return typ
 }
@@ -294,7 +295,7 @@ func ruleTypeLabel(typ string) string {
 // ruleTargetLabel names where a rule sends traffic.
 func ruleTargetLabel(target string) string {
 	if i := slices.Index(service.CustomRuleTargets, target); i >= 0 {
-		return ruleTargetLabels[i]
+		return ruleTargetLabels()[i]
 	}
 	return target
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/locales"
 )
 
 const (
@@ -31,10 +32,8 @@ const (
 
 // modeHints say what each of modeLabels does, index for index; the mode
 // switch carries the current one as its tooltip, no text on the row.
-var modeHints = []string{
-	"按规则决定哪些走代理、哪些直连",
-	"全部流量走代理",
-	"全部直连,不经过代理",
+func modeHints() []string {
+	return []string{locales.ModeHintRule(), locales.ModeHintGlobal(), locales.ModeHintDirect()}
 }
 
 // routeGauge draws the exit as two rings: the outer sweeps with the download,
@@ -108,9 +107,9 @@ func exitIdentity(c *ui.Context, t *ui.Theme, route []model.RouteHop) {
 	case hop.Group:
 		ui.Text(c, hop.Name).FontSize(fontHeadline).FontWeight(weightSemibold)
 	case node.PlanNote:
-		headline(c, t, "机场信息节点", node.Delay)
+		headline(c, t, locales.PlanInfoNode(), node.Delay)
 	case node.Via != "":
-		headline(c, t, "直连", node.Delay)
+		headline(c, t, locales.RouteDirect(), node.Delay)
 	default:
 		headline(c, t, strings.TrimSpace(shownFlag(node.Flag)+" "+node.Region+" "+node.Title), node.Delay)
 	}
@@ -129,7 +128,7 @@ func exitDetails(c *ui.Context, t *ui.Theme, route []model.RouteHop) {
 	}
 	switch {
 	case node.PlanNote:
-		mutedText(c, t, node.Name+" · 测速后,自动选择会换到延迟最低的节点").MaxLines(1)
+		mutedText(c, t, locales.RoutePlanNote(node.Name)).MaxLines(1)
 	case node.Via != "":
 		mutedText(c, t, node.Via)
 	default:
@@ -159,7 +158,7 @@ func routeVia(route []model.RouteHop) string {
 	if len(groups) == 0 {
 		return ""
 	}
-	return "经 " + strings.Join(groups, " › ")
+	return locales.RouteVia(strings.Join(groups, " › "))
 }
 
 func headline(c *ui.Context, t *ui.Theme, text string, delay model.Delay) {

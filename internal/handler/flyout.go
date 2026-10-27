@@ -9,6 +9,7 @@ import (
 
 	"hop/internal/model"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 const (
@@ -74,7 +75,7 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 			ui.Box(c).Grow(1)
 			if d.appUpdate.update.Available && d.appUpdate.enabled {
 				// Labelled: a bare arrow here would read as the upload rate.
-				button(c, buttonSpec{label: "新版本", icon: iconUpgrade, style: softButton(t)}, func() {
+				button(c, buttonSpec{label: locales.FlyoutNewVersion(), icon: iconUpgrade, style: softButton(t)}, func() {
 					d.page = pageSettings
 					openWindow()
 				})
@@ -96,7 +97,7 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 			// three modes, one of which is always on, fill the first, and the
 			// two traffic switches split the second.
 			ui.Row(c).Key("pills").Gap(gapTight).AlignItems(ui.Center).Children(func() {
-				for i := range modeLabels {
+				for i := range modeLabels() {
 					d.modePill(c, t, i).Grow(1).Basis(0)
 				}
 			})
@@ -115,8 +116,8 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 			d.quickRoutes(c, t)
 		})
 		entrance(ui.Row(c).Key("footer"), 5).Gap(gapSmall).Children(func() {
-			button(c, buttonSpec{label: "打开主窗口", icon: iconWindow, style: softButton(t)}, openWindow).Grow(1)
-			button(c, buttonSpec{label: "退出 Hop", icon: iconPower, style: softButton(t)}, quit)
+			button(c, buttonSpec{label: locales.OpenMainWindow(), icon: iconWindow, style: softButton(t)}, openWindow).Grow(1)
+			button(c, buttonSpec{label: locales.QuitHop(), icon: iconPower, style: softButton(t)}, quit)
 		})
 	})
 }
@@ -124,7 +125,7 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 func (d *Dashboard) flyoutRoute(c *ui.Context, t *ui.Theme) {
 	route := d.view.Route
 	if len(route) == 0 {
-		mutedText(c, t, "还没有使用中的订阅。打开主窗口添加一个。")
+		mutedText(c, t, locales.FlyoutNoSubscription())
 		return
 	}
 	ui.Row(c).Key("exitRow").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
@@ -193,13 +194,13 @@ func (d *Dashboard) quickRoutes(c *ui.Context, t *ui.Theme) {
 	}
 	routes := service.QuickRoutes(group, fastestCount)
 	ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Height(26).Children(func() {
-		sectionTitle(c, "线路")
+		sectionTitle(c, locales.ColumnRoute())
 		mutedText(c, t, shownName(group.Label))
 		ui.Box(c).Grow(1)
 		d.testButton(c, t, group.Name)
 	})
 	if len(routes) == 0 {
-		mutedText(c, t, "还没有测速结果。点「测速」看看哪个节点最快。")
+		mutedText(c, t, locales.FlyoutNoDelays())
 		return
 	}
 	ui.Scroll(c).MaxHeight(quickRowsMax*(quickRowH+quickRowGap) - quickRowGap).Children(func() {

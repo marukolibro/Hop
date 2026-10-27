@@ -468,7 +468,7 @@ func TestLocalProfilesEndToEnd(t *testing.T) {
 		t.Fatalf("view = %+v, want the local profile in use", view)
 	}
 	clashID := view.Items[0].ID
-	if got := view.Items[0]; got.Source != model.SourceLocal || got.Host != "" || got.HasUsage || got.Name != service.LocalProfileName {
+	if got := view.Items[0]; got.Source != model.SourceLocal || got.Host != "" || got.HasUsage || got.Name != service.LocalProfileName() {
 		t.Fatalf("local summary = %+v, want local, no host or usage, and the local label", got)
 	}
 	clashEntry, found, err := h.store.Get(clashID)
@@ -586,7 +586,7 @@ func TestLocalProfilesEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("source: %v", err)
 	}
-	if source.Source != model.SourceLocal || source.URL != "" || source.Name != service.LocalProfileName || len(source.Content) != 0 {
+	if source.Source != model.SourceLocal || source.URL != "" || source.Name != service.LocalProfileName() || len(source.Content) != 0 {
 		t.Fatalf("Source = %+v, want name and source only", source)
 	}
 	if err := h.service.Edit(ctx, clashID, model.SubscriptionInput{

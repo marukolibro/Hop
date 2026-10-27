@@ -7,5 +7,9 @@
     "publicKey": "qIKeKUovG7mr/iygM3lK+eFJU9DIyyFkHYAbV73GcVU=",
     "github": "marukolibro/Hop",
     "privateKey": "~/Library/Application Support/mygo/update-keys/mygo-update.key"
+  },
+  "i18n": {
+    "dir": "locales",
+    "source": "en"
   }
 }

@@ -9,13 +9,7 @@ import (
 
 	"hop/internal/model"
 	"hop/internal/service"
-)
-
-const (
-	unlockStartLabel = "解锁检测"
-	unlockStopLabel  = "停止检测"
-	unlockNoneText   = "均不可用"
-	unlockUnsureText = "未能检测"
+	"hop/locales"
 )
 
 // unlockState is the unlock check: what it found for each group, kept until
@@ -43,18 +37,18 @@ type unlockLabel struct {
 func unlockLabels(u model.Unlock) []unlockLabel {
 	var labels []unlockLabel
 	if u.ChatGPT.State == model.UnlockAvailable {
-		labels = append(labels, unlockLabel{text: "GPT", tooltip: "ChatGPT 可用"})
+		labels = append(labels, unlockLabel{text: "GPT", tooltip: locales.UnlockChatGPT()})
 	}
 	if u.Netflix.State == model.UnlockAvailable || u.Netflix.State == model.UnlockPartial {
-		label := unlockLabel{text: "Netflix", tooltip: "Netflix 可用" + regionNote(u.Netflix.Region)}
+		label := unlockLabel{text: "Netflix", tooltip: locales.UnlockNetflix() + regionNote(u.Netflix.Region)}
 		if u.Netflix.State == model.UnlockPartial {
-			label.tooltip = "Netflix 只能看自制剧" + regionNote(u.Netflix.Region)
+			label.tooltip = locales.UnlockNetflixPartial() + regionNote(u.Netflix.Region)
 			label.partial = true
 		}
 		labels = append(labels, label)
 	}
 	if u.YouTube.State == model.UnlockAvailable {
-		labels = append(labels, unlockLabel{text: "YouTube", tooltip: "YouTube Premium 可用" + regionNote(u.YouTube.Region)})
+		labels = append(labels, unlockLabel{text: "YouTube", tooltip: locales.UnlockYouTube() + regionNote(u.YouTube.Region)})
 	}
 	return labels
 }
@@ -64,7 +58,7 @@ func regionNote(code string) string {
 	if code == "" {
 		return ""
 	}
-	return ",地区:" + countryName(code)
+	return locales.UnlockRegion(service.CountryName(code))
 }
 
 // unlockSummary says what a group with no working service shows: that every
@@ -72,10 +66,10 @@ func regionNote(code string) string {
 func unlockSummary(u model.Unlock) string {
 	for _, r := range []model.UnlockResult{u.ChatGPT, u.Netflix, u.YouTube} {
 		if r.State == model.UnlockUnknown {
-			return unlockUnsureText
+			return locales.UnlockUnsure()
 		}
 	}
-	return unlockNoneText
+	return locales.UnlockNone()
 }
 
 // toggleUnlock starts the check of every group, or ends the one running. It
@@ -126,10 +120,10 @@ func (d *Dashboard) unlockControls(c *ui.Context, t *ui.Theme) {
 		captionText(c, t, fmt.Sprintf("%d/%d", d.unlock.done, d.unlock.total)).FontFeatures("tnum").
 			ContentTransition(ui.ContentTransition{Numeric: true})
 	}
-	spec := buttonSpec{label: unlockStartLabel, icon: iconUnlock, style: mainSoftButton(t),
+	spec := buttonSpec{label: locales.UnlockStart(), icon: iconUnlock, style: mainSoftButton(t),
 		disabled: d.services.Unlock == nil || d.controlsLocked() || d.testing != ""}
 	if running {
-		spec.label, spec.icon, spec.disabled = unlockStopLabel, iconClose, false
+		spec.label, spec.icon, spec.disabled = locales.UnlockStop(), iconClose, false
 	}
 	button(c, spec, d.toggleUnlock)
 }

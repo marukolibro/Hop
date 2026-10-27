@@ -16,6 +16,7 @@ import (
 	"hop/internal/model"
 	"hop/internal/repository/profile"
 	"hop/internal/repository/subscription"
+	"hop/locales"
 )
 
 // rollbackTimeout bounds the cleanup that puts the previous config back: it runs
@@ -31,8 +32,8 @@ var ErrNoSubscription = errors.New("no subscription has been added yet")
 var ErrLocalProfile = errors.New("a local profile has no link to refresh")
 
 // LocalProfileName names a local profile the user left unnamed and did not
-// read from a file.
-const LocalProfileName = "本地配置"
+// read from a file, in the language Hop shows when it is asked.
+func LocalProfileName() string { return locales.SubSourceLocal() }
 
 // MaxProfileSize is the largest profile Hop accepts, from a link or from a
 // local file or pasted text, in bytes.
@@ -1036,7 +1037,7 @@ func normalizeInput(input model.SubscriptionInput) (model.SubscriptionInput, err
 			return model.SubscriptionInput{}, fmt.Errorf("the local config is larger than %d bytes", MaxProfileSize)
 		}
 		return model.SubscriptionInput{
-			Name: cmp.Or(name, LocalProfileName), Source: model.SourceLocal,
+			Name: cmp.Or(name, LocalProfileName()), Source: model.SourceLocal,
 			Content: input.Content, Rules: input.Rules,
 		}, nil
 	}

@@ -2,6 +2,8 @@
 
 package handler
 
+import "hop/locales"
+
 // tunPrivilegePrompt is how enabling TUN describes the one-time elevation;
 // this platform has no privileged helper.
-const tunPrivilegePrompt = "系统会请求一次管理员授权"
+func tunPrivilegePrompt() string { return locales.TunPromptOther() }

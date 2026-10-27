@@ -7,6 +7,7 @@ import (
 
 	"hop/internal/model"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 // statsDirectAlpha quietens direct traffic under the accent of proxy traffic.
@@ -18,7 +19,7 @@ func (d *Dashboard) statsPage(c *ui.Context, t *ui.Theme) {
 	view := d.stats
 	if trafficViewEmpty(view) {
 		ui.Row(c).Grow(1).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
-			mutedText(c, t, "还没有流量经过 Hop。")
+			mutedText(c, t, locales.StatsEmpty())
 		})
 		return
 	}
@@ -26,8 +27,8 @@ func (d *Dashboard) statsPage(c *ui.Context, t *ui.Theme) {
 	// start at the page gutter, so the heading stays where the other pages put it.
 	ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
 		ui.Column(c).Padding(28, pageGutter(c), 40, pageGutter(c)).Gap(20).Children(func() {
-			pageHeadingRow(c, t, "流量统计", "每一段流量,都清晰有迹", func() {
-				captionText(c, t, "截至今天")
+			pageHeadingRow(c, t, locales.StatsTitle(), locales.StatsSubtitle(), func() {
+				captionText(c, t, locales.StatsAsOfToday())
 			})
 			statsTotals(c, t, view)
 			horizontalHairline(c, t)
@@ -64,8 +65,8 @@ func (d *Dashboard) trafficSource() model.TrafficSource {
 // statsTotals is today and this month, each with its proxy and direct split.
 func statsTotals(c *ui.Context, t *ui.Theme, view model.TrafficView) {
 	ui.Row(c).Key("totals").Gap(24).Children(func() {
-		statsTotalsColumn(c, t, "今天", view.Today)
-		statsTotalsColumn(c, t, "本月", view.Month)
+		statsTotalsColumn(c, t, locales.StatsToday(), view.Today)
+		statsTotalsColumn(c, t, locales.StatsThisMonth(), view.Month)
 	})
 }
 
@@ -75,8 +76,8 @@ func statsTotalsColumn(c *ui.Context, t *ui.Theme, label string, split model.Tra
 		mutedText(c, t, label)
 		statsAmount(c, t, total, fontStat)
 		ui.Row(c).Gap(gapLarge).Children(func() {
-			statsSplit(c, t, "代理", proxy, t.Accent)
-			statsSplit(c, t, "直连", direct, t.TextMuted)
+			statsSplit(c, t, locales.RouteProxy(), proxy, t.Accent)
+			statsSplit(c, t, locales.RouteDirect(), direct, t.TextMuted)
 		})
 	})
 }
@@ -111,21 +112,21 @@ func statsAmount(c *ui.Context, t *ui.Theme, bytes int64, size float32) {
 func statsChartCard(c *ui.Context, t *ui.Theme, days []model.TrafficDayView) {
 	panelCard(c, t).Padding(22, 24).Gap(16).Children(func() {
 		ui.Row(c).Justify(ui.SpaceBetween).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "最近 30 天").FontSize(fontEmphasis).FontWeight(weightMedium)
+			ui.Text(c, locales.StatsLast30()).FontSize(fontEmphasis).FontWeight(weightMedium)
 			statsLegend(c, t)
 		})
 		statsBars(c, t, days)
 		ui.Row(c).Justify(ui.SpaceBetween).Children(func() {
-			mutedText(c, t, "30 天前")
-			mutedText(c, t, "今天")
+			mutedText(c, t, locales.StatsThirtyAgo())
+			mutedText(c, t, locales.StatsToday())
 		})
 	})
 }
 
 func statsLegend(c *ui.Context, t *ui.Theme) {
 	ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-		statsLegendItem(c, t, "代理", t.Accent)
-		statsLegendItem(c, t, "直连", t.TextMuted.Alpha(statsDirectAlpha))
+		statsLegendItem(c, t, locales.RouteProxy(), t.Accent)
+		statsLegendItem(c, t, locales.RouteDirect(), t.TextMuted.Alpha(statsDirectAlpha))
 	})
 }
 
@@ -139,8 +140,8 @@ func statsLegendItem(c *ui.Context, t *ui.Theme, label string, color ui.Color) {
 // statsBars draws the chart and tracks which day the pointer is over, so
 // that day's numbers show.
 func statsBars(c *ui.Context, t *ui.Theme, days []model.TrafficDayView) {
-	bars := ui.Box(c).Height(statChartHeight).Label("最近 30 天的流量").
-		Description("每天经过 Hop 的流量，代理与直连合计")
+	bars := ui.Box(c).Height(statChartHeight).Label(locales.StatsChartLabel()).
+		Description(locales.StatsChartDescription())
 	hover := -1
 	if x, _, over := bars.PointerPosition(); over && len(days) > 0 {
 		if width := bars.Bounds().W; width > 0 {
@@ -212,15 +213,15 @@ func drawTrafficTooltip(p *ui.Painter, r ui.Rect, day model.TrafficDayView, toda
 	proxy, direct, _ := trafficSplitTotals(day.Split)
 	title := day.Date[5:]
 	if today {
-		title = "今天"
+		title = locales.StatsToday()
 	}
 	lines := []struct {
 		text string
 		ink  ui.Color
 	}{
 		{title, t.TextMuted},
-		{"代理 " + amountText(proxy), t.Text},
-		{"直连 " + amountText(direct), t.TextMuted},
+		{locales.StatsProxyValue(amountText(proxy)), t.Text},
+		{locales.StatsDirectValue(amountText(direct)), t.TextMuted},
 	}
 	width := float32(0)
 	for _, line := range lines {
@@ -245,9 +246,9 @@ func drawTrafficTooltip(p *ui.Painter, r ui.Rect, day model.TrafficDayView, toda
 func statsSources(c *ui.Context, t *ui.Theme, sources []model.TrafficSourceView, activeID string) {
 	ui.Column(c).Key("sources").Gap(gapSmall).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "本月按订阅").FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(t.TextMuted)
+			ui.Text(c, locales.StatsBySubscription()).FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(t.TextMuted)
 			ui.Box(c).Grow(1)
-			captionText(c, t, "代理")
+			captionText(c, t, locales.RouteProxy())
 		})
 		ui.Column(c).Children(func() {
 			for i, source := range sources {
@@ -266,7 +267,7 @@ func statsSourceRow(c *ui.Context, t *ui.Theme, source model.TrafficSourceView, 
 		Padding(gapMedium, 0).Children(func() {
 		ui.Text(c, statsSourceName(source)).FontSize(fontBody).MaxLines(1)
 		if active {
-			badge(c, t, "使用中")
+			badge(c, t, locales.BadgeInUse())
 		}
 		ui.Box(c).Grow(1)
 		statsDot(c, t.Accent)
@@ -281,9 +282,9 @@ func statsSourceName(source model.TrafficSourceView) string {
 		return source.Name
 	}
 	if source.ID == service.TrafficBootstrapID {
-		return "内置配置"
+		return locales.StatsBuiltInConfig()
 	}
-	return "已删除的订阅"
+	return locales.StatsDeletedSubscription()
 }
 
 // trafficSplitTotals sums a split into proxy, direct and total bytes.

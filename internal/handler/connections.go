@@ -1,13 +1,13 @@
 package handler
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 // connectionColumns are the columns of the connection table, by index.
@@ -21,14 +21,16 @@ const (
 	colClose
 )
 
-var connectionColumns = []ui.TableColumn{
-	colHost:     {Title: "主机 / 应用", MinWidth: 160},
-	colRule:     {Title: "匹配规则", Width: 170, MinWidth: 90},
-	colRoute:    {Title: "线路", Width: 150, MinWidth: 90},
-	colDownload: {Title: "下载", Width: 76, Align: ui.End},
-	colUpload:   {Title: "上传", Width: 76, Align: ui.End},
-	colAddRule:  {Title: "", ID: "add-rule", Width: 40, Fixed: true, Align: ui.Center},
-	colClose:    {Title: "", ID: "close", Width: 40, Fixed: true, Align: ui.Center},
+func connectionColumns() []ui.TableColumn {
+	return []ui.TableColumn{
+		colHost:     {Title: locales.ColumnHost(), MinWidth: 160},
+		colRule:     {Title: locales.ColumnRule(), Width: 170, MinWidth: 90},
+		colRoute:    {Title: locales.ColumnRoute(), Width: 150, MinWidth: 90},
+		colDownload: {Title: locales.ColumnDownload(), Width: 92, Align: ui.End},
+		colUpload:   {Title: locales.ColumnUpload(), Width: 92, Align: ui.End},
+		colAddRule:  {Title: "", ID: "add-rule", Width: 40, Fixed: true, Align: ui.Center},
+		colClose:    {Title: "", ID: "close", Width: 40, Fixed: true, Align: ui.Center},
+	}
 }
 
 // connectionsPage lists the connections the core carries, newest first,
@@ -40,22 +42,22 @@ func (d *Dashboard) connectionsPage(c *ui.Context, t *ui.Theme) {
 	columns, order := connectionLayout(width < 760)
 	ui.Column(c).Fill().Children(func() {
 		ui.Column(c).Padding(28, pageGutter(c), 26, pageGutter(c)).Children(func() {
-			pageHeadingRow(c, t, "连接", "查看应用正在经过的线路", func() {
-				badge(c, t, "实时")
+			pageHeadingRow(c, t, locales.PageConnections(), locales.ConnectionsSubtitle(), func() {
+				badge(c, t, locales.BadgeLive())
 			})
 		})
 		toolbar(c, func() {
-			ui.TextInput(c, &d.connections.filter).Placeholder("筛选主机、应用或规则").Width(270)
-			mutedText(c, t, fmt.Sprintf("%d 条连接", len(conns.Active))).FontFeatures("tnum")
+			ui.TextInput(c, &d.connections.filter).Placeholder(locales.ConnectionsFilter()).Width(270)
+			mutedText(c, t, locales.ConnectionsCount(len(conns.Active))).FontFeatures("tnum")
 			ui.Box(c).Grow(1)
-			button(c, buttonSpec{label: "全部断开", icon: iconClose, style: mainDangerButton(t), disabled: len(conns.Active) == 0}, d.closeAll)
+			button(c, buttonSpec{label: locales.ConnectionsCloseAll(), icon: iconClose, style: mainDangerButton(t), disabled: len(conns.Active) == 0}, d.closeAll)
 		})
 		switch {
 		case len(conns.Active) == 0:
-			emptyState(c, t, "还没有连接经过 Hop",
-				fmt.Sprintf("Hop 没有设为系统代理。把浏览器或应用的代理设为 %s(HTTP 或 SOCKS5),它们的连接就会出现在这里。", d.proxyAddress()))
+			emptyState(c, t, locales.ConnectionsEmpty(),
+				locales.ConnectionsEmptyHint(d.proxyAddress()))
 		case len(visible) == 0:
-			emptyState(c, t, "没有匹配的连接", fmt.Sprintf("没有连接的主机、规则或节点包含「%s」。", strings.TrimSpace(d.connections.filter)))
+			emptyState(c, t, locales.ConnectionsNoMatch(), locales.ConnectionsNoMatchHint(strings.TrimSpace(d.connections.filter)))
 		default:
 			ui.Box(c).Grow(1).Padding(0, pageGutter(c), 18, pageGutter(c)).Children(func() {
 				panelCard(c, t).Fill().Clip().Children(func() {
@@ -77,7 +79,7 @@ func connectionLayout(narrow bool) ([]ui.TableColumn, []int) {
 	}
 	columns := make([]ui.TableColumn, len(order))
 	for i, col := range order {
-		columns[i] = connectionColumns[col]
+		columns[i] = connectionColumns()[col]
 	}
 	return columns, order
 }
@@ -100,10 +102,10 @@ func (d *Dashboard) connectionCell(c *ui.Context, t *ui.Theme, conn model.Connec
 	case colUpload:
 		amount(c, conn.Upload)
 	case colAddRule:
-		iconButton(c, "为这条连接添加规则", iconPlus, softButton(t), func() { d.openRuleEditorFor(conn) })
+		iconButton(c, locales.ConnectionAddRule(), iconPlus, softButton(t), func() { d.openRuleEditorFor(conn) })
 	case colClose:
 		id := conn.ID
-		iconButton(c, "断开连接", iconClose, dangerButton(t), func() { d.closeConnection(id) })
+		iconButton(c, locales.ConnectionClose(), iconClose, dangerButton(t), func() { d.closeConnection(id) })
 	}
 }
 
@@ -120,7 +122,7 @@ func routeLabel(chain []string) string {
 	}
 	exit := chain[len(chain)-1]
 	if exit == "DIRECT" {
-		return "直连"
+		return locales.RouteDirect()
 	}
 	node := service.ParseNode(exit, nil)
 	if node.Flag == "" {

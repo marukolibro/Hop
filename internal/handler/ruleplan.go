@@ -7,6 +7,7 @@ import (
 
 	"hop/internal/model"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 // ruleSuggestion is a rule the add dialog offers for a connection: the type
@@ -30,16 +31,16 @@ func suggestRules(conn model.Connection) []ruleSuggestion {
 	var out []ruleSuggestion
 	host := strings.ToLower(strings.TrimSpace(conn.Host))
 	if addr, err := netip.ParseAddr(host); err == nil {
-		out = append(out, ruleSuggestion{ruleTypeIndex(model.CustomRuleIPCIDR), netip.PrefixFrom(addr, addr.BitLen()).String(), "此地址 " + host})
+		out = append(out, ruleSuggestion{ruleTypeIndex(model.CustomRuleIPCIDR), netip.PrefixFrom(addr, addr.BitLen()).String(), locales.RuleSuggestAddress(host)})
 	} else if host != "" {
 		site := siteOf(host)
-		out = append(out, ruleSuggestion{ruleTypeIndex(model.CustomRuleDomainSuffix), site, "整个站点 " + site})
+		out = append(out, ruleSuggestion{ruleTypeIndex(model.CustomRuleDomainSuffix), site, locales.RuleSuggestSite(site)})
 		if host != site {
-			out = append(out, ruleSuggestion{ruleTypeIndex(model.CustomRuleDomain), host, "仅此域名 " + host})
+			out = append(out, ruleSuggestion{ruleTypeIndex(model.CustomRuleDomain), host, locales.RuleSuggestDomain(host)})
 		}
 	}
 	if conn.Process != "" {
-		out = append(out, ruleSuggestion{ruleTypeIndex(model.CustomRuleProcessName), conn.Process, "此应用 " + conn.Process})
+		out = append(out, ruleSuggestion{ruleTypeIndex(model.CustomRuleProcessName), conn.Process, locales.RuleSuggestApp(conn.Process)})
 	}
 	return out
 }

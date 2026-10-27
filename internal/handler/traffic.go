@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/locales"
 )
 
 // The hero's plot: sparkCaptionH is the top strip that holds the caption.
@@ -67,11 +68,11 @@ func (d *Dashboard) sparkline(c *ui.Context, t *ui.Theme, height float32) {
 		}).Children(func() {
 			ui.Column(c).Fill().Children(func() {
 				ui.Row(c).Height(sparkCaptionH).AlignItems(ui.Center).Children(func() {
-					captionText(c, t, "最近 2 分钟")
+					captionText(c, t, locales.TrafficLast2Min())
 				})
 				if idle {
 					ui.Row(c).Grow(1).Basis(0).Center().Children(func() {
-						mutedText(c, t, "暂无流量")
+						mutedText(c, t, locales.TrafficNone())
 					})
 				}
 			})

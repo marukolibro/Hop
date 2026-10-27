@@ -6,13 +6,10 @@ import (
 	"strings"
 	"unicode"
 
-	"hop/internal/model"
-)
+	"github.com/egoist/mygo/i18n"
 
-const (
-	otherRegionName  = "其他"
-	planNodeLabel    = "机场信息节点"
-	globalGroupLabel = "全局"
+	"hop/internal/model"
+	"hop/locales"
 )
 
 // countryNames names the regions providers use most, by flag.
@@ -87,7 +84,7 @@ func BuildView(snapshot model.Snapshot, mode string) model.ProxyView {
 		}
 	}
 	if mode == model.ModeGlobal {
-		view.Groups[0].Label = globalGroupLabel
+		view.Groups[0].Label = locales.ModeGlobal()
 	}
 	view.Plan = planNotes(snapshot.Groups)
 	switch mode {
@@ -117,7 +114,7 @@ func buildGroup(g model.ProxyGroup, groups map[string]model.ProxyGroup, snapshot
 		flag, isRegional := LeadingFlag(name)
 		key, label := flag, node.Region
 		if !isRegional {
-			key, label = otherRegionName, otherRegionName
+			key, label = locales.SidebarOther(), locales.SidebarOther()
 		}
 		i, known := regionIndex[key]
 		if !known {
@@ -166,9 +163,9 @@ func onlyRoutes(options []string, groups map[string]model.ProxyGroup) bool {
 func pickLabel(selected string) string {
 	switch selected {
 	case "DIRECT":
-		return "直连"
+		return locales.RouteDirect()
 	case "REJECT":
-		return "拒绝"
+		return locales.RouteReject()
 	}
 	node := ParseNode(selected, nil)
 	if node.Flag == "" {
@@ -187,10 +184,10 @@ func optionNode(name string, groups map[string]model.ProxyGroup, snapshot model.
 	}
 	switch name {
 	case "DIRECT":
-		node.Via = "不经过代理"
+		node.Via = locales.ViewDirect()
 		return node
 	case "REJECT":
-		node.Via = "拒绝连接"
+		node.Via = locales.ViewReject()
 		return node
 	}
 	pick := finalPick(name, groups)
@@ -200,7 +197,7 @@ func optionNode(name string, groups map[string]model.ProxyGroup, snapshot model.
 	picked := ParseNode(pick, snapshot.Delays)
 	node.Via = strings.TrimSpace(picked.Flag + " " + picked.Region + " " + picked.Title)
 	if picked.PlanNote {
-		node.Via = planNodeLabel
+		node.Via = locales.PlanInfoNode()
 	}
 	node.Delay = picked.Delay
 	return node
@@ -288,19 +285,24 @@ func isRegionalIndicator(r rune) bool {
 	return r >= 0x1F1E6 && r <= 0x1F1FF
 }
 
+// regionName is the name of the region a flag stands for: the table's Chinese
+// names for a reader of Chinese, CLDR's names in the language Hop shows for
+// any other. A flag nothing names shows its two letters.
 func regionName(flag string, isRegional bool) string {
 	if !isRegional {
-		return otherRegionName
+		return locales.SidebarOther()
 	}
-	if name, ok := countryNames[flag]; ok {
-		return name
-	}
-	// An unlisted flag still names its region: show its two letters.
 	letters := make([]rune, 0, 2)
 	for _, r := range flag {
 		letters = append(letters, 'A'+(r-0x1F1E6))
 	}
-	return string(letters)
+	if strings.HasPrefix(i18n.Locale(), "zh") {
+		if name, ok := countryNames[flag]; ok {
+			return name
+		}
+		return string(letters)
+	}
+	return CountryName(string(letters))
 }
 
 func isPlanNote(name string) bool {

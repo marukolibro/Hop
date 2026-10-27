@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"hop/internal/model"
+	"hop/locales"
 )
 
 // The orders the node grid offers: the subscription's own, grouped by
@@ -14,7 +15,9 @@ const (
 	nodeOrderDelay
 )
 
-var nodeOrderLabels = []string{"默认", "延迟"}
+func nodeOrderLabels() []string {
+	return []string{locales.NodesOrderDefault(), locales.NodesOrderLatency()}
+}
 
 // Where a node ranks when ordered by delay: answered first, then nodes not
 // tested yet, then those that timed out.

@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"fmt"
+	"errors"
 	"net"
 	"strconv"
 	"strings"
@@ -9,14 +9,10 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/service"
+	"hop/locales"
 )
 
-const (
-	portNote = "改后立即生效,系统代理会跟着换;填过旧端口的程序要自己改"
-	// portSkippedNote says why Hop runs on another port than the one chosen.
-	portSkippedNote = "上次选的端口 %d 被其他程序占用,这次先用 %d。腾出它后重启,或在这里换一个"
-	portWidth       = 86
-)
+const portWidth = 86
 
 // portUIState is the proxy port row: what is typed, and whether a change
 // runs.
@@ -40,7 +36,7 @@ func (d *Dashboard) beginPort() {
 	}
 	port, err := strconv.Atoi(strings.TrimSpace(p.input))
 	if err != nil {
-		d.fail(actionPort, fmt.Errorf("代理端口要填 %d 到 %d 之间的整数", service.MixedPortMin, service.MixedPortMax))
+		d.fail(actionPort, errors.New(locales.PortInvalid(service.MixedPortMin, service.MixedPortMax)))
 		return
 	}
 	if port == d.services.Port.Current() {
@@ -71,18 +67,18 @@ func (d *Dashboard) portRow(c *ui.Context, t *ui.Theme) func() {
 	return func() {
 		p := &d.port
 		locked := p.busy || d.sysProxy.busy || d.controlsLocked()
-		note := portNote
+		note := locales.PortNote()
 		if skipped := d.services.Port.Skipped(); skipped != 0 {
-			note = fmt.Sprintf(portSkippedNote, skipped, d.services.Port.Current())
+			note = locales.PortSkipped(skipped, d.services.Port.Current())
 		}
-		settingRow(c, t, "代理端口", note, func() {
+		settingRow(c, t, locales.PortTitle(), note, func() {
 			unchanged := strings.TrimSpace(p.input) == strconv.Itoa(d.services.Port.Current())
 			ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 				ui.Box(c).Disabled(locked).Children(func() {
-					ui.TextInput(c.Key("proxy-port"), &p.input).Label("代理端口").Width(portWidth).
+					ui.TextInput(c.Key("proxy-port"), &p.input).Label(locales.PortTitle()).Width(portWidth).
 						Font("monospace").OnSubmit(d.beginPort)
 				})
-				button(c, buttonSpec{label: "应用", style: mainSoftButton(t), busy: p.busy,
+				button(c, buttonSpec{label: locales.PortApply(), style: mainSoftButton(t), busy: p.busy,
 					disabled: locked || unchanged}, d.beginPort)
 			})
 		})

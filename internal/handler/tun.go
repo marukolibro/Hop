@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/locales"
 )
 
 // tunState is what the TUN switch shows: whether the helper's core runs,
@@ -167,7 +168,7 @@ func (d *Dashboard) beginUninstallHelper() {
 func (d *Dashboard) tunHint() string {
 	s := &d.tun
 	if s.loaded && !s.on && s.taken {
-		return "TUN 已被 " + s.takenBy + " 占用"
+		return locales.TunTaken(s.takenBy)
 	}
 	return ""
 }
@@ -179,11 +180,11 @@ func (d *Dashboard) tunHint() string {
 // updated instead, and the copy says so.
 func (d *Dashboard) tunDialog(c *ui.Context, t *ui.Theme) {
 	s := &d.tun
-	description := "增强模式会接管全部流量,需要先安装 Hop 的增强组件。" + tunPrivilegePrompt + ",之后可随时在设置里卸载。"
-	submit := "安装并开启"
+	description := locales.TunInstallDescription(tunPrivilegePrompt())
+	submit := locales.TunInstallAndOn()
 	if s.helperOutdated {
-		description = "增强模式会接管全部流量,需要更新 Hop 的增强组件。" + tunPrivilegePrompt + ",之后可随时在设置里卸载。"
-		submit = "更新并开启"
+		description = locales.TunUpdateDescription(tunPrivilegePrompt())
+		submit = locales.TunUpdateAndOn()
 	}
 	animatedDialog(c, "tun", &s.installOpen, func(backdrop, panel ui.Element) {
 		backdrop.Background(dialogScrim)
@@ -194,13 +195,13 @@ func (d *Dashboard) tunDialog(c *ui.Context, t *ui.Theme) {
 				ui.Column(c).Gap(gapSmall).Children(func() {
 					ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 						ui.Icon(c, iconShieldCheck).Width(iconTitle).Height(iconTitle).TextColor(t.Accent)
-						ui.Text(c, "开启增强模式").FontSize(fontHeadline).FontWeight(weightSemibold).Grow(1)
-						iconButton(c, "关闭", iconClose, softButton(t), func() { s.installOpen = false })
+						ui.Text(c, locales.TunDialogTitle()).FontSize(fontHeadline).FontWeight(weightSemibold).Grow(1)
+						iconButton(c, locales.Close(), iconClose, softButton(t), func() { s.installOpen = false })
 					})
 					mutedText(c, t, description)
 				})
 				ui.Row(c).Gap(gapSmall).Justify(ui.End).Children(func() {
-					button(c, buttonSpec{label: "取消", style: softButton(t), disabled: s.busy}, func() { s.installOpen = false })
+					button(c, buttonSpec{label: locales.Cancel(), style: softButton(t), disabled: s.busy}, func() { s.installOpen = false })
 					button(c, buttonSpec{label: submit, style: primaryButton(t), busy: s.busy}, d.submitTunInstall)
 				})
 			})
@@ -217,12 +218,12 @@ func (d *Dashboard) helperRows(c *ui.Context, t *ui.Theme) []func() {
 	}
 	// The protocol version means nothing to the user; only whether the
 	// installed component is this app's is worth saying.
-	note := "未安装。开启增强模式时会请求安装。"
+	note := locales.HelperNotInstalled()
 	switch {
 	case s.helper && s.helperOutdated:
-		note = "需要更新。下次开启增强模式时会请求更新。"
+		note = locales.HelperNeedsUpdate()
 	case s.helper:
-		note = "已安装,增强模式下的内核由它以系统权限运行"
+		note = locales.HelperInstalled()
 	}
 	return []func(){func() {
 		ui.Row(c).Key("helper").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
@@ -231,11 +232,11 @@ func (d *Dashboard) helperRows(c *ui.Context, t *ui.Theme) []func() {
 				ui.Icon(c, iconShieldCheck).Width(cardIconGlyph).Height(cardIconGlyph).TextColor(t.Accent)
 			})
 			ui.Column(c).Grow(1).Basis(0).Gap(gapLine).Children(func() {
-				ui.Text(c, "增强组件").FontSize(fontBody).FontWeight(weightSemibold)
+				ui.Text(c, locales.HelperTitle()).FontSize(fontBody).FontWeight(weightSemibold)
 				mutedText(c, t, note)
 			})
 			if s.helper {
-				button(c, buttonSpec{label: "卸载", style: softButton(t), busy: s.busy, disabled: d.controlsLocked()}, d.beginUninstallHelper)
+				button(c, buttonSpec{label: locales.HelperUninstall(), style: softButton(t), busy: s.busy, disabled: d.controlsLocked()}, d.beginUninstallHelper)
 			}
 		})
 	}}

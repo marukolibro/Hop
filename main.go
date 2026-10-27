@@ -34,6 +34,7 @@ import (
 	"hop/internal/repository/sysproxy"
 	"hop/internal/repository/unlock"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 const (
@@ -319,6 +320,9 @@ func run() (err error) {
 	// returns after the Quit that follows it.
 	var readyErr error
 	mygo.App.WhenReady(func() {
+		// The language is the user's choice, or the system's while none was
+		// made; mygo keeps it too, and this makes the settings the one truth.
+		mygo.App.SetLocale(string(userSettings.Language))
 		// Started at login, Hop runs in the menu bar only: no window and no
 		// Dock icon until the user opens it.
 		atLogin := mygo.App.WasOpenedAtLogin()
@@ -477,8 +481,8 @@ func showStartupError(err error) {
 		go func() {
 			if _, dialogErr := mygo.Dialog.Message(mygo.MessageOptions{
 				Type:    mygo.MessageError,
-				Title:   "Hop 无法启动",
-				Message: "Hop 启动时遇到问题,已经退出。",
+				Title:   locales.StartupFailedTitle(),
+				Message: locales.StartupFailedMessage(),
 				Detail:  err.Error(),
 			}); dialogErr != nil {
 				slog.Error("could not show why Hop cannot start", "error", dialogErr)

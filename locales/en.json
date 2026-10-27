@@ -1,0 +1,758 @@
+{
+  "@@locale": "en",
+  "actionAddSubscription": "Couldn't add the subscription",
+  "actionCheckAppUpdate": "Couldn't check for app updates",
+  "actionCheckCore": "Couldn't check for core updates",
+  "actionCheckUnlock": "Unlock check failed",
+  "actionCloseConnection": "Couldn't close the connection",
+  "actionCoreGaveUp": "The core keeps quitting, so Hop stopped restarting it",
+  "actionCoreRestarted": "The core quit unexpectedly and was restarted",
+  "actionDeleteSubscription": "Couldn't delete the subscription",
+  "actionEditSubscription": "Couldn't edit the subscription",
+  "actionInstallAppUpdate": "Couldn't install the app update",
+  "actionLan": "Couldn't change LAN access",
+  "actionLoadGroups": "Couldn't read the node list",
+  "actionLoadSource": "Couldn't read the subscription details",
+  "actionOpenAtLogin": "Couldn't change launch at login",
+  "actionPort": "Couldn't change the proxy port",
+  "actionReadCore": "Couldn't read the core version",
+  "actionReadGeodata": "Couldn't read the rule data status",
+  "actionReadRules": "Couldn't read custom rules",
+  "actionReadSubscription": "Couldn't read the subscription list",
+  "actionReadSystemProxy": "Couldn't read the system proxy",
+  "actionReadTun": "Couldn't read the TUN status",
+  "actionRefreshSubscription": "Couldn't refresh the subscription",
+  "actionRestoreCore": "Couldn't restore the bundled core",
+  "actionSaveRules": "Couldn't save custom rules",
+  "actionSaveSettings": "Couldn't save settings",
+  "actionSwitchMode": "Couldn't switch the outbound mode",
+  "actionSwitchNode": "Couldn't switch node",
+  "actionSystemProxyOff": "Couldn't turn off the system proxy",
+  "actionSystemProxyOn": "Couldn't turn on the system proxy",
+  "actionTestLatency": "Speed test failed",
+  "actionTunOff": "Couldn't turn off TUN",
+  "actionTunOn": "Couldn't turn on TUN",
+  "actionUninstallHelper": "Couldn't uninstall the helper",
+  "actionUpdateGeodata": "Couldn't update the rule data",
+  "actionUpgradeCore": "Couldn't upgrade the core",
+  "actionUseSubscription": "Couldn't use the subscription",
+  "actionWatchConnections": "Couldn't read the connection list",
+  "actionWatchLogs": "Couldn't read the core log",
+  "actionWatchTraffic": "Lost the connection to the core",
+  "add": "Add",
+  "all": "All",
+  "appDevBuild": "Dev build",
+  "appearanceDark": "Dark",
+  "appearanceLight": "Light",
+  "appUpdateBlocked": "This version can't update itself",
+  "appUpdateNewVersion": "New version {version}",
+  "@appUpdateNewVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "appVersion": "Version",
+  "badgeInUse": "In use",
+  "badgeLive": "Live",
+  "cancel": "Cancel",
+  "checkForUpdates": "Check for updates",
+  "checking": "Checking",
+  "choose": "Choose",
+  "close": "Close",
+  "columnDownload": "Download",
+  "columnHost": "Host / app",
+  "columnRoute": "Route",
+  "columnRule": "Matched rule",
+  "columnUpload": "Upload",
+  "connectionAddRule": "Add a rule for this connection",
+  "connectionClose": "Close connection",
+  "connectionsCloseAll": "Close all",
+  "connectionsCount": "{count, plural, one {# connection} other {# connections}}",
+  "@connectionsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "connectionsEmpty": "No connections through Hop yet",
+  "connectionsEmptyHint": "Hop isn't set as the system proxy. Point a browser or app's proxy at {address} (HTTP or SOCKS5) and its connections will show up here.",
+  "@connectionsEmptyHint": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "connectionsFilter": "Filter by host, app or rule",
+  "connectionsNoMatch": "No matching connections",
+  "connectionsNoMatchHint": "No connection has a host, rule or node containing “{query}”.",
+  "@connectionsNoMatchHint": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "connectionsSubtitle": "See which route each app is taking",
+  "copied": "Copied",
+  "copy": "Copy",
+  "coreChecking": "Checking that the new core runs",
+  "coreConnecting": "Core connecting",
+  "coreDownloading": "Downloading the new core",
+  "coreDownloadingProgress": "Downloading the new core {done} / {total}",
+  "@coreDownloadingProgress": {
+    "placeholders": {
+      "done": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "coreLockedByTun": "The core can't be replaced while TUN is on. Turn it off first.",
+  "coreNewDev": "Version {version} is available. The development core comes from HOP_MIHOMO_BINARY and isn't upgraded here.",
+  "@coreNewDev": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "coreNewUpgrade": "Version {version} is available. The proxy pauses for a second or two while upgrading, and the new core is used only after it passes a check.",
+  "@coreNewUpgrade": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "coreNotConnected": "Core not connected",
+  "corePreparing": "Preparing",
+  "coreQuitRepeatedly": "Quit {count} times in a row: {reason}",
+  "@coreQuitRepeatedly": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "coreRestarting": "Restarting the core",
+  "coreRestoreBundled": "Restore bundled version",
+  "coreRunning": "Core running",
+  "coreSourceBundled": "Core bundled with Hop",
+  "coreSourceDev": "Development core (from HOP_MIHOMO_BINARY)",
+  "coreSourceUpgraded": "Upgraded core",
+  "coreUpgradeTo": "Upgrade to {version}",
+  "@coreUpgradeTo": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "coreUpToDate": "You're up to date.",
+  "delete": "Delete",
+  "dismissNotice": "Dismiss",
+  "exitIpChecking": "Checking exit IP…",
+  "exitIpCopied": "Exit IP copied",
+  "exitIpLabel": "Exit IP",
+  "exitIpNone": "Exit IP not found",
+  "exitIpRetry": "Click to retry",
+  "exitIpTip": "The exit IP of the default route. Sites on dedicated routes, such as AI, may differ. Click to copy.",
+  "fileCloseFailed": "Couldn't close “{name}”: ",
+  "@fileCloseFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fileOpenFailed": "Couldn't open “{name}”: ",
+  "@fileOpenFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fileReadFailed": "Couldn't read “{name}”: ",
+  "@fileReadFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fileTooLarge": "“{name}” is over {limit} MB and wasn't read.",
+  "@fileTooLarge": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "flyoutNewVersion": "New version",
+  "flyoutNoDelays": "No speed test results yet. Click “Test speed” to see which node is fastest.",
+  "flyoutNoSubscription": "No subscription in use. Open the main window to add one.",
+  "followSystem": "System",
+  "geodataBundled": "Bundled with the app",
+  "geodataFailed": "Couldn't read",
+  "geodataNote": "GeoSite and GeoIP data, updated weekly. The core restarts once after an update.",
+  "geodataTitle": "Rule data",
+  "geodataUpdatedAt": "Updated {date}",
+  "@geodataUpdatedAt": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "groupModeFallback": "Fails over when down",
+  "groupModeLoadBalance": "Balances connections",
+  "groupModeRelay": "Chains every node",
+  "groupModeSelector": "Manual",
+  "groupModeURLTest": "Auto, lowest latency",
+  "helperInstalled": "Installed. With TUN on, it runs the core with system privileges.",
+  "helperNeedsUpdate": "Needs an update. Turning on TUN next time asks to update it.",
+  "helperNotInstalled": "Not installed. Turning on TUN asks to install it.",
+  "helperTitle": "Helper",
+  "helperUninstall": "Uninstall",
+  "heroDirectNote": "Direct, not through the proxy",
+  "heroEmpty": "Import a subscription and the route your traffic takes will show here",
+  "hoursShort": "{count} h",
+  "@hoursShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lanAccount": "Account",
+  "lanAccountOff": "Devices can connect without a username or password.",
+  "lanAccountOn": "Devices must enter a username and password to connect.",
+  "lanAddress": "Proxy address",
+  "lanAllow": "Allow LAN devices",
+  "lanFirewallNote": "The first time you turn this on, the system may ask whether to allow incoming connections. Choose Allow. Only connections from your home or office network are accepted; those from the internet are refused.",
+  "lanIntro": "Let phones and computers on the same network get online through this computer. On the other device, enter the proxy address below in its network settings.",
+  "lanNoNetwork": "Not connected to a local network",
+  "lanOpenWarning": "Any device on the same network can use your subscription's data. Don't use this on public Wi-Fi.",
+  "lanPassword": "Password",
+  "lanProtocols": "Both HTTP and SOCKS5 are supported",
+  "lanRequireAccount": "Require an account",
+  "lanResetPassword": "Reset password",
+  "lanUsername": "Username",
+  "logLevelDebug": "Debug",
+  "logLevelError": "Error",
+  "logLevelInfo": "Info",
+  "logLevelWarning": "Warning",
+  "logsClear": "Clear log",
+  "logsEmpty": "No log yet",
+  "logsEmptyHint": "The core's activity appears here live, such as which rule a connection matched and why a node failed to connect.",
+  "logsLevel": "Log level",
+  "logsLines": "{count, plural, one {# line} other {# lines}}",
+  "@logsLines": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "logsSubtitle": "A record of connections and rules",
+  "logsTitle": "Log",
+  "modeGlobal": "Global",
+  "modeHintDirect": "Everything goes direct, nothing through the proxy",
+  "modeHintGlobal": "All traffic goes through the proxy",
+  "modeHintRule": "Rules decide what goes through the proxy and what goes direct",
+  "modeRule": "Rule",
+  "nodesByLatency": "By latency",
+  "nodesExit": "Exit",
+  "nodesMore": "More",
+  "nodesOrder": "Node order",
+  "nodesOrderDefault": "Default",
+  "nodesOrderLatency": "Latency",
+  "nodesTestDelay": "Test speed",
+  "nodesTesting": "Testing",
+  "nodesTimeout": "Timeout",
+  "off": "Off",
+  "openHop": "Open Hop",
+  "openMainWindow": "Open main window",
+  "optional": "Optional",
+  "outboundMode": "Outbound mode",
+  "pageConnections": "Connections",
+  "pageLogs": "Log",
+  "pageNodes": "Nodes",
+  "pageSettings": "Settings",
+  "pageStats": "Stats",
+  "pageSwitchLabel": "Pages",
+  "planInfoNode": "Provider info",
+  "portApply": "Apply",
+  "portInvalid": "Enter a whole number from {min} to {max} for the proxy port",
+  "@portInvalid": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "portNote": "Takes effect right away and the system proxy follows. Apps you gave the old port to need changing by hand.",
+  "portSkipped": "The port you chose, {chosen}, is in use by another program, so Hop is using {fallback} for now. Free it and restart, or pick another one here.",
+  "@portSkipped": {
+    "placeholders": {
+      "chosen": {
+        "type": "int"
+      },
+      "fallback": {
+        "type": "int"
+      }
+    }
+  },
+  "portTitle": "Proxy port",
+  "quitHop": "Quit Hop",
+  "reading": "Reading",
+  "refresh": "Refresh",
+  "refreshing": "Refreshing",
+  "rename": "Rename",
+  "routeDirect": "Direct",
+  "routePlanNote": "{name} · After a speed test, Auto switches to the lowest-latency node",
+  "@routePlanNote": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "routeProxy": "Proxy",
+  "routeReject": "Reject",
+  "routeVia": "via {groups}",
+  "@routeVia": {
+    "placeholders": {
+      "groups": {
+        "type": "String"
+      }
+    }
+  },
+  "ruleAdd": "Add rule",
+  "ruleChooseTypeTarget": "Choose a rule type and where it goes.",
+  "ruleContentLabel": "Rule content",
+  "ruleDelete": "Delete rule {value}",
+  "@ruleDelete": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ruleDialogNote": "Rules are checked before the subscription's, and the LAN direct rule still comes first.",
+  "ruleEnterContent": "Enter what to match.",
+  "ruleFieldContent": "Content",
+  "ruleFieldTarget": "Goes to",
+  "ruleFieldType": "Type",
+  "ruleFromConnection": "From this connection",
+  "ruleHintCidr": "Matches this address range without resolving a domain, such as 192.0.2.0/24",
+  "ruleHintDomain": "Matches only this exact domain, such as api.example.com",
+  "ruleHintKeyword": "Matches any domain containing this text, such as example",
+  "ruleHintProcess": "Matches by this computer's process name, such as Telegram",
+  "ruleHintSuffix": "Matches this domain and its subdomains, such as example.com",
+  "rulesEmpty": "No custom rules yet. Traffic follows the current rules.",
+  "rulesOrderNote": "Rules match in order, ahead of the subscription's rules.",
+  "rulesReadFailed": "Couldn't read custom rules.",
+  "rulesReading": "Reading custom rules…",
+  "ruleSuggestAddress": "This address {value}",
+  "@ruleSuggestAddress": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ruleSuggestApp": "This app {value}",
+  "@ruleSuggestApp": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ruleSuggestDomain": "This domain only {value}",
+  "@ruleSuggestDomain": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ruleSuggestSite": "Whole site {value}",
+  "@ruleSuggestSite": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ruleTypeCidr": "IP range",
+  "ruleTypeDomain": "Domain",
+  "ruleTypeKeyword": "Keyword",
+  "ruleTypeProcess": "App",
+  "ruleTypeSuffix": "Suffix",
+  "saveChanges": "Save changes",
+  "secondsShort": "{count} s",
+  "@secondsShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsAppearance": "Appearance",
+  "settingsAutoUpdate": "Auto update",
+  "settingsAutoUpdateNote": "Refreshes saved subscriptions at this interval. Local configs aren't refreshed. After a failure it waits for the next interval.",
+  "settingsClarity": "Window transparency",
+  "settingsClarityNote": "Higher values make the glass clearer",
+  "settingsCommandCopied": "Terminal proxy command copied. Paste it into a terminal.",
+  "settingsCopyCommand": "Copy command",
+  "settingsCore": "Core",
+  "settingsCustomRules": "Custom rules",
+  "settingsGeneral": "General",
+  "settingsLan": "LAN",
+  "settingsLanguage": "Language",
+  "settingsLanguageNote": "Takes effect immediately",
+  "settingsLaunchAtLogin": "Launch at login",
+  "settingsLaunchAtLoginNote": "Runs in the menu bar after you log in, without opening a window",
+  "settingsLicense": "Released under GPL-3.0. The bundled mihomo core is GPL-3.0 too.",
+  "settingsMenuBarSpeed": "Menu bar speed",
+  "settingsMenuBarSpeedNote": "Shows live upload and download speed next to the menu bar icon",
+  "settingsRules": "Rules",
+  "settingsSubtitle": "Set Hop up your way and let it run quietly",
+  "settingsTerminalProxy": "Terminal proxy",
+  "settingsTerminalProxyNote": "Terminals don't use the system proxy. Paste this command and that window goes through Hop. Not needed with TUN.",
+  "settingsTheme": "Theme",
+  "settingsThemeNote": "Glass background colors. Takes effect immediately.",
+  "settingsTimeout": "Speed test timeout",
+  "settingsTimeoutNote": "Shorter is faster, but slow routes may be counted as timed out",
+  "sidebarAuto": "Auto",
+  "sidebarMain": "Main",
+  "sidebarOther": "Other",
+  "sidebarProxyAddress": "Proxy address {address}",
+  "@sidebarProxyAddress": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "sidebarRegions": "Regions",
+  "sidebarRouting": "Routing",
+  "startupFailedMessage": "Hop ran into a problem while starting and has quit.",
+  "startupFailedTitle": "Hop couldn't start",
+  "statsAsOfToday": "As of today",
+  "statsBuiltInConfig": "Built-in config",
+  "statsBySubscription": "This month by subscription",
+  "statsChartDescription": "Daily traffic through Hop, proxy and direct combined",
+  "statsChartLabel": "Traffic in the last 30 days",
+  "statsDeletedSubscription": "Deleted subscription",
+  "statsDirectValue": "Direct {size}",
+  "@statsDirectValue": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "statsEmpty": "No traffic has gone through Hop yet.",
+  "statsLast30": "Last 30 days",
+  "statsProxyValue": "Proxy {size}",
+  "@statsProxyValue": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "statsSubtitle": "Every bit of traffic, clearly traced",
+  "statsThirtyAgo": "30 days ago",
+  "statsThisMonth": "This month",
+  "statsTitle": "Traffic",
+  "statsToday": "Today",
+  "statusConnecting": "Connecting",
+  "statusNotConnected": "Not connected",
+  "statusProxying": "Proxying",
+  "statusProxyOff": "Proxy off",
+  "subAdd": "Add subscription",
+  "subAddAndUse": "Add and use",
+  "subAddFirstHint": "Add your first config and start using it.",
+  "subAddHint": "Save a subscription or local config without changing the route in use.",
+  "subAddressScheme": "The subscription address must start with http:// or https://.",
+  "subBackToNodes": "Back to nodes",
+  "subChooseFile": "Choose file…",
+  "subChoosePrompt": "Choose a subscription",
+  "subChooseReplacement": "Choose a replacement subscription.",
+  "subConfigBlank": "The config can't be only whitespace.",
+  "subConfigMissing": "Paste the config, or choose a config file.",
+  "subConfigTooLarge": "The config file can't be larger than {limit} MB.",
+  "@subConfigTooLarge": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "subContentLimit": "Up to {limit} MB",
+  "@subContentLimit": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "subContentPlaceholder": "Paste a Clash config or node links…",
+  "subCount": "{count, plural, one {# subscription} other {# subscriptions}}",
+  "@subCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "subCurrent": "Current subscription",
+  "subDaysLeft": "{count, plural, one {# day left} other {# days left}}",
+  "@subDaysLeft": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "subDelete": "Delete subscription",
+  "subDeleteActive": "“{name}” is in use. Choose a replacement subscription; it's deleted once the switch succeeds.",
+  "@subDeleteActive": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "subDeleteAfterSwitch": "It's deleted after the switch succeeds. Hop won't pick a route for you.",
+  "subDeleteConfirm": "Delete “{name}”? The subscription in use isn't affected.",
+  "@subDeleteConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "subDeleteLast": "“{name}” is the last subscription. After deleting it nothing is configured and Hop no longer proxies through a subscription.",
+  "@subDeleteLast": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "subEdit": "Edit subscription",
+  "subEditConfig": "Edit config",
+  "subEditConfigHint": "Edit the name, rule setting and config content. The new content replaces the old only after it checks out.",
+  "subEditHint": "Edit the name, address and rule setting. The new address replaces the old content only after it checks out.",
+  "subEditKeepHint": "Leave empty to keep the current config. Pasting or choosing a file replaces all of it.",
+  "subEmptyNote": "Add a subscription to start choosing routes.",
+  "subEmptyTitle": "No subscriptions yet",
+  "subEnterAddress": "Enter the subscription address.",
+  "subExpired": "Expired",
+  "subExpiresToday": "Expires today",
+  "subFieldAddress": "Subscription address",
+  "subFieldContent": "Config content",
+  "subFieldName": "Name",
+  "subFieldRules": "Routing rules",
+  "subFieldSource": "Source",
+  "subFileDialogFailed": "Couldn't open the file chooser: {error}",
+  "@subFileDialogFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "subFileDialogTitle": "Choose config file",
+  "subFileFilterAll": "All files",
+  "subFileFilterConfig": "Config files",
+  "subFileRead": "Read {name}",
+  "@subFileRead": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "subFileTypes": "Supports .yaml, .yml, .txt, .conf, or any file",
+  "subLocalNameHint": "Choosing a file fills in its name. If you leave the name empty, it shows as “{fallback}”.",
+  "@subLocalNameHint": {
+    "placeholders": {
+      "fallback": {
+        "type": "String"
+      }
+    }
+  },
+  "subManage": "Manage subscriptions",
+  "subMetricExpires": "Expires",
+  "subMetricUpdated": "Last updated",
+  "subMetricUsed": "Data used",
+  "subMoreActions": "More actions for {name}",
+  "@subMoreActions": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "subNameHint": "If you leave the name empty, the source domain is used.",
+  "subNamePlaceholder": "For example: Backup route",
+  "subNoneInUse": "No subscription in use",
+  "subPageNote": "Kept separately and switched when you need. Adding one doesn't change the current route.",
+  "subPasteHint": "Paste a Clash config or node links, or read them from a file. The content is kept on this computer, so moving or deleting the original file changes nothing.",
+  "subReadingDetails": "Reading the subscription details…",
+  "subReadingSaved": "Reading the saved config…",
+  "subRefreshAll": "Refresh all",
+  "subRenameHint": "You can rename it freely. Its content stays the same.",
+  "subRuleHintLocalOwn": "Keeps the config's own groups and rules. Node links alone have no rules and use “Hop smart rules” instead.",
+  "subRuleHintLocalSmart": "Uses only the config's nodes: blocked and overseas sites go through the proxy, sites in mainland China go direct, and sites not on the lists are decided by where their IP is. AI, streaming, Telegram and others are grouped automatically. Good for a server you run yourself.",
+  "subRuleHintProvider": "Keeps the subscription's own groups and rules. A subscription that is only a node list has no rules and uses “Hop smart rules” instead.",
+  "subRuleHintSmart": "Uses only the subscription's nodes: blocked and overseas sites go through the proxy, sites in mainland China go direct, and sites not on the lists are decided by where their IP is. AI, streaming, Telegram and others are grouped automatically.",
+  "subRuleOwn": "Config's own rules",
+  "subRuleProvider": "Provider rules",
+  "subRuleSmart": "Hop smart rules",
+  "subscriptions": "Subscriptions",
+  "subSelect": "Select subscription",
+  "subSourceLink": "Subscription link",
+  "subSourceLocal": "Local config",
+  "subSourceLocked": "The source can't be changed after creation. For a different source, create a new config.",
+  "subStopAndDelete": "Turn off and delete",
+  "subSwitchAndDelete": "Switch and delete",
+  "subSwitchTo": "Switch to another subscription",
+  "subUnknownRules": "This subscription's saved rule setting ({value}) isn't recognised.",
+  "@subUnknownRules": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "subUnknownSource": "This config's saved source ({value}) isn't recognised.",
+  "@subUnknownSource": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "subUpdatedDays": "{count, plural, one {Updated # day ago} other {Updated # days ago}}",
+  "@subUpdatedDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "subUpdatedHours": "{count, plural, one {Updated # hour ago} other {Updated # hours ago}}",
+  "@subUpdatedHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "subUpdatedMinutes": "{count, plural, one {Updated # minute ago} other {Updated # minutes ago}}",
+  "@subUpdatedMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "subUpdatedNow": "Updated just now",
+  "subUpdatedUnknown": "Update time unknown. Refresh once to show it",
+  "systemProxy": "System proxy",
+  "systemProxyHint": "Browsers and most apps go through Hop",
+  "systemProxyTaken": "Already in use by {owner}",
+  "@systemProxyTaken": {
+    "placeholders": {
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "themeDusk": "Dusk",
+  "themeOcean": "Ocean",
+  "themePaper": "Paper",
+  "trafficLast2Min": "Last 2 minutes",
+  "trafficNone": "No traffic yet",
+  "tun": "TUN",
+  "tunDialogTitle": "Turn on TUN",
+  "tunHint": "Takes over all traffic, including terminals and games",
+  "tunInstallAndOn": "Install and turn on",
+  "tunInstallDescription": "TUN takes over all traffic and needs Hop's helper installed first. {prompt}. You can uninstall it any time in Settings.",
+  "@tunInstallDescription": {
+    "placeholders": {
+      "prompt": {
+        "type": "String"
+      }
+    }
+  },
+  "tunPromptMac": "macOS will ask for your administrator password once",
+  "tunPromptOther": "The system will ask for administrator permission once",
+  "tunPromptWindows": "Windows will show a UAC prompt once",
+  "tunTaken": "TUN is already in use by {owner}",
+  "@tunTaken": {
+    "placeholders": {
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "tunUpdateAndOn": "Update and turn on",
+  "tunUpdateDescription": "TUN takes over all traffic and needs Hop's helper updated first. {prompt}. You can uninstall it any time in Settings.",
+  "@tunUpdateDescription": {
+    "placeholders": {
+      "prompt": {
+        "type": "String"
+      }
+    }
+  },
+  "unlockChatGPT": "ChatGPT available",
+  "unlockNetflix": "Netflix available",
+  "unlockNetflixPartial": "Netflix originals only",
+  "unlockNone": "None available",
+  "unlockRegion": ", region: {region}",
+  "@unlockRegion": {
+    "placeholders": {
+      "region": {
+        "type": "String"
+      }
+    }
+  },
+  "unlockStart": "Unlock",
+  "unlockStop": "Stop",
+  "unlockUnsure": "Couldn't check",
+  "unlockYouTube": "YouTube Premium available",
+  "update": "Update",
+  "updateAndRestart": "Update and restart",
+  "updateBlockedDev": "A dev build can't update itself",
+  "updateBlockedReadOnly": "The app folder isn't writable, so Hop can't update itself",
+  "updateBlockedUnpackaged": "Hop isn't running from a packaged app, so it can't update itself",
+  "updating": "Updating",
+  "use": "Use",
+  "viewDirect": "Not through the proxy",
+  "viewReject": "Connection rejected",
+  "working": "Working"
+}

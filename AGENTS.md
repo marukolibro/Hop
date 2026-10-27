@@ -8,8 +8,8 @@ this file covers how to change it.
 
 The user's global rules (strict typing, pure functions, explicit errors,
 structured logging, no fallbacks, minimal tests) apply. Code comments are
-English only: the UI copy is Chinese, and a comment may quote a UI label but is
-never written in Chinese. Below are the rules specific to this project.
+English only: the UI copy is in the catalogs (English and Chinese), and a comment
+may quote a UI label but is never written in Chinese. Below are the rules specific to this project.
 
 ## Safety: never disturb the user's running proxy
 
@@ -288,10 +288,40 @@ for font sizes, weights, gaps or radii in views.
   (`pill.go`). Text actions are `textButton`.
 - Icons: 24-unit SVG strokes in `icons.go`, tinted by text colour.
 - CJK text in small controls sits ~1px low: apply `Translate(0, -opticalLift)`.
-- UI copy is Chinese, sentence-short, in the user's terms. No ALL-CAPS labels,
-  no `·` joined meta strings, no decorative eyebrows.
+- UI copy is sentence-short, in the user's terms, in both languages (see
+  Languages). No ALL-CAPS labels, no `·` joined meta strings, no decorative
+  eyebrows. The TUN switch is called "TUN" in both languages; its helper is
+  "增强组件" / "Helper".
 - The mark's geometry lives once in `trayicon.go`; the menu bar icon and
   `hopMark` both draw from it.
+
+## Languages
+
+Hop shows English or Simplified Chinese: the system's, or the one chosen in
+Settings (`model.Settings.Language`, applied with `mygo.App.SetLocale`, at
+once and at every start). The messages are `locales/en.json` (the source) and
+`locales/zh-Hans.json`; `go tool mygo generate` writes `locales/catalog_gen.go`
+(commit it), and `go tool mygo i18n check` checks the catalogs.
+
+- Never type UI text in Go. Add a message to both catalogs and say it with
+  `locales.Xxx(args)`. Plurals and word order belong in the message
+  (`{count, plural, one {…} other {…}}`), never in a concatenation.
+- Say messages in a function, never in a package-level `var` or `const`: a frame
+  is built again for every frame and follows the language, a package variable
+  keeps the language of the start. `locales/usage_test.go` fails on both that
+  and on Chinese typed into `internal/handler`, and on a message nothing says.
+- Names that are data stay as they are: the groups of Hop's template ("节点选择",
+  "自动选择"), the words that match node and group names (`serviceof.go`,
+  `hop_rules.go`, `view.go`'s tables), and what a provider wrote. Element keys
+  (`.Key("…")`) are never shown.
+- Logs and errors for the log stay English. An error the user reads is a message
+  (`errors.New(locales.Xxx())`, or `fmt.Errorf("%s%w", locales.Xxx(), cause)`).
+- English is longer. Switches and page tabs widen to their labels
+  (`fitSegment`); rows that can run out of room wrap or truncate. Look at both
+  languages (`MYGO_LOCALE=en` in a preview test, `go tool mygo dev -lang en`) at
+  860 and at 700 pixels.
+- The Windows service's name and description (`helper/winsetup.go`) are English:
+  the helper that writes them has no language to follow.
 
 ## Motion
 

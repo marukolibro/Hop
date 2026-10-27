@@ -15,8 +15,8 @@ import (
 // ServiceDisplayName and ServiceDescription describe the Windows service in
 // the services panel and in Task Manager.
 const (
-	ServiceDisplayName = "Hop 增强组件"
-	ServiceDescription = "Hop 的增强模式在后台以系统权限运行 mihomo 内核。"
+	ServiceDisplayName = "Hop Helper"
+	ServiceDescription = "Runs Hop's mihomo core with system privileges in the background while TUN is on."
 )
 
 // ServiceArgs is the command line the service runs the helper with. It is

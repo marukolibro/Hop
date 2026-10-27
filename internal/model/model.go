@@ -496,6 +496,16 @@ const (
 	AppearanceDark   Appearance = "dark"
 )
 
+// Language is the language the user chose for Hop's texts, as a BCP 47 tag of
+// the languages Hop is translated to; LanguageSystem follows the system's.
+type Language string
+
+const (
+	LanguageSystem  Language = ""
+	LanguageChinese Language = "zh-Hans"
+	LanguageEnglish Language = "en"
+)
+
 // ColorTheme is the material palette chosen independently of appearance.
 type ColorTheme string
 
@@ -526,6 +536,9 @@ const (
 // Settings are the user's preferences, kept between starts.
 type Settings struct {
 	Appearance Appearance
+	// Language is the language of Hop's texts; the zero value follows the
+	// system's, so settings saved before this existed keep doing so.
+	Language Language
 	// Theme selects the ocean or dusk material palette.
 	Theme ColorTheme
 	// DelayTimeoutSeconds is how long a delay test waits for one node.

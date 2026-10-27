@@ -7,6 +7,7 @@ import (
 
 	"hop/internal/model"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 const (
@@ -62,7 +63,7 @@ func (d *Dashboard) heroExit(c *ui.Context, t *ui.Theme, route []model.RouteHop)
 	exit := ui.Column(c).Key("exit").Gap(gapTight).Width(exitWidth)
 	exit.Children(func() {
 		if len(route) == 0 {
-			mutedText(c, t, "导入订阅后,这里会显示流量经过的线路")
+			mutedText(c, t, locales.HeroEmpty())
 			return
 		}
 		hop := route[len(route)-1]
@@ -98,9 +99,9 @@ func heroExitName(hop model.RouteHop) string {
 	case hop.Group:
 		return hop.Name
 	case node.PlanNote:
-		return "机场信息节点"
+		return locales.PlanInfoNode()
 	case node.Via != "":
-		return "直连"
+		return locales.RouteDirect()
 	}
 	name := strings.TrimSpace(node.Region + " " + node.Title)
 	if name == "" {
@@ -116,7 +117,7 @@ func heroVia(route []model.RouteHop, hop model.RouteHop) string {
 	case hop.Group:
 		return routeVia(route)
 	case hop.Node.PlanNote, hop.Node.Via != "":
-		return "直连,不经过代理"
+		return locales.HeroDirectNote()
 	default:
 		return routeVia(route)
 	}
@@ -166,12 +167,12 @@ func (d *Dashboard) modeLocked() bool {
 // modeSwitch chooses the outbound mode as one sliding switch.
 func (d *Dashboard) modeSwitch(c *ui.Context, style switchStyle) {
 	disabled := d.modeLocked()
-	mode := ui.Box(c).Key("mode").Disabled(disabled).Tooltip(modeHints[d.modeIndex])
+	mode := ui.Box(c).Key("mode").Disabled(disabled).Tooltip(modeHints()[d.modeIndex])
 	if disabled {
 		mode.Opacity(disabledOpacity)
 	}
 	mode.Children(func() {
-		slidingSwitch(c, "出站模式", &d.modeIndex, modeLabels, style, func(i int) {
+		slidingSwitch(c, locales.OutboundMode(), &d.modeIndex, modeLabels(), style, func(i int) {
 			d.setMode(service.Modes[i])
 		})
 	})
@@ -188,13 +189,13 @@ func heroSpeedLine(c *ui.Context, t *ui.Theme, arrow string, r readout, color ui
 
 // coreStatus is the core's state: a dot and a few words.
 func (d *Dashboard) coreStatus(c *ui.Context, t *ui.Theme) {
-	dotColor, title := t.Success, "内核运行中"
+	dotColor, title := t.Success, locales.CoreRunning()
 	switch d.status {
 	case statusFailed:
-		dotColor, title = t.Danger, "内核未连接"
+		dotColor, title = t.Danger, locales.CoreNotConnected()
 	case statusConnected:
 	default:
-		dotColor, title = t.TextMuted, "内核连接中"
+		dotColor, title = t.TextMuted, locales.CoreConnecting()
 	}
 	ui.Row(c).Key("coreStatus").Gap(gapTight).AlignItems(ui.Center).Children(func() {
 		ui.Box(c).Width(5).Height(5).Radius(2.5).Background(dotColor)

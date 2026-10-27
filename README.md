@@ -36,8 +36,9 @@ drawn natively in Go with [MyGo](https://github.com/egoist/mygo) instead of
 running in a webview, and the same code runs on macOS and Windows.
 
 > [!NOTE]
-> Hop's interface is in Chinese for now. Everything in this README is the same
-> in both languages; the labels quoted below are the ones you will see.
+> Hop's interface comes in English and Simplified Chinese. It follows the
+> system language, and **Settings → Language** changes it at once. The labels
+> quoted below are the English ones.
 
 ## Contents
 
@@ -84,12 +85,12 @@ running in a webview, and the same code runs on macOS and Windows.
 - **The exit's address.** Click to copy the public IP and country traffic
   leaves by. Hop looks it up once through its own proxy when the exit changes
   and keeps it in memory only.
-- **Unlock check.** **解锁检测** tries ChatGPT, Netflix and YouTube Premium
+- **Unlock check.** **Unlock** tries ChatGPT, Netflix and YouTube Premium
   through every group at once, by the node each group uses now, and marks the
   ones that work on the group's tile, with the region the service saw. It goes
   through listeners of its own on the loopback, so your rules and your current
   route stay as they are. The results are kept until Hop quits.
-- **LAN access.** **Settings → 局域网** lets phones and other computers on the
+- **LAN access.** **Settings → LAN** lets phones and other computers on the
   same network use Hop's proxy: they enter this computer's address (shown with
   a copy button) as an HTTP or SOCKS5 proxy. Off by default. While on, devices
   must give an account (a random password Hop makes, which you can reset) unless
@@ -103,7 +104,7 @@ running in a webview, and the same code runs on macOS and Windows.
 - **System proxy.** One switch in the header. Hop refuses when another app
   already holds the system proxy, clears only a proxy that points at itself, and
   puts it back when it quits.
-- **Enhanced mode (TUN).** Carries every app's traffic through a small
+- **TUN.** Carries every app's traffic through a small
   privileged helper you install once (a LaunchDaemon on macOS, a service on
   Windows), so the core runs with the rights a TUN needs and Hop itself never
   does. On macOS the helper also points the system DNS at resolvers whose
@@ -167,7 +168,7 @@ running in a webview, and the same code runs on macOS and Windows.
 
 ## Limits
 
-Hop is young and deliberately small. The interface is in Chinese only. There is
+Hop is young and deliberately small. There is
 no Linux build. It has no profile scripts or merge files, so how far you can
 reshape a provider's configuration is limited by design. The macOS app is ad
 hoc signed and the Windows installer is not code signed, so the first run needs
@@ -206,18 +207,18 @@ From then on Hop keeps itself up to date on both platforms.
 ## Getting started
 
 1. **Add a subscription.** Open the nodes page, choose the subscription bar and
-   add one: paste your provider's link, or choose **本地配置** (local config) and
+   add one: paste your provider's link, or choose **Local config** and
    paste node links or a Clash config.
 2. **Pick the rules.** Keep the provider's rules, or use Hop's smart rules.
 3. **Choose a route.** Pick a group in the sidebar, test it, and click a node
    (or switch the grid to latency order).
 4. **Turn something on.** The system proxy switch in the header points your
-   apps at Hop. Enhanced mode asks to install the helper the first time.
+   apps at Hop. TUN asks to install the helper the first time.
 5. **Adjust.** Add your own rules from **Settings** or from any connection,
    choose the theme and appearance, and decide whether Hop starts at login.
 
 Apps that ignore the system proxy can be pointed at the mixed port
-`127.0.0.1:17890` (HTTP and SOCKS5), or use **Settings → 终端代理** to copy a
+`127.0.0.1:17890` (HTTP and SOCKS5), or use **Settings → Terminal proxy** to copy a
 ready-made terminal command.
 
 ## How it works
@@ -272,7 +273,7 @@ The ports sit away from the ones other Clash clients use.
   with the script instead of opening a downloaded `.dmg`.
 - **Windows SmartScreen blocks the installer.** It is not code signed yet:
   **More info → Run anyway**.
-- **Enhanced mode will not turn on.** Another VPN or Clash client holds the
+- **TUN will not turn on.** Another VPN or Clash client holds the
   default routes; turn its TUN off first. Hop never takes routes over.
 - **Another client uses the same ports.** Hop's own are `17890`, `19090`,
   `17853` and `17900`–`17907`, apart from other clients', so both can run at once.

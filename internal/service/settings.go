@@ -17,6 +17,9 @@ type SettingsStore interface {
 // Appearances are the looks the settings offer, in the order they show.
 var Appearances = []model.Appearance{model.AppearanceSystem, model.AppearanceLight, model.AppearanceDark}
 
+// Languages are the languages the settings offer, in the order they show.
+var Languages = []model.Language{model.LanguageSystem, model.LanguageChinese, model.LanguageEnglish}
+
 // ColorThemes are the material palettes in the order offered in settings.
 var ColorThemes = []model.ColorTheme{model.ThemeOcean, model.ThemeDusk, model.ThemePaper}
 
@@ -78,6 +81,9 @@ func (s *SettingsService) Save(settings model.Settings) error {
 func validateSettings(settings model.Settings) error {
 	if !slices.Contains(Appearances, settings.Appearance) {
 		return fmt.Errorf("unknown appearance %q", settings.Appearance)
+	}
+	if !slices.Contains(Languages, settings.Language) {
+		return fmt.Errorf("unsupported language %q", settings.Language)
 	}
 	if !slices.Contains(ColorThemes, settings.Theme) {
 		return fmt.Errorf("unsupported color theme %q", settings.Theme)

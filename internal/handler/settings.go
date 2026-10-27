@@ -7,29 +7,46 @@ import (
 	"slices"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 // appearanceLabels name service.Appearances, index for index.
-var appearanceLabels = []string{"跟随系统", "浅色", "深色"}
+func appearanceLabels() []string {
+	return []string{locales.FollowSystem(), locales.AppearanceLight(), locales.AppearanceDark()}
+}
+
+// languageLabels name service.Languages, index for index; a language is named
+// in itself, whichever language Hop shows.
+func languageLabels() []string {
+	return []string{locales.FollowSystem(), i18n.Autonym(string(model.LanguageChinese)), i18n.Autonym(string(model.LanguageEnglish))}
+}
 
 // colorThemeLabels name service.ColorThemes, index for index.
-var colorThemeLabels = []string{"海蓝", "暮紫", "纸张"}
+func colorThemeLabels() []string {
+	return []string{locales.ThemeOcean(), locales.ThemeDusk(), locales.ThemePaper()}
+}
 
 // timeoutLabels name service.DelayTimeouts, index for index.
-var timeoutLabels = []string{"2 秒", "3 秒", "5 秒"}
+func timeoutLabels() []string {
+	return []string{locales.SecondsShort(2), locales.SecondsShort(3), locales.SecondsShort(5)}
+}
 
 // updateLabels name service.SubscriptionUpdateIntervals, index for index.
-var updateLabels = []string{"关闭", "6 小时", "12 小时", "24 小时"}
+func updateLabels() []string {
+	return []string{locales.Off(), locales.HoursShort(6), locales.HoursShort(12), locales.HoursShort(24)}
+}
 
 // settingsState is what the settings page shows and edits. The indexes are
 // what its switches hold, kept in step with settings.
 type settingsState struct {
 	settings        model.Settings
 	appearanceIndex int
+	languageIndex   int
 	themeIndex      int
 	timeoutIndex    int
 	updateIndex     int
@@ -50,6 +67,7 @@ func newSettingsState(settings model.Settings) settingsState {
 	return settingsState{
 		settings:        settings,
 		appearanceIndex: slices.Index(service.Appearances, settings.Appearance),
+		languageIndex:   slices.Index(service.Languages, settings.Language),
 		themeIndex:      slices.Index(service.ColorThemes, settings.Theme),
 		timeoutIndex:    slices.Index(service.DelayTimeouts, settings.DelayTimeoutSeconds),
 		updateIndex:     slices.Index(service.SubscriptionUpdateIntervals, settings.SubscriptionUpdateHours),
@@ -95,6 +113,7 @@ func (d *Dashboard) theme(c *ui.Context) *ui.Theme {
 // what is saved. It writes on the UI thread: the file is tiny, and saves
 // then land in the order the user made them.
 func (d *Dashboard) saveSettings(next model.Settings) {
+	previous := d.settings.settings
 	if err := d.services.Settings.Save(next); err != nil {
 		d.fail(actionSaveSettings, err)
 		d.settings = newSettingsState(d.settings.settings)
@@ -102,6 +121,13 @@ func (d *Dashboard) saveSettings(next model.Settings) {
 	}
 	d.settings = newSettingsState(next)
 	mygo.Theme.SetSource(AppearanceSource(next.Appearance))
+	if next.Language != previous.Language {
+		mygo.App.SetLocale(string(next.Language))
+		// The view carries names the service words in the language shown.
+		if d.opCtx != nil {
+			d.reloadViewAfterCore(d.opCtx, d.opWin)
+		}
+	}
 }
 
 // settingsWidth is the column the settings page centres in the window.
@@ -115,20 +141,20 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 	ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
 		ui.Row(c).Justify(ui.Center).Padding(28, pageGutter(c), 40, pageGutter(c)).Children(func() {
 			ui.Column(c).Grow(1).MaxWidth(settingsWidth).Gap(26).Children(func() {
-				pageHeading(c, t, "设置", "按你的习惯,让 Hop 安静运行")
+				pageHeading(c, t, locales.PageSettings(), locales.SettingsSubtitle())
 				general := []func(){
 					func() {
-						settingRow(c, t, "开机启动", "登录后在菜单栏里运行,不打开窗口", func() {
+						settingRow(c, t, locales.SettingsLaunchAtLogin(), locales.SettingsLaunchAtLoginNote(), func() {
 							on := d.openAtLogin
-							ui.Switch(c.Key("open-at-login"), &on).Label("开机启动").OnChange(func() {
+							ui.Switch(c.Key("open-at-login"), &on).Label(locales.SettingsLaunchAtLogin()).OnChange(func() {
 								d.setOpenAtLogin(!d.openAtLogin)
 							})
 						})
 					},
 					func() {
-						settingRow(c, t, "菜单栏网速", "在菜单栏图标旁显示实时上传和下载速度", func() {
+						settingRow(c, t, locales.SettingsMenuBarSpeed(), locales.SettingsMenuBarSpeedNote(), func() {
 							on := s.settings.MenuBarSpeed
-							ui.Switch(c.Key("menu-bar-speed"), &on).Label("菜单栏网速").OnChange(func() {
+							ui.Switch(c.Key("menu-bar-speed"), &on).Label(locales.SettingsMenuBarSpeed()).OnChange(func() {
 								next := s.settings
 								next.MenuBarSpeed = !next.MenuBarSpeed
 								d.saveSettings(next)
@@ -137,16 +163,16 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 					},
 					d.portRow(c, t),
 					func() {
-						settingRow(c, t, "终端代理", "终端不走系统代理,粘贴这条命令后当前窗口就经过 Hop;增强模式下不需要", func() {
-							button(c, buttonSpec{label: "复制命令", icon: iconTerminal, style: mainSoftButton(t)}, func() {
+						settingRow(c, t, locales.SettingsTerminalProxy(), locales.SettingsTerminalProxyNote(), func() {
+							button(c, buttonSpec{label: locales.SettingsCopyCommand(), icon: iconTerminal, style: mainSoftButton(t)}, func() {
 								c.WriteClipboard(service.TerminalProxyCommand(runtime.GOOS, d.proxyAddress()))
-								c.Toast("已复制终端代理命令,粘贴到终端即可")
+								c.Toast(locales.SettingsCommandCopied())
 							})
 						})
 					},
 					func() {
-						settingRow(c, t, "主题", "玻璃背景配色,切换后立即生效", func() {
-							slidingSwitch(c, "color-theme", &s.themeIndex, colorThemeLabels, pageSwitchStyle(t, themeSegmentWidth), func(i int) {
+						settingRow(c, t, locales.SettingsTheme(), locales.SettingsThemeNote(), func() {
+							slidingSwitch(c, "color-theme", &s.themeIndex, colorThemeLabels(), pageSwitchStyle(t, themeSegmentWidth), func(i int) {
 								next := s.settings
 								next.Theme = service.ColorThemes[i]
 								d.saveSettings(next)
@@ -154,8 +180,17 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 						})
 					},
 					func() {
-						settingRow(c, t, "外观", "", func() {
-							slidingSwitch(c, "appearance", &s.appearanceIndex, appearanceLabels, pageSwitchStyle(t, 64), func(i int) {
+						settingRow(c, t, locales.SettingsLanguage(), locales.SettingsLanguageNote(), func() {
+							slidingSwitch(c, "language", &s.languageIndex, languageLabels(), pageSwitchStyle(t, languageSegmentWidth), func(i int) {
+								next := s.settings
+								next.Language = service.Languages[i]
+								d.saveSettings(next)
+							})
+						})
+					},
+					func() {
+						settingRow(c, t, locales.SettingsAppearance(), "", func() {
+							slidingSwitch(c, "appearance", &s.appearanceIndex, appearanceLabels(), pageSwitchStyle(t, 64), func(i int) {
 								next := s.settings
 								next.Appearance = service.Appearances[i]
 								d.saveSettings(next)
@@ -165,10 +200,10 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 				}
 				if runtime.GOOS == "darwin" && c.Vibrancy() {
 					general = append(general, func() {
-						settingRow(c, t, "窗口通透度", "数值越高,玻璃越通透", func() {
+						settingRow(c, t, locales.SettingsClarity(), locales.SettingsClarityNote(), func() {
 							ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 								ui.Slider(c, &s.clarity, model.WindowClarityMin, model.WindowClarityMax).
-									Label("窗口通透度").Width(150).OnChange(func() {
+									Label(locales.SettingsClarity()).Width(150).OnChange(func() {
 									next := s.settings
 									next.WindowClarity = int(math.Round(s.clarity))
 									if next.WindowClarity != s.settings.WindowClarity {
@@ -183,8 +218,8 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 				}
 				general = append(general,
 					func() {
-						settingRow(c, t, "测速超时", "越短测得越快,较慢的线路可能被记为超时", func() {
-							slidingSwitch(c, "timeout", &s.timeoutIndex, timeoutLabels, pageSwitchStyle(t, 52), func(i int) {
+						settingRow(c, t, locales.SettingsTimeout(), locales.SettingsTimeoutNote(), func() {
+							slidingSwitch(c, "timeout", &s.timeoutIndex, timeoutLabels(), pageSwitchStyle(t, 52), func(i int) {
 								next := s.settings
 								next.DelayTimeoutSeconds = service.DelayTimeouts[i]
 								d.saveSettings(next)
@@ -193,12 +228,12 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 					},
 					d.appVersionRow(c, t),
 				)
-				settingsGroup(c, t, "通用", general...)
-				settingsGroup(c, t, "局域网", d.lanRows(c, t)...)
-				settingsGroup(c, t, "订阅",
+				settingsGroup(c, t, locales.SettingsGeneral(), general...)
+				settingsGroup(c, t, locales.SettingsLan(), d.lanRows(c, t)...)
+				settingsGroup(c, t, locales.Subscriptions(),
 					func() {
-						settingRow(c, t, "自动更新", "按间隔刷新已保存的订阅，本地配置不刷新；失败后等下一个间隔再试", func() {
-							slidingSwitch(c, "subscription-update", &s.updateIndex, updateLabels, pageSwitchStyle(t, 58), func(i int) {
+						settingRow(c, t, locales.SettingsAutoUpdate(), locales.SettingsAutoUpdateNote(), func() {
+							slidingSwitch(c, "subscription-update", &s.updateIndex, updateLabels(), pageSwitchStyle(t, 58), func(i int) {
 								next := s.settings
 								next.SubscriptionUpdateHours = service.SubscriptionUpdateIntervals[i]
 								d.saveSettings(next)
@@ -206,12 +241,12 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 						})
 					},
 				)
-				settingsGroup(c, t, "规则", d.geodataRow(c, t))
-				settingsGroup(c, t, "自定义规则", d.customRulesRows(c, t)...)
+				settingsGroup(c, t, locales.SettingsRules(), d.geodataRow(c, t))
+				settingsGroup(c, t, locales.SettingsCustomRules(), d.customRulesRows(c, t)...)
 				if d.core.loaded {
-					settingsGroup(c, t, "内核", append(d.coreRows(c, t), d.helperRows(c, t)...)...)
+					settingsGroup(c, t, locales.SettingsCore(), append(d.coreRows(c, t), d.helperRows(c, t)...)...)
 				}
-				mutedText(c, t, "以 GPL-3.0 许可发布,内置的 mihomo 内核同为 GPL-3.0。").AlignSelf(ui.Center)
+				mutedText(c, t, locales.SettingsLicense()).AlignSelf(ui.Center)
 			})
 		})
 	})

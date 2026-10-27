@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/locales"
 )
 
 const (
@@ -56,13 +57,22 @@ const (
 	nodeFilterRegion  = "region:"
 )
 
-// groupModes says in plain words how each group type picks its node.
-var groupModes = map[string]string{
-	model.GroupSelector:    "手动选择",
-	model.GroupURLTest:     "自动选择延迟最低的节点",
-	model.GroupFallback:    "当前节点不可用时自动切换",
-	model.GroupLoadBalance: "在节点间分配连接",
-	model.GroupRelay:       "依次经过所有节点",
+// groupMode says in plain words how a group of type kind picks its node.
+func groupMode(kind string) string {
+	switch kind {
+	case model.GroupSelector:
+		return locales.GroupModeSelector()
+	case model.GroupURLTest:
+		return locales.GroupModeURLTest()
+	case model.GroupFallback:
+		return locales.GroupModeFallback()
+	case model.GroupLoadBalance:
+		return locales.GroupModeLoadBalance()
+	case model.GroupRelay:
+		return locales.GroupModeRelay()
+	default:
+		return ""
+	}
 }
 
 func (d *Dashboard) activeGroupView() (model.GroupView, bool) {
@@ -110,25 +120,31 @@ func (d *Dashboard) groupHeader(c *ui.Context, t *ui.Theme) {
 	if !ok {
 		return
 	}
-	ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-		groupIcon(c, t, group, 32)
-		ui.Column(c).Grow(1).Gap(3).Children(func() {
-			ui.Text(c, groupTitle(group)).FontSize(fontHeadline).FontWeight(weightSemibold).MaxLines(1)
-			ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-				mutedText(c, t, groupModes[group.Type])
-				if group.Exit.Name != "" {
-					mutedText(c, t, "出口")
-					ui.Text(c, nodeDisplay(group.Exit)).FontSize(fontSecondary).FontWeight(weightMedium).MaxLines(1)
-					delayLabel(c, t, group.Exit.Delay, fontSecondary)
-				}
-				if result, checked := d.unlock.results[group.Name]; checked {
-					unlockChips(c, t, result)
-				}
+	// The controls wrap below the group's name where a longer translation
+	// leaves the row too little room.
+	ui.Row(c).Gap(gapMedium).GapY(gapSmall).Wrap().AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Grow(1).MinWidth(260).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+			groupIcon(c, t, group, 32)
+			ui.Column(c).Grow(1).Gap(3).Children(func() {
+				ui.Text(c, groupTitle(group)).FontSize(fontHeadline).FontWeight(weightSemibold).MaxLines(1)
+				ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+					mutedText(c, t, groupMode(group.Type)).MaxLines(1)
+					if group.Exit.Name != "" {
+						mutedText(c, t, locales.NodesExit()).NoWrap()
+						ui.Text(c, nodeDisplay(group.Exit)).FontSize(fontSecondary).FontWeight(weightMedium).MaxLines(1)
+						delayLabel(c, t, group.Exit.Delay, fontSecondary)
+					}
+					if result, checked := d.unlock.results[group.Name]; checked {
+						unlockChips(c, t, result)
+					}
+				})
 			})
 		})
-		slidingSwitch(c, "节点排序", &d.nodeOrder, nodeOrderLabels, pageSwitchStyle(t, nodeOrderSegmentWidth), func(int) {})
-		d.unlockControls(c, t)
-		d.testButton(c, t, group.Name)
+		ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+			slidingSwitch(c, locales.NodesOrder(), &d.nodeOrder, nodeOrderLabels(), pageSwitchStyle(t, nodeOrderSegmentWidth), func(int) {})
+			d.unlockControls(c, t)
+			d.testButton(c, t, group.Name)
+		})
 	})
 }
 
@@ -145,7 +161,7 @@ type regionChip struct {
 func regionChips(group model.GroupView) []regionChip {
 	var chips []regionChip
 	if len(group.Others) > 0 {
-		chips = append(chips, regionChip{key: nodeFilterOthers, label: "线路", count: len(group.Others)})
+		chips = append(chips, regionChip{key: nodeFilterOthers, label: locales.ColumnRoute(), count: len(group.Others)})
 	}
 	total := len(group.Others)
 	var regions []regionChip
@@ -157,7 +173,7 @@ func regionChips(group model.GroupView) []regionChip {
 			count: len(region.Nodes),
 		})
 	}
-	chips = append(chips, regionChip{key: nodeFilterAll, label: "全部", count: total})
+	chips = append(chips, regionChip{key: nodeFilterAll, label: locales.All(), count: total})
 	return append(chips, regions...)
 }
 
@@ -197,10 +213,10 @@ func visibleSections(group model.GroupView, filter string, byDelay bool, delayOf
 	}
 	var sections []nodeSection
 	if len(group.Others) > 0 {
-		sections = append(sections, nodeSection{title: "线路", nodes: group.Others})
+		sections = append(sections, nodeSection{title: locales.ColumnRoute(), nodes: group.Others})
 	}
 	if byDelay {
-		return append(sections, nodeSection{title: "按延迟", nodes: regionNodes(group.Regions, true, delayOf)})
+		return append(sections, nodeSection{title: locales.NodesByLatency(), nodes: regionNodes(group.Regions, true, delayOf)})
 	}
 	for _, region := range group.Regions {
 		sections = append(sections, nodeSection{title: strings.TrimSpace(shownFlag(region.Flag) + " " + region.Name), nodes: region.Nodes})
@@ -279,7 +295,7 @@ func (d *Dashboard) regionFilter(c *ui.Context, t *ui.Theme) {
 			d.regionChipButton(c, t, chip, key == current).OnClick(func() { d.nodeRegion = key })
 		}
 		if len(more) > 0 {
-			d.regionChipButton(c, t, regionChip{key: "more", label: "更多", count: len(more)}, false).Menu(func(m *ui.Menu) {
+			d.regionChipButton(c, t, regionChip{key: "more", label: locales.NodesMore(), count: len(more)}, false).Menu(func(m *ui.Menu) {
 				for _, chip := range more {
 					if m.Item(fmt.Sprintf("%s  %d", chip.label, chip.count)).Chosen() {
 						d.nodeRegion = chip.key
@@ -426,7 +442,7 @@ func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, 
 				latencyInk = ink.Text
 			}
 			if d.testing != "" {
-				latency = "测速中"
+				latency = locales.NodesTesting()
 				if !isActive {
 					latencyInk = textOn(t, accentInk(t))
 				}
@@ -531,7 +547,7 @@ func delayText(delay model.Delay) string {
 	case !delay.Measured:
 		return "—"
 	case delay.Millis == 0:
-		return "超时"
+		return locales.NodesTimeout()
 	default:
 		return fmt.Sprintf("%d ms", delay.Millis)
 	}
@@ -553,9 +569,9 @@ func delayColor(t *ui.Theme, delay model.Delay) ui.Color {
 // testButton measures every node of group; while any test runs it spins
 // and takes no clicks.
 func (d *Dashboard) testButton(c *ui.Context, t *ui.Theme, group string) {
-	label := "测速"
+	label := locales.NodesTestDelay()
 	if d.testing != "" {
-		label = "测速中"
+		label = locales.NodesTesting()
 	}
 	button(c, buttonSpec{label: label, icon: iconBolt, style: mainSoftButton(t), busy: d.testing != ""}, func() { d.testDelay(group) })
 }

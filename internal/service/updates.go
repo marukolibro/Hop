@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"hop/internal/model"
+	"hop/locales"
 )
 
 // appUpdateCheckEvery is how often a running Hop checks for a new version
@@ -56,11 +57,11 @@ func (s *AppUpdateService) DisabledReason() string {
 	}
 	switch {
 	case mygo.IsDev():
-		return "开发版不能自动更新"
+		return locales.UpdateBlockedDev()
 	case !mygo.App.IsPackaged():
-		return "未打包运行，不能自动更新"
+		return locales.UpdateBlockedUnpackaged()
 	default:
-		return "应用目录不可写，不能自动更新"
+		return locales.UpdateBlockedReadOnly()
 	}
 }
 

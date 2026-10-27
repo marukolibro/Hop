@@ -5,6 +5,7 @@ import (
 
 	"hop/internal/model"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 const (
@@ -160,7 +161,7 @@ func statusToggle(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onClick
 
 // modePill is the pill of the i'th outbound mode.
 func (d *Dashboard) modePill(c *ui.Context, t *ui.Theme, i int) ui.Element {
-	return togglePill(c, t, pillSpec{label: modeLabels[i], on: d.modeIndex == i, disabled: d.modeLocked()}, func() {
+	return togglePill(c, t, pillSpec{label: modeLabels()[i], on: d.modeIndex == i, disabled: d.modeLocked()}, func() {
 		if d.modeIndex == i {
 			return
 		}
@@ -175,7 +176,7 @@ func (d *Dashboard) systemProxyPill(c *ui.Context, t *ui.Theme) ui.Element {
 	s := &d.sysProxy
 	taken := s.status.Owner == model.ProxyOwnerOther
 	return togglePill(c, t, pillSpec{
-		label: "系统代理", on: s.on, busy: s.busy,
+		label: locales.SystemProxy(), on: s.on, busy: s.busy,
 		disabled: !s.loaded || (taken && !s.on),
 	}, func() { d.beginSystemProxy(!s.on) })
 }
@@ -185,7 +186,7 @@ func (d *Dashboard) systemProxyPill(c *ui.Context, t *ui.Theme) ui.Element {
 func (d *Dashboard) tunPill(c *ui.Context, t *ui.Theme) ui.Element {
 	s := &d.tun
 	return togglePill(c, t, pillSpec{
-		label: "增强模式", on: s.on, busy: s.busy,
+		label: locales.Tun(), on: s.on, busy: s.busy,
 		disabled: !s.loaded || d.controlsLocked() || (s.taken && !s.on),
 	}, func() { d.beginTun(!s.on) })
 }

@@ -7,16 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
-)
-
-const (
-	lanOpenNote      = "让同一网络里的手机、电脑通过这台电脑上网。其他设备在自己的网络设置里填下面的代理地址"
-	lanAccountNote   = "设备连接时要填用户名和密码"
-	lanOpenNoAccount = "设备无需账号密码就能连接"
-	lanOpenWarning   = "同一网络里的任何设备都能使用你的订阅流量,公共 Wi-Fi 下请不要这样用"
-	lanNoNetwork     = "未连接局域网"
-	lanProtocolNote  = "HTTP 和 SOCKS5 都支持"
-	lanFirewallNote  = "第一次开启时,系统可能会询问是否允许接收传入连接,请选择允许。只有来自家里或公司局域网的连接会被接受,来自互联网的会被拒绝。"
+	"hop/locales"
 )
 
 // lanUIState is what the LAN rows show: the access as the service reports
@@ -112,10 +103,10 @@ func (d *Dashboard) lanRows(c *ui.Context, t *ui.Theme) []func() {
 	locked := !l.loaded || l.busy || d.controlsLocked()
 	asksAccount := l.status.Account != (model.LANCredential{})
 	rows := []func(){func() {
-		settingRow(c, t, "允许局域网设备使用", lanOpenNote, func() {
+		settingRow(c, t, locales.LanAllow(), locales.LanIntro(), func() {
 			on := l.status.Enabled
 			ui.Box(c).Disabled(locked).Children(func() {
-				ui.Switch(c.Key("lan"), &on).Label("允许局域网设备使用").OnChange(func() {
+				ui.Switch(c.Key("lan"), &on).Label(locales.LanAllow()).OnChange(func() {
 					d.beginLAN(!l.status.Enabled, !d.settings.settings.LANNoPassword)
 				})
 			})
@@ -126,14 +117,14 @@ func (d *Dashboard) lanRows(c *ui.Context, t *ui.Theme) []func() {
 	}
 	rows = append(rows,
 		func() {
-			note := lanAccountNote
+			note := locales.LanAccountOn()
 			if !asksAccount {
-				note = lanOpenNoAccount
+				note = locales.LanAccountOff()
 			}
-			settingRow(c, t, "需要账号密码", note, func() {
+			settingRow(c, t, locales.LanRequireAccount(), note, func() {
 				on := asksAccount
 				ui.Box(c).Disabled(locked).Children(func() {
-					ui.Switch(c.Key("lan-account"), &on).Label("需要账号密码").OnChange(func() {
+					ui.Switch(c.Key("lan-account"), &on).Label(locales.LanRequireAccount()).OnChange(func() {
 						d.beginLAN(true, !asksAccount)
 					})
 				})
@@ -142,28 +133,28 @@ func (d *Dashboard) lanRows(c *ui.Context, t *ui.Theme) []func() {
 	)
 	if !asksAccount {
 		rows = append(rows, func() {
-			ui.Text(c, lanOpenWarning).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(textOn(t, t.Warning))
+			ui.Text(c, locales.LanOpenWarning()).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(textOn(t, t.Warning))
 		})
 	}
 	rows = append(rows, func() {
-		settingRow(c, t, "代理地址", lanProtocolNote, func() { d.lanAddressList(c, t) })
+		settingRow(c, t, locales.LanAddress(), locales.LanProtocols(), func() { d.lanAddressList(c, t) })
 	})
 	if asksAccount {
 		account := l.status.Account
 		rows = append(rows, func() {
-			settingRow(c, t, "账号", "", func() { d.lanCopyValue(c, t, "用户名", account.Username) })
+			settingRow(c, t, locales.LanAccount(), "", func() { d.lanCopyValue(c, t, locales.LanUsername(), account.Username) })
 		}, func() {
-			settingRow(c, t, "密码", "", func() {
+			settingRow(c, t, locales.LanPassword(), "", func() {
 				ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-					d.lanCopyValue(c, t, "密码", account.Password)
+					d.lanCopyValue(c, t, locales.LanPassword(), account.Password)
 					ui.Box(c).Disabled(locked).Children(func() {
-						button(c, buttonSpec{label: "重置密码", icon: iconRefresh, style: mainSoftButton(t)}, d.beginLANReset)
+						button(c, buttonSpec{label: locales.LanResetPassword(), icon: iconRefresh, style: mainSoftButton(t)}, d.beginLANReset)
 					})
 				})
 			})
 		})
 	}
-	rows = append(rows, func() { mutedText(c, t, lanFirewallNote) })
+	rows = append(rows, func() { mutedText(c, t, locales.LanFirewallNote()) })
 	return rows
 }
 
@@ -172,13 +163,13 @@ func (d *Dashboard) lanRows(c *ui.Context, t *ui.Theme) []func() {
 func (d *Dashboard) lanAddressList(c *ui.Context, t *ui.Theme) {
 	addresses := d.lan.status.Addresses
 	if len(addresses) == 0 {
-		mutedText(c, t, lanNoNetwork)
+		mutedText(c, t, locales.LanNoNetwork())
 		return
 	}
 	ui.Column(c).Gap(gapSmall).AlignItems(ui.End).Children(func() {
 		for _, address := range addresses {
 			ui.Row(c).Key(address).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-				d.lanCopyValue(c, t, "代理地址", address)
+				d.lanCopyValue(c, t, locales.LanAddress(), address)
 			})
 		}
 	})
@@ -188,9 +179,9 @@ func (d *Dashboard) lanAddressList(c *ui.Context, t *ui.Theme) {
 func (d *Dashboard) lanCopyValue(c *ui.Context, t *ui.Theme, what string, value string) {
 	ui.Row(c).Key(what + value).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, value).Font("monospace").FontSize(fontSecondary).FontWeight(weightMedium).NoWrap()
-		button(c, buttonSpec{label: "复制", style: mainSoftButton(t)}, func() {
+		button(c, buttonSpec{label: locales.Copy(), style: mainSoftButton(t)}, func() {
 			c.WriteClipboard(value)
-			c.Toast("已复制" + what)
+			c.Toast(locales.Copied() + what)
 		})
 	})
 }

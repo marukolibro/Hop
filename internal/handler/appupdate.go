@@ -8,6 +8,7 @@ import (
 
 	"hop/internal/model"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 // appUpdateState is the version row's and the flyout's share of the app
@@ -96,24 +97,24 @@ func (d *Dashboard) appVersionRow(c *ui.Context, t *ui.Theme) func() {
 		if !s.enabled {
 			note = s.disabledReason
 			if note == "" {
-				note = "此版本不能自动更新"
+				note = locales.AppUpdateBlocked()
 			}
 		}
-		settingRow(c, t, "版本", note, func() {
+		settingRow(c, t, locales.AppVersion(), note, func() {
 			ui.Column(c).Key("app-version").Gap(gapSmall).AlignItems(ui.End).Children(func() {
 				ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 					version := d.appVersion
 					if version == "" {
-						version = "开发版"
+						version = locales.AppDevBuild()
 					}
 					mutedText(c, t, "Hop "+version).NoWrap().FontFeatures("tnum")
 					if s.update.Available {
-						ui.Text(c, "新版本 "+s.update.Version).FontSize(fontBody).FontWeight(weightMedium).
+						ui.Text(c, locales.AppUpdateNewVersion(s.update.Version)).FontSize(fontBody).FontWeight(weightMedium).
 							TextColor(accentInk(t)).NoWrap()
 						if s.enabled {
-							label := "更新并重启"
+							label := locales.UpdateAndRestart()
 							if s.updating {
-								label = "更新中"
+								label = locales.Updating()
 							}
 							button(c, buttonSpec{label: label, style: primaryButton(t), busy: s.updating,
 								disabled: d.controlsLocked()}, d.beginAppInstall)
@@ -123,9 +124,9 @@ func (d *Dashboard) appVersionRow(c *ui.Context, t *ui.Theme) func() {
 					if !s.enabled {
 						return
 					}
-					label := "检查更新"
+					label := locales.CheckForUpdates()
 					if s.checking {
-						label = "检查中"
+						label = locales.Checking()
 					}
 					button(c, buttonSpec{label: label, style: mainSoftButton(t), busy: s.checking,
 						disabled: d.controlsLocked()}, d.beginAppCheck)

@@ -13,6 +13,7 @@ import (
 
 	"hop/internal/model"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 const (
@@ -44,10 +45,14 @@ const (
 	pageSettings
 )
 
-var pageLabels = []string{"节点", "连接", "统计", "日志", "设置"}
+func pageLabels() []string {
+	return []string{locales.PageNodes(), locales.PageConnections(), locales.PageStats(), locales.PageLogs(), locales.PageSettings()}
+}
 
 // modeLabels name service.Modes, index for index.
-var modeLabels = []string{"规则", "全局", "直连"}
+func modeLabels() []string {
+	return []string{locales.ModeRule(), locales.ModeGlobal(), locales.RouteDirect()}
+}
 
 // ProxyService is what the dashboard needs to show and switch nodes.
 type ProxyService interface {
@@ -813,56 +818,59 @@ func (d *Dashboard) runCloseAll(ctx context.Context, win Updater) {
 	}
 }
 
-// action names what the user or the dashboard was doing, worded for the
-// user as the title of its failure.
-type action string
+// action names what the user or the dashboard was doing: id is for the log,
+// and title is worded for the user as the title of its failure.
+type action struct {
+	id    string
+	title func() string
+}
 
-const (
-	actionReadSubscription    action = "读取订阅列表失败"
-	actionLoadSource          action = "读取订阅信息失败"
-	actionLoadGroups          action = "无法读取节点列表"
-	actionWatchTraffic        action = "与内核的连接已断开"
-	actionWatchConnections    action = "无法读取连接列表"
-	actionWatchLogs           action = "无法读取内核日志"
-	actionSwitchNode          action = "切换节点失败"
-	actionSwitchMode          action = "切换出站模式失败"
-	actionTestLatency         action = "测速失败"
-	actionCheckUnlock         action = "解锁检测失败"
-	actionLAN                 action = "设置局域网访问失败"
-	actionPort                action = "修改代理端口失败"
-	actionUseSubscription     action = "使用订阅失败"
-	actionAddSubscription     action = "添加订阅失败"
-	actionEditSubscription    action = "修改订阅失败"
-	actionDeleteSubscription  action = "删除订阅失败"
-	actionRefreshSubscription action = "刷新订阅失败"
-	actionCloseConnection     action = "断开连接失败"
-	actionReadCore            action = "读取内核版本失败"
-	actionCheckCore           action = "检查内核更新失败"
-	actionUpgradeCore         action = "升级内核失败"
-	actionRestoreCore         action = "恢复内置内核失败"
-	actionCoreRestarted       action = "内核意外退出,已自动重启"
-	actionCoreGaveUp          action = "内核反复退出,已停止自动重启"
-	actionSaveSettings        action = "保存设置失败"
-	actionReadRules           action = "读取自定义规则失败"
-	actionSaveRules           action = "保存自定义规则失败"
-	actionReadGeodata         action = "读取规则数据状态失败"
-	actionUpdateGeodata       action = "更新规则数据失败"
-	actionCheckAppUpdate      action = "检查应用更新失败"
-	actionInstallAppUpdate    action = "安装应用更新失败"
-	actionReadSystemProxy     action = "读取系统代理失败"
-	actionSystemProxyOn       action = "打开系统代理失败"
-	actionSystemProxyOff      action = "关闭系统代理失败"
-	actionOpenAtLogin         action = "设置开机启动失败"
-	actionReadTun             action = "读取增强模式状态失败"
-	actionTunOn               action = "开启增强模式失败"
-	actionTunOff              action = "关闭增强模式失败"
-	actionUninstallHelper     action = "卸载增强组件失败"
+var (
+	actionReadSubscription    = action{"read-subscription", locales.ActionReadSubscription}
+	actionLoadSource          = action{"load-source", locales.ActionLoadSource}
+	actionLoadGroups          = action{"load-groups", locales.ActionLoadGroups}
+	actionWatchTraffic        = action{"watch-traffic", locales.ActionWatchTraffic}
+	actionWatchConnections    = action{"watch-connections", locales.ActionWatchConnections}
+	actionWatchLogs           = action{"watch-logs", locales.ActionWatchLogs}
+	actionSwitchNode          = action{"switch-node", locales.ActionSwitchNode}
+	actionSwitchMode          = action{"switch-mode", locales.ActionSwitchMode}
+	actionTestLatency         = action{"test-latency", locales.ActionTestLatency}
+	actionCheckUnlock         = action{"check-unlock", locales.ActionCheckUnlock}
+	actionLAN                 = action{"l-a-n", locales.ActionLan}
+	actionPort                = action{"port", locales.ActionPort}
+	actionUseSubscription     = action{"use-subscription", locales.ActionUseSubscription}
+	actionAddSubscription     = action{"add-subscription", locales.ActionAddSubscription}
+	actionEditSubscription    = action{"edit-subscription", locales.ActionEditSubscription}
+	actionDeleteSubscription  = action{"delete-subscription", locales.ActionDeleteSubscription}
+	actionRefreshSubscription = action{"refresh-subscription", locales.ActionRefreshSubscription}
+	actionCloseConnection     = action{"close-connection", locales.ActionCloseConnection}
+	actionReadCore            = action{"read-core", locales.ActionReadCore}
+	actionCheckCore           = action{"check-core", locales.ActionCheckCore}
+	actionUpgradeCore         = action{"upgrade-core", locales.ActionUpgradeCore}
+	actionRestoreCore         = action{"restore-core", locales.ActionRestoreCore}
+	actionCoreRestarted       = action{"core-restarted", locales.ActionCoreRestarted}
+	actionCoreGaveUp          = action{"core-gave-up", locales.ActionCoreGaveUp}
+	actionSaveSettings        = action{"save-settings", locales.ActionSaveSettings}
+	actionReadRules           = action{"read-rules", locales.ActionReadRules}
+	actionSaveRules           = action{"save-rules", locales.ActionSaveRules}
+	actionReadGeodata         = action{"read-geodata", locales.ActionReadGeodata}
+	actionUpdateGeodata       = action{"update-geodata", locales.ActionUpdateGeodata}
+	actionCheckAppUpdate      = action{"check-app-update", locales.ActionCheckAppUpdate}
+	actionInstallAppUpdate    = action{"install-app-update", locales.ActionInstallAppUpdate}
+	actionReadSystemProxy     = action{"read-system-proxy", locales.ActionReadSystemProxy}
+	actionSystemProxyOn       = action{"system-proxy-on", locales.ActionSystemProxyOn}
+	actionSystemProxyOff      = action{"system-proxy-off", locales.ActionSystemProxyOff}
+	actionOpenAtLogin         = action{"open-at-login", locales.ActionOpenAtLogin}
+	actionReadTun             = action{"read-tun", locales.ActionReadTun}
+	actionTunOn               = action{"tun-on", locales.ActionTunOn}
+	actionTunOff              = action{"tun-off", locales.ActionTunOff}
+	actionUninstallHelper     = action{"uninstall-helper", locales.ActionUninstallHelper}
 )
 
 // fail shows what went wrong without touching the connection status.
 func (d *Dashboard) fail(a action, err error) {
-	slog.Error("dashboard action failed", "action", string(a), "error", err)
-	d.failure = &failure{title: string(a), detail: err.Error()}
+	slog.Error("dashboard action failed", "action", a.id, "error", err)
+	d.failure = &failure{title: a.title(), detail: err.Error()}
 }
 
 // failConnection is fail for errors that mean the core cannot be reached.
@@ -934,7 +942,7 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 			} else {
 				brandMark(c, t, 28, d.markRun)
 			}
-			pageTabs(c, t, "页面", &d.page, pageLabels, func(int) {})
+			pageTabs(c, t, locales.PageSwitchLabel(), &d.page, pageLabels(), func(int) {})
 			ui.Box(c).Grow(1)
 			// The two switches belong together: a tight gap of their own, not the
 			// header's wide one between the brand, the tabs and this group.
@@ -956,13 +964,13 @@ func (d *Dashboard) proxying() bool {
 func (d *Dashboard) statusText() string {
 	switch {
 	case d.proxying():
-		return "代理中"
+		return locales.StatusProxying()
 	case d.status == statusConnected:
-		return "未开代理"
+		return locales.StatusProxyOff()
 	case d.status == statusFailed:
-		return "未连接"
+		return locales.StatusNotConnected()
 	default:
-		return "连接中"
+		return locales.StatusConnecting()
 	}
 }
 
@@ -996,7 +1004,7 @@ func (d *Dashboard) notice(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, d.failure.title).FontSize(fontBody).FontWeight(weightSemibold).TextColor(t.Danger)
 			mutedText(c, t, d.failure.detail)
 		})
-		iconButton(c, "关闭提示", iconClose, dangerButton(t), func() { d.failure = nil })
+		iconButton(c, locales.DismissNotice(), iconClose, dangerButton(t), func() { d.failure = nil })
 	})
 	horizontalHairline(c, t)
 }

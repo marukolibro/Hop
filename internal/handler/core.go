@@ -3,11 +3,11 @@ package handler
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/locales"
 )
 
 // coreState is what the core page shows: the running core, the newest
@@ -127,18 +127,18 @@ func (d *Dashboard) coreRows(c *ui.Context, t *ui.Theme) []func() {
 		rows = append(rows, func() { coreProgress(c, t, s.progress) })
 	case s.latest != nil && s.newer && s.info.Origin == model.CoreOverride:
 		rows = append(rows, func() {
-			mutedText(c, t, "有新版本 "+s.latest.Tag+"。开发用内核由 HOP_MIHOMO_BINARY 指定,不在这里升级。")
+			mutedText(c, t, locales.CoreNewDev(s.latest.Tag))
 		})
 	case s.latest != nil && s.newer:
 		rows = append(rows, func() {
-			mutedText(c, t, "有新版本 "+s.latest.Tag+"。升级时代理会中断一两秒,新内核检验通过才启用。")
+			mutedText(c, t, locales.CoreNewUpgrade(s.latest.Tag))
 		})
 	case s.latest != nil:
-		rows = append(rows, func() { mutedText(c, t, "已是最新版本。") })
+		rows = append(rows, func() { mutedText(c, t, locales.CoreUpToDate()) })
 	}
 	if d.tun.on {
 		rows = append(rows, func() {
-			mutedText(c, t, "增强模式开启时不能更换内核,先关闭增强模式。")
+			mutedText(c, t, locales.CoreLockedByTun())
 		})
 	}
 	return rows
@@ -156,11 +156,11 @@ func coreTile(c *ui.Context, t *ui.Theme) {
 func originText(origin model.CoreOrigin) string {
 	switch origin {
 	case model.CoreInstalled:
-		return "已升级的内核"
+		return locales.CoreSourceUpgraded()
 	case model.CoreOverride:
-		return "开发用内核(来自 HOP_MIHOMO_BINARY)"
+		return locales.CoreSourceDev()
 	default:
-		return "Hop 自带的内核"
+		return locales.CoreSourceBundled()
 	}
 }
 
@@ -171,11 +171,11 @@ func (d *Dashboard) coreActions(c *ui.Context, t *ui.Theme) {
 	canChange := s.info.Origin != model.CoreOverride && !d.controlsLocked() && !d.tun.on
 	ui.Row(c).Key("actions").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 		if s.info.Origin == model.CoreInstalled {
-			button(c, buttonSpec{label: "恢复内置版本", style: mainSoftButton(t), disabled: !canChange}, d.beginRestoreCore)
+			button(c, buttonSpec{label: locales.CoreRestoreBundled(), style: mainSoftButton(t), disabled: !canChange}, d.beginRestoreCore)
 		}
-		button(c, buttonSpec{label: "检查更新", icon: iconRefresh, style: mainSoftButton(t), busy: s.checking}, d.beginCheckCore)
+		button(c, buttonSpec{label: locales.CheckForUpdates(), icon: iconRefresh, style: mainSoftButton(t), busy: s.checking}, d.beginCheckCore)
 		if s.latest != nil && s.newer {
-			button(c, buttonSpec{label: "升级到 " + s.latest.Tag, icon: iconUpgrade, style: primaryButton(t), disabled: !canChange}, d.beginUpgradeCore)
+			button(c, buttonSpec{label: locales.CoreUpgradeTo(s.latest.Tag), icon: iconUpgrade, style: primaryButton(t), disabled: !canChange}, d.beginUpgradeCore)
 		}
 	})
 }
@@ -198,16 +198,16 @@ func stageText(p model.CoreProgress) string {
 	switch p.Stage {
 	case model.CoreStageDownload:
 		if p.Total <= 0 {
-			return "正在下载新内核"
+			return locales.CoreDownloading()
 		}
 		done, total := formatBytes(p.Done), formatBytes(p.Total)
-		return fmt.Sprintf("正在下载新内核 %s %s / %s %s", done.value, done.unit, total.value, total.unit)
+		return locales.CoreDownloadingProgress(done.value+" "+done.unit, total.value+" "+total.unit)
 	case model.CoreStageVerify:
-		return "正在检查新内核能否运行"
+		return locales.CoreChecking()
 	case model.CoreStageRestart:
-		return "正在重启内核"
+		return locales.CoreRestarting()
 	default:
-		return "正在准备"
+		return locales.CorePreparing()
 	}
 }
 
@@ -265,7 +265,7 @@ func (d *Dashboard) applyCoreRestart(r model.CoreRestart) {
 		d.releaseSystemProxy()
 		return
 	}
-	d.fail(actionCoreRestarted, fmt.Errorf("连续第 %d 次退出:%s", r.InARow, r.Exit))
+	d.fail(actionCoreRestarted, errors.New(locales.CoreQuitRepeatedly(r.InARow, r.Exit)))
 	d.stopWatchers()
 	gen := d.nextViewGen()
 	d.startWatchers(d.opCtx, d.opWin)

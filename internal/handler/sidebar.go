@@ -7,6 +7,7 @@ import (
 
 	"hop/internal/model"
 	"hop/internal/service"
+	"hop/locales"
 )
 
 const (
@@ -31,15 +32,20 @@ func sidebarWidthFor(window float32) float32 {
 }
 
 // sidebarSections are the sidebar's sections, by what groups are for.
-var sidebarSections = []struct {
+func sidebarSections() []sidebarSection {
+	return []sidebarSection{
+		{model.GroupKindMain, locales.SidebarMain()},
+		{model.GroupKindAuto, locales.SidebarAuto()},
+		{model.GroupKindRouting, locales.SidebarRouting()},
+		{model.GroupKindRegion, locales.SidebarRegions()},
+		{model.GroupKindOther, locales.SidebarOther()},
+	}
+}
+
+// sidebarSection is a kind of group and the title its section shows.
+type sidebarSection struct {
 	kind  string
 	title string
-}{
-	{model.GroupKindMain, "主线路"},
-	{model.GroupKindAuto, "自动选择"},
-	{model.GroupKindRouting, "分流"},
-	{model.GroupKindRegion, "地区"},
-	{model.GroupKindOther, "其他"},
 }
 
 // sidebarRow is one row of the sidebar: a section title or a group.
@@ -106,7 +112,7 @@ func (d *Dashboard) groupSidebar(c *ui.Context, t *ui.Theme) {
 			d.coreStatus(c, t)
 			ui.Box(c).Grow(1)
 			captionText(c, t, proxyPort(d.proxyAddress())).FontFeatures("tnum").NoWrap().
-				Tooltip("代理地址 " + d.proxyAddress())
+				Tooltip(locales.SidebarProxyAddress(d.proxyAddress()))
 		})
 	})
 }
@@ -120,7 +126,7 @@ func proxyPort(address string) string {
 // profile's order within a section.
 func sidebarRows(groups []model.GroupView) []sidebarRow {
 	var rows []sidebarRow
-	for _, section := range sidebarSections {
+	for _, section := range sidebarSections() {
 		var members []sidebarRow
 		for _, g := range groups {
 			if g.Kind == section.kind {
@@ -253,7 +259,7 @@ func groupDestination(group model.GroupView) string {
 		return "→ " + shownName(group.Pick)
 	}
 	if group.Exit.PlanNote {
-		return "→ 机场信息节点"
+		return "→ " + locales.PlanInfoNode()
 	}
 	return "→ " + nodeDisplay(group.Exit)
 }

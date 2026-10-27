@@ -43,6 +43,8 @@ const (
 	pageContentWidth float32 = 640
 
 	themeSegmentWidth float32 = 72
+	// languageSegmentWidth fits the longest language name, in its own script.
+	languageSegmentWidth float32 = 88
 
 	controlSpacing float32 = 3.5
 	radiusControl  float32 = 8

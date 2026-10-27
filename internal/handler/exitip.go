@@ -4,18 +4,10 @@ import (
 	"log/slog"
 
 	"github.com/egoist/mygo/ui"
-	"golang.org/x/text/language"
-	"golang.org/x/text/language/display"
 
 	"hop/internal/model"
-)
-
-const (
-	exitIPLoadingText = "检测出口 IP…"
-	exitIPFailedText  = "未检测到出口 IP"
-	exitIPCopyTip     = "默认线路的出口 IP。AI 等走专用线路的网站可能不同。点击复制。"
-	exitIPRetryTip    = "点击重试"
-	exitIPCopiedText  = "已复制出口 IP"
+	"hop/internal/service"
+	"hop/locales"
 )
 
 // exitIPStatus is what the route bar's exit IP line shows.
@@ -141,46 +133,28 @@ func (d *Dashboard) startWantedExitIP() {
 func (d *Dashboard) exitIPLine(c *ui.Context, t *ui.Theme) {
 	switch d.exitIP.status {
 	case exitIPLoading:
-		ui.Box(c).Key("exitIP").Label("出口 IP").Children(func() {
-			captionText(c, t, exitIPLoadingText)
+		ui.Box(c).Key("exitIP").Label(locales.ExitIpLabel()).Children(func() {
+			captionText(c, t, locales.ExitIpChecking())
 		})
 	case exitIPFailed:
-		ui.Box(c).Key("exitIP").Label("出口 IP").Tooltip(exitIPRetryTip).Cursor(ui.CursorPointer).
+		ui.Box(c).Key("exitIP").Label(locales.ExitIpLabel()).Tooltip(locales.ExitIpRetry()).Cursor(ui.CursorPointer).
 			OnClick(func() { d.retryExitIP() }).Children(func() {
-			captionText(c, t, exitIPFailedText)
+			captionText(c, t, locales.ExitIpNone())
 		})
 	case exitIPReady:
 		ip := d.exitIP.ip
-		line := ui.Row(c).Key("exitIP").Label("出口 IP").MaxWidth(exitWidth).Clip().
-			AlignItems(ui.End).Cursor(ui.CursorPointer).Tooltip(exitIPCopyTip)
+		line := ui.Row(c).Key("exitIP").Label(locales.ExitIpLabel()).MaxWidth(exitWidth).Clip().
+			AlignItems(ui.End).Cursor(ui.CursorPointer).Tooltip(locales.ExitIpTip())
 		line.OnClick(func() {
 			c.WriteClipboard(ip.Address.String())
-			c.Toast(exitIPCopiedText)
+			c.Toast(locales.ExitIpCopied())
 		})
 		line.Children(func() {
 			value := ui.Text(c, ip.Address.String()).Font("monospace").FontSize(fontCaption).TextColor(t.Text).NoWrap()
 			if onGlass(t) {
 				value.FontWeight(weightMedium)
 			}
-			captionText(c, t, " · "+countryName(ip.Country)).MaxLines(1)
+			captionText(c, t, " · "+service.CountryName(ip.Country)).MaxLines(1)
 		})
 	}
-}
-
-// unknownCountry is what CLDR calls a region it does not know; a code with
-// that name is not a country Hop can name, so the code itself shows.
-var unknownCountry = display.SimplifiedChinese.Regions().Name(language.MustParseRegion("ZZ"))
-
-// countryName is the Chinese name of an ISO 3166 alpha-2 code, or the code
-// itself when CLDR names none.
-func countryName(code string) string {
-	region, err := language.ParseRegion(code)
-	if err != nil {
-		return code
-	}
-	name := display.SimplifiedChinese.Regions().Name(region)
-	if name == "" || name == unknownCountry {
-		return code
-	}
-	return name
 }

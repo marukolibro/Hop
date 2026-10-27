@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/locales"
 )
 
 // geodataState is what the 规则数据 row shows.
@@ -66,23 +67,23 @@ func (d *Dashboard) beginGeodataUpdate() {
 func (d *Dashboard) geodataRow(c *ui.Context, t *ui.Theme) func() {
 	s := &d.geodata
 	return func() {
-		settingRow(c, t, "规则数据", "GeoSite 与 GeoIP 数据，每周自动更新；更新后内核重启一次", func() {
+		settingRow(c, t, locales.GeodataTitle(), locales.GeodataNote(), func() {
 			ui.Row(c).Key("geodata").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-				text := "读取中"
+				text := locales.Reading()
 				switch {
 				case s.busy:
-					text = "更新中"
+					text = locales.Updating()
 				case s.failed:
-					text = "读取失败"
+					text = locales.GeodataFailed()
 				case s.loaded && s.status.UpdatedAt.IsZero():
-					text = "随应用自带"
+					text = locales.GeodataBundled()
 				case s.loaded:
-					text = "更新于 " + s.status.UpdatedAt.Format(usageDateStyle)
+					text = locales.GeodataUpdatedAt(s.status.UpdatedAt.Format(usageDateStyle))
 				}
 				mutedText(c, t, text).NoWrap().FontFeatures("tnum")
-				label := "更新"
+				label := locales.Update()
 				if s.busy {
-					label = "更新中"
+					label = locales.Updating()
 				}
 				button(c, buttonSpec{label: label, icon: iconRefresh, style: mainSoftButton(t),
 					disabled: d.controlsLocked(), busy: s.busy}, d.beginGeodataUpdate)

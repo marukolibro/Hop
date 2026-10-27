@@ -1,46 +1,51 @@
 package handler
 
 import (
-	"fmt"
 	"slices"
 
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/locales"
 )
 
 const logTimeWidth float32 = 62
 
 // logFilters are the level filter's segments and the levels each shows.
-var logFilters = []struct {
+func logFilters() []logFilter {
+	return []logFilter{
+		{locales.All(), []string{model.LogDebug, model.LogInfo, model.LogWarning, model.LogError}},
+		{locales.LogLevelWarning(), []string{model.LogWarning, model.LogError}},
+		{locales.LogLevelError(), []string{model.LogError}},
+	}
+}
+
+// logFilter is one segment of the level filter.
+type logFilter struct {
 	label  string
 	levels []string
-}{
-	{"全部", []string{model.LogDebug, model.LogInfo, model.LogWarning, model.LogError}},
-	{"警告", []string{model.LogWarning, model.LogError}},
-	{"错误", []string{model.LogError}},
 }
 
 // logsPage shows the core's log as it arrives, following the newest line
 // until the user scrolls away from it.
 func (d *Dashboard) logsPage(c *ui.Context, t *ui.Theme) {
-	visible := filterLogs(d.logs.entries, logFilters[d.logs.level].levels)
-	labels := make([]string, len(logFilters))
-	for i, f := range logFilters {
+	visible := filterLogs(d.logs.entries, logFilters()[d.logs.level].levels)
+	labels := make([]string, len(logFilters()))
+	for i, f := range logFilters() {
 		labels[i] = f.label
 	}
 	ui.Column(c).Fill().Children(func() {
 		ui.Column(c).Padding(28, pageGutter(c), 26, pageGutter(c)).Children(func() {
-			pageHeading(c, t, "运行日志", "连接与规则的运行记录")
+			pageHeading(c, t, locales.LogsTitle(), locales.LogsSubtitle())
 		})
 		toolbar(c, func() {
-			slidingSwitch(c, "日志级别", &d.logs.level, labels, pageSwitchStyle(t, 52), func(int) {})
-			mutedText(c, t, fmt.Sprintf("%d 行", len(visible))).FontFeatures("tnum")
+			slidingSwitch(c, locales.LogsLevel(), &d.logs.level, labels, pageSwitchStyle(t, 52), func(int) {})
+			mutedText(c, t, locales.LogsLines(len(visible))).FontFeatures("tnum")
 			ui.Box(c).Grow(1)
-			button(c, buttonSpec{label: "清空日志", style: mainSoftButton(t), disabled: len(d.logs.entries) == 0}, func() { d.logs.entries = nil })
+			button(c, buttonSpec{label: locales.LogsClear(), style: mainSoftButton(t), disabled: len(d.logs.entries) == 0}, func() { d.logs.entries = nil })
 		})
 		if len(visible) == 0 {
-			emptyState(c, t, "暂无日志", "内核的运行记录会实时出现在这里,比如连接匹配了哪条规则、节点连接失败的原因。")
+			emptyState(c, t, locales.LogsEmpty(), locales.LogsEmptyHint())
 			return
 		}
 		ui.Box(c).Grow(1).Padding(0, pageGutter(c), 18, pageGutter(c)).Children(func() {
@@ -71,13 +76,13 @@ func logRow(c *ui.Context, t *ui.Theme, entry model.LogEntry, last bool) {
 func levelLabel(level string) string {
 	switch level {
 	case model.LogError:
-		return "错误"
+		return locales.LogLevelError()
 	case model.LogWarning:
-		return "警告"
+		return locales.LogLevelWarning()
 	case model.LogDebug:
-		return "调试"
+		return locales.LogLevelDebug()
 	default:
-		return "信息"
+		return locales.LogLevelInfo()
 	}
 }
 

@@ -2,6 +2,8 @@
 
 package handler
 
+import "hop/locales"
+
 // tunPrivilegePrompt is how enabling TUN describes the one-time elevation
 // macOS asks for.
-const tunPrivilegePrompt = "系统会请求一次管理员密码"
+func tunPrivilegePrompt() string { return locales.TunPromptMac() }

@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui/chart"
 
 	"hop/internal/model"
+	"hop/locales"
 )
 
 // Motion in Hop is for what changes: the switch slides to the new choice,
@@ -66,6 +67,24 @@ type switchStyle struct {
 	segmentWidth  float32
 }
 
+// Space kept on each side of a segment's label, so a longer translation widens
+// the segment instead of crowding its neighbours.
+const (
+	switchLabelPadding float32 = 10
+	tabLabelPadding    float32 = 12
+)
+
+// fitSegment is the width of a segment of a switch: the width the design
+// gives it, or what the widest of labels needs with padding on each side.
+func fitSegment(c *ui.Context, labels []string, designed float32, size float32, weight int, padding float32) float32 {
+	widest := float32(0)
+	for _, label := range labels {
+		w, _ := c.MeasureText(0, ui.Span{Text: label, Size: size, Weight: weight})
+		widest = max(widest, w)
+	}
+	return max(designed, widest+2*padding)
+}
+
 // pageSwitchStyle is the quiet switch between choices in settings, the log
 // filter and the outbound mode.
 func pageSwitchStyle(t *ui.Theme, segmentWidth float32) switchStyle {
@@ -79,6 +98,7 @@ func pageSwitchStyle(t *ui.Theme, segmentWidth float32) switchStyle {
 // slidingSwitch chooses one of labels into *selected, with a thumb that
 // springs to the choice. onChange hears the new index.
 func slidingSwitch(c *ui.Context, key string, selected *int, labels []string, style switchStyle, onChange func(int)) {
+	style.segmentWidth = fitSegment(c, labels, style.segmentWidth, fontSecondary, weightMedium, switchLabelPadding)
 	inner := switchHeight - 2*switchInset
 	track := ui.Box(c).Key(key).Label(key).Width(style.segmentWidth*float32(len(labels)) + 2*switchInset).Height(switchHeight).
 		Radius(switchHeight / 2).Background(style.track)
@@ -123,6 +143,16 @@ func pageTabs(c *ui.Context, t *ui.Theme, key string, selected *int, labels []st
 	if width < 760 {
 		segment = tabNarrowWidth
 	}
+	// Each tab is as wide as its label needs, never narrower than the design
+	// gives it, so a longer translation widens one tab and not all of them.
+	widths := make([]float32, len(labels))
+	offsets := make([]float32, len(labels))
+	total := float32(0)
+	for i, label := range labels {
+		widths[i] = fitSegment(c, []string{label}, segment, fontEmphasis, weightSemibold, tabLabelPadding)
+		offsets[i] = total
+		total += widths[i]
+	}
 	trackFill := t.SurfacePressed
 	if onGlass(t) {
 		trackFill = glassFill(t, glassTrackAlpha)
@@ -132,15 +162,16 @@ func pageTabs(c *ui.Context, t *ui.Theme, key string, selected *int, labels []st
 		pill = ui.RGB(255, 255, 255)
 	}
 	inner := tabHeight - 2*tabInset
-	track := ui.Box(c).Key(key).Label(key).Width(segment*float32(len(labels)) + 2*tabInset).
+	track := ui.Box(c).Key(key).Label(key).Width(total + 2*tabInset).
 		Height(tabHeight).Radius(tabHeight / 2).Background(trackFill)
-	x := track.AnimateTo("thumb", float32(*selected)*segment, ui.Snappy)
+	x := track.AnimateTo("thumb", offsets[*selected], ui.Snappy)
+	thumbWidth := track.AnimateTo("thumb-width", widths[*selected], ui.Snappy)
 	track.Children(func() {
-		ui.Box(c).Absolute().Left(tabInset+x).Top(tabInset).Width(segment).Height(inner).
+		ui.Box(c).Absolute().Left(tabInset+x).Top(tabInset).Width(thumbWidth).Height(inner).
 			Radius(inner/2).Background(pill).Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.12))
 		ui.Row(c).Absolute().Left(tabInset).Top(tabInset).Children(func() {
 			for i, label := range labels {
-				tab := ui.Box(c).Key(label).Width(segment).Height(inner).Center().Cursor(ui.CursorPointer)
+				tab := ui.Box(c).Key(label).Width(widths[i]).Height(inner).Center().Cursor(ui.CursorPointer)
 				ink, weight := t.TextMuted, weightMedium
 				if i == *selected {
 					ink, weight = tabPillInk, weightSemibold
@@ -187,7 +218,7 @@ func statusDot(c *ui.Context, color ui.Color, live bool) {
 // before them, and so does a core Hop cannot reach.
 func (d *Dashboard) trafficSwitches(c *ui.Context, t *ui.Theme) {
 	if d.status == statusFailed {
-		ui.Text(c, "内核未连接").FontSize(fontSecondary).TextColor(t.Danger).NoWrap()
+		ui.Text(c, locales.CoreNotConnected()).FontSize(fontSecondary).TextColor(t.Danger).NoWrap()
 	}
 	for _, note := range []string{d.systemProxyHint(), d.tunHint()} {
 		if note != "" {
@@ -196,13 +227,13 @@ func (d *Dashboard) trafficSwitches(c *ui.Context, t *ui.Theme) {
 	}
 	sp, tun := &d.sysProxy, &d.tun
 	statusToggle(c, t, pillSpec{
-		label: "系统代理", on: sp.on, busy: sp.busy,
+		label: locales.SystemProxy(), on: sp.on, busy: sp.busy,
 		disabled: !sp.loaded || (sp.status.Owner == model.ProxyOwnerOther && !sp.on),
-	}, "浏览器和大多数应用经过 Hop", func() { d.beginSystemProxy(!sp.on) })
+	}, locales.SystemProxyHint(), func() { d.beginSystemProxy(!sp.on) })
 	statusToggle(c, t, pillSpec{
-		label: "增强模式", on: tun.on, busy: tun.busy,
+		label: locales.Tun(), on: tun.on, busy: tun.busy,
 		disabled: !tun.loaded || (d.controlsLocked() && !tun.busy) || (tun.taken && !tun.on),
-	}, "接管全部流量,包括终端和游戏", func() { d.beginTun(!tun.on) })
+	}, locales.TunHint(), func() { d.beginTun(!tun.on) })
 }
 
 // flowIntensity maps a throughput onto 0..1, by doublings of idleRate so a
@@ -322,7 +353,7 @@ func entrance(e ui.Element, step int) ui.Element {
 // spinner turns while something runs: MyGo's Atom, three rings tumbling
 // inside a circle, drawn in color.
 func spinner(c *ui.Context, size float32, color ui.Color) {
-	loading.Atom(c, loading.Options{Size: size, Color: color}).Label("处理中")
+	loading.Atom(c, loading.Options{Size: size, Color: color}).Label(locales.Working())
 }
 
 // sparkArea draws history across r, download filled, upload as a line.

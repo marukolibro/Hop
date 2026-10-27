@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/locales"
 )
 
 // idleRate is the throughput below which the menu bar shows 0K and the
@@ -193,9 +194,9 @@ func (m *MenuBar) popUpMenu() {
 		m.panel.Close()
 	}
 	m.tray.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
-		{Label: "打开 Hop", Click: func(*mygo.MenuItem, *mygo.Window) { m.showWindow() }},
+		{Label: locales.OpenHop(), Click: func(*mygo.MenuItem, *mygo.Window) { m.showWindow() }},
 		mygo.Separator(),
-		{Label: "退出 Hop", Role: mygo.RoleQuit},
+		{Label: locales.QuitHop(), Role: mygo.RoleQuit},
 	}))
 	defer m.tray.SetMenu(nil)
 	m.tray.PopUpMenu()

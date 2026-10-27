@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"hop/internal/model"
+	"hop/locales"
 )
 
 // sysProxyState is what the system proxy switch shows. on is whether the
@@ -109,7 +110,7 @@ func (d *Dashboard) releaseSystemProxy() {
 func (d *Dashboard) systemProxyHint() string {
 	s := &d.sysProxy
 	if s.loaded && !s.on && s.status.Owner == model.ProxyOwnerOther {
-		return "已被 " + s.status.Other + " 占用"
+		return locales.SystemProxyTaken(s.status.Other)
 	}
 	return ""
 }
