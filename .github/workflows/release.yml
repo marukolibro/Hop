@@ -109,6 +109,10 @@ jobs:
             echo "::error::the MYGO_UPDATER_PRIVATE_KEY secret is not set; installed apps would not accept this release"
             exit 1
           }
+      # Windows draws no mask around an icon, so its icon carries the rounded
+      # shape itself; macOS masks resources/icon.png and keeps that one.
+      - name: Use the Windows icon
+        run: cp packaging/icon-windows.png resources/icon.png
       # The installer is not code signed: Windows SmartScreen asks people to
       # confirm the first run. Updates are verified by the update key.
       - name: Build, sign and upload
