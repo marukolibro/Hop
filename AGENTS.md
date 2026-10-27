@@ -387,6 +387,24 @@ updater verifies the signature of every later update. The private key must
 stay outside the repository and out of output; `mygo.json` only points at
 its path.
 
+Icons: `resources/icon.png` is a square that fills the canvas, which macOS
+masks into its rounded shape. Windows masks nothing, so the Windows build
+swaps in `packaging/icon-windows.png` (the same art as a rounded tile on a
+transparent canvas, with a soft shadow) for the executable and the installer:
+the Windows job of `release.yml` copies it over `resources/icon.png` before
+`mygo build`. Keep the two in step when the artwork changes; `mygo dev` on
+Windows still shows the square one. `docs/icon.png` and `docs/favicon.png` are
+the same tile at 128 and 64 pixels.
+
+`install.ps1` is the Windows counterpart (`irm .../install.ps1 | iex`): it
+reads `update-windows-amd64.json`, downloads `Hop.Setup.<version>.amd64.exe`
+next to the update archive, asks a running Hop to quit (never kills it, which
+would leave the system proxy set), runs it with `/S` (per user, no
+administrator rights), and checks the installed version in the uninstall key.
+`install.sh` hands over to it from Git Bash or MSYS2. It has only been read
+and reasoned about, not run on Windows, so try it on a real PC after changing
+it.
+
 Releases are built by `.github/workflows/release.yml` when a `v<version>`
 tag is pushed: it checks the tag against `mygo.json` and `CHANGELOG.md`,
 builds and signs with the `MYGO_UPDATER_PRIVATE_KEY` repository secret, and
@@ -400,6 +418,20 @@ without the version, an existing tag, and a build without the signing key.
 The release workflow builds `darwin/universal` and `windows/amd64` (an NSIS installer, not code signed); `scripts/release.sh` builds only the former. Never use shared or third-party signing
 certificates. A Developer ID with notarization (MyGo's
 `macos.signingIdentity` and `notarize`) waits for a public release.
+
+## Website
+
+`docs/` is the GitHub Pages site (`https://marukolibro.github.io/Hop/`): one
+static `index.html`, no build step, English and Chinese in the same file
+(`data-l="zh"` / `data-l="en"` spans; the language follows the browser, the
+scheme the system). Its pictures are `docs/assets/<lang>/<page>-<light|dark>.webp`,
+made from the PNGs in `docs/screenshots/` (Chinese, which the Chinese README
+uses) and `docs/screenshots/en/` (English, for `README.md`) with
+`cwebp -q 84 -alpha_q 90`. Retake them with a temporary preview test as in
+"Verify every change" (sample data, the UI in each language through
+`MYGO_LOCALE`, light and dark), and convert again after a UI change. Keep the
+page plain: a sentence and a real screenshot per section, no decoration.
+Check it at desktop and phone width, in both languages and both schemes.
 
 ## Git
 
