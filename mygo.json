@@ -1,6 +1,7 @@
 {
   "name": "Hop",
   "identifier": "io.github.marukolibro.hop",
+  "publisher": "marukolibro",
   "version": "0.4.12",
   "out": "build",
   "updates": {

@@ -120,20 +120,20 @@ Hop 还很年轻,而且有意保持小。没有 Linux 版;没有配置脚本或�
 ### macOS
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/marukolibro/Hop/main/install.sh | sh
+curl -fsSL https://github.com/marukolibro/Hop/releases/latest/download/install.sh | sh
 ```
 
-脚本把 `Hop.app` 装到 `/Applications`(没有写权限时装到 `~/Applications`),不需要 `sudo`,会检查下载文件的大小、版本和代码签名,装好后打开它。再运行一次就会装上新版本。目前的安装包是本机临时签名(ad hoc),用这个脚本安装,而不是下载 `.dmg`,macOS 才能正常打开它。
+脚本把 `Hop.app` 装到 `/Applications`(没有写权限时装到 `~/Applications`),不需要 `sudo`,会检查下载文件的大小和 Ed25519 签名,装好后打开它。再运行一次就会装上新版本;`sh install.sh --uninstall` 可以卸载,数据会保留。目前的安装包是本机临时签名(ad hoc),用这个脚本安装,而不是下载 `.dmg`,macOS 才能正常打开它。
 
 ### Windows
 
 在 PowerShell 里运行:
 
 ```powershell
-irm https://raw.githubusercontent.com/marukolibro/Hop/main/install.ps1 | iex
+irm https://github.com/marukolibro/Hop/releases/latest/download/install.ps1 | iex
 ```
 
-脚本下载最新的安装包,以当前用户身份静默安装(不需要管理员权限),检查装好的版本,然后打开 Hop。Hop 正在运行时会先请它退出。上面的 macOS 命令在 Windows 的 shell(Git Bash)里也能用:它会识别系统,转交给这个脚本。再运行一次就会装上新版本。
+脚本下载最新的安装包,对照发布页的 `SHA256SUMS` 校验它的 SHA-256,以当前用户身份静默安装(不需要管理员权限),然后打开 Hop。Hop 正在运行时会先请它退出。再运行一次就会装上新版本。
 
 也可以从[最新发布](https://github.com/marukolibro/Hop/releases/latest)下载 `hop-setup-<版本>-amd64.exe` 并运行。安装包还没有代码签名,第一次运行时 Windows SmartScreen 会要你确认:点「更多信息 → 仍要运行」。
 

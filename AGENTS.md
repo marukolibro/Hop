@@ -374,16 +374,15 @@ CI job (a disposable runner) sets; never set it on a machine someone uses.
 Hop is for the user and colleagues for now, shipped ad hoc signed without an
 Apple Developer ID, as one universal app for Apple silicon and Intel (mygo
 combines the two pinned cores and helpers). Colleagues install with `curl -fsSL
-https://raw.githubusercontent.com/marukolibro/Hop/main/install.sh | sh`
-(curl sets no quarantine attribute, so Gatekeeper lets the app open). The
-script refuses while Hop Dev is running, quits a running release Hop, verifies
-the archive size and the extracted app's version and ad-hoc code signature,
-and installs it
-user-owned to `/Applications` when the user can write there, else
-`~/Applications`; it removes quarantine only from the installed `Hop.app`
-and never uses sudo. MyGo's manifest carries no SHA-256 and POSIX sh does
-not verify Ed25519, so the bootstrap download relies on HTTPS; the app's own
-updater verifies the signature of every later update. The private key must
+https://github.com/marukolibro/Hop/releases/latest/download/install.sh | sh`
+(curl sets no quarantine attribute, so Gatekeeper lets the app open). That
+script is made by `mygo build` and uploaded with each release, so it matches
+the release it came with: it checks the archive's size and Ed25519 signature
+against `updates.publicKey`, quits a running Hop, replaces the bundle in
+`/Applications` (else `~/Applications`) without sudo, and has `--uninstall`.
+The `install.sh` in this repository only forwards to it, so the address in
+older instructions keeps working, and hands over to PowerShell in Git Bash.
+The private key must
 stay outside the repository and out of output; `mygo.json` only points at
 its path.
 
@@ -396,15 +395,15 @@ the Windows job of `release.yml` copies it over `resources/icon.png` before
 Windows still shows the square one. `docs/icon.png` and `docs/favicon.png` are
 the same tile at 128 and 64 pixels.
 
-`install.ps1` is the Windows counterpart (`irm .../install.ps1 | iex`): it
-reads `update-windows-amd64.json`, downloads `hop-setup-<version>-amd64.exe`
-(`Hop.Setup.<version>.amd64.exe` up to 0.4.12, before MyGo 0.7 renamed it)
-next to the update archive, asks a running Hop to quit (never kills it, which
-would leave the system proxy set), runs it with `/S` (per user, no
-administrator rights), and checks the installed version in the uninstall key.
-`install.sh` hands over to it from Git Bash or MSYS2. It has only been read
-and reasoned about, not run on Windows, so try it on a real PC after changing
-it.
+The Windows counterpart is the `install.ps1` that `mygo build` makes
+(`irm .../releases/latest/download/install.ps1 | iex`): it downloads the
+installer (`hop-setup-<version>-amd64.exe`), checks its SHA-256 against the
+release's `SHA256SUMS`, closes a running Hop and, if Hop is still running ten
+seconds later, stops it, then runs the installer silently (per user, no
+administrator rights). Stopping skips Hop's own quit work, which puts the
+system proxy back. The repository's `install.ps1` only forwards to it. Neither
+script has been run on a real Windows PC by us, so try the release's one on a
+real PC after a MyGo upgrade.
 
 Releases are built by `.github/workflows/release.yml` when a `v<version>`
 tag is pushed: it checks the tag against `mygo.json` and `CHANGELOG.md`,

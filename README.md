@@ -186,12 +186,13 @@ Linux is not supported.
 ### macOS
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/marukolibro/Hop/main/install.sh | sh
+curl -fsSL https://github.com/marukolibro/Hop/releases/latest/download/install.sh | sh
 ```
 
 The script installs `Hop.app` into `/Applications` (or `~/Applications`)
-without `sudo`, checks the download's size, version and code signature, and
-opens it. Running it again installs a newer version. Builds are ad hoc signed
+without `sudo`, checks the download's size and its Ed25519 signature, and
+opens it. Running it again installs a newer version;
+`sh install.sh --uninstall` removes the app and keeps your data. Builds are ad hoc signed
 for now, so installing through the script rather than a downloaded `.dmg` is
 what lets macOS open the app.
 
@@ -200,14 +201,13 @@ what lets macOS open the app.
 In PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/marukolibro/Hop/main/install.ps1 | iex
+irm https://github.com/marukolibro/Hop/releases/latest/download/install.ps1 | iex
 ```
 
-The script downloads the latest installer, runs it silently for the current
-user (no administrator rights), checks the version it installed, and opens Hop.
-It asks Hop to quit first if it is running. The macOS command also works in a
-shell on Windows (Git Bash): it detects the system and hands over to this
-script. Running it again installs a newer version.
+The script downloads the latest installer, checks its SHA-256 against the
+release's `SHA256SUMS`, runs it silently for the current user (no administrator
+rights), and opens Hop. It asks Hop to quit first if it is running. Running it
+again installs a newer version.
 
 Or download `hop-setup-<version>-amd64.exe` from the
 [latest release](https://github.com/marukolibro/Hop/releases/latest) and run it.

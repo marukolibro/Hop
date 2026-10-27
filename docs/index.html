@@ -499,13 +499,13 @@ html[data-lang="zh"] h1 { font-size: 36px; }
       <div class="install">
         <div class="card">
           <h3>macOS</h3>
-          <p><span data-l="zh">Apple 芯片和 Intel 通用。脚本不需要 sudo,会检查下载文件的大小、版本和代码签名,然后打开 Hop。</span><span data-l="en">Apple silicon and Intel in one app. No sudo; the script checks the download's size, version and code signature, then opens Hop.</span></p>
+          <p><span data-l="zh">Apple 芯片和 Intel 通用。脚本不需要 sudo,会校验下载文件的大小和 Ed25519 签名,然后打开 Hop。</span><span data-l="en">Apple silicon and Intel in one app. No sudo; the script checks the download's size and Ed25519 signature, then opens Hop.</span></p>
           <div class="cmd" data-cmd data-fixed="mac"><div class="cmd-row"><code></code><button class="copy" type="button"><span data-l="zh">复制</span><span data-l="en">Copy</span></button></div></div>
           <small><span data-l="zh">现在的安装包是本机临时签名(ad hoc),所以请用这条命令安装,不要用浏览器下载的文件,否则 macOS 会拒绝打开。</span><span data-l="en">Builds are ad hoc signed for now, so install with this command rather than a file downloaded in a browser, which macOS would refuse to open.</span></small>
         </div>
         <div class="card">
           <h3>Windows</h3>
-          <p><span data-l="zh">x64,Windows 10 和 11。在 PowerShell 里运行,为当前用户静默安装,不需要管理员权限。</span><span data-l="en">x64, Windows 10 and 11. Run it in PowerShell; it installs silently for the current user, with no administrator rights.</span></p>
+          <p><span data-l="zh">x64,Windows 10 和 11。在 PowerShell 里运行,校验安装包的 SHA-256,为当前用户静默安装,不需要管理员权限。</span><span data-l="en">x64, Windows 10 and 11. Run it in PowerShell; it checks the installer's SHA-256 and installs silently for the current user, with no administrator rights.</span></p>
           <div class="cmd" data-cmd data-fixed="win"><div class="cmd-row"><code></code><button class="copy" type="button"><span data-l="zh">复制</span><span data-l="en">Copy</span></button></div></div>
           <small><span data-l="zh">也可以从<a href="https://github.com/marukolibro/Hop/releases/latest">发布页</a>下载安装包。安装包还没有代码签名,手动运行时 SmartScreen 会提示:选「更多信息 → 仍要运行」。</span><span data-l="en">Or download the installer from the <a href="https://github.com/marukolibro/Hop/releases/latest">releases page</a>. It isn't code signed yet, so SmartScreen asks when you run it by hand: choose "More info → Run anyway".</span></small>
         </div>
@@ -584,8 +584,8 @@ html[data-lang="zh"] h1 { font-size: 36px; }
   var root = document.documentElement;
   var REPO = "marukolibro/Hop";
   var COMMANDS = {
-    mac: "curl -fsSL https://raw.githubusercontent.com/" + REPO + "/main/install.sh | sh",
-    win: "irm https://raw.githubusercontent.com/" + REPO + "/main/install.ps1 | iex"
+    mac: "curl -fsSL https://github.com/" + REPO + "/releases/latest/download/install.sh | sh",
+    win: "irm https://github.com/" + REPO + "/releases/latest/download/install.ps1 | iex"
   };
   /* detectOS names the visitor's system: "mac", "win", or "other" (a phone, a tablet, Linux). */
   function detectOS(nav) {
