@@ -65,3 +65,27 @@ func bindable(addrs []string) error {
 	}
 	return nil
 }
+
+// dialTimeout bounds one connection to a port being checked.
+const dialTimeout = time.Second
+
+// PortProbe checks a loopback port of this machine.
+type PortProbe struct{}
+
+// Free says whether 127.0.0.1:port can be listened on now.
+func (PortProbe) Free(port int) error {
+	return bindable([]string{net.JoinHostPort("127.0.0.1", strconv.Itoa(port))})
+}
+
+// Listening says whether something accepts a connection on 127.0.0.1:port.
+func (PortProbe) Listening(ctx context.Context, port int) error {
+	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	conn, err := (&net.Dialer{Timeout: dialTimeout}).DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("connect to %s: %w", addr, err)
+	}
+	if err := conn.Close(); err != nil {
+		return fmt.Errorf("close the connection to %s: %w", addr, err)
+	}
+	return nil
+}

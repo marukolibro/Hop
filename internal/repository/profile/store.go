@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,10 @@ const (
 	legacyMetaFileName = "subscription.meta"
 
 	modeFileName = "mode"
+	// mixedPortFileName keeps the proxy port the user chose, apart from the
+	// settings file: a settings save writes the whole struct and must not be
+	// able to put an older port back.
+	mixedPortFileName = "mixed-port"
 )
 
 // bodyFilePattern is the shape of a body file's name: a 24-hex-digit ID and a
@@ -353,6 +358,32 @@ func (s *Store) LoadMode() (string, bool, error) {
 		return "", false, fmt.Errorf("read saved mode (path=%q): %w", path, err)
 	}
 	return string(raw), true, nil
+}
+
+// SaveMixedPort keeps the proxy port the user chose for the next start.
+func (s *Store) SaveMixedPort(port int) error {
+	if err := os.MkdirAll(s.dir, dirPerm); err != nil {
+		return fmt.Errorf("create profile dir (path=%q): %w", s.dir, err)
+	}
+	return writeAtomic(filepath.Join(s.dir, mixedPortFileName), []byte(strconv.Itoa(port)))
+}
+
+// LoadMixedPort returns the proxy port the user chose, and false when none
+// was chosen.
+func (s *Store) LoadMixedPort() (int, bool, error) {
+	path := filepath.Join(s.dir, mixedPortFileName)
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("read saved proxy port (path=%q): %w", path, err)
+	}
+	port, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	if err != nil {
+		return 0, false, fmt.Errorf("saved proxy port is not a number (path=%q content=%q): %w", path, raw, err)
+	}
+	return port, true, nil
 }
 
 // readIndex reads and checks the index. Nothing is papered over: a corrupt

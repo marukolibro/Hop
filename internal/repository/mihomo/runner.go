@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sync"
 
 	"hop/config"
@@ -50,6 +51,24 @@ func (r *Runner) OnRestart(fn func(model.CoreRestart)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.onRestart = fn
+}
+
+// SetMixedPort makes port the proxy port the cores started from now on wait
+// for. A core already running keeps listening where its config says; the
+// config applied to it is what moves it.
+func (r *Runner) SetMixedPort(port int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cfg.MixedPort = port
+}
+
+// ReapLeftover stops a core an earlier Hop left running, which Start and
+// Restart do first anyway. A caller that wants to know whether another program
+// holds a port calls it first, so a leftover core is not taken for one.
+func (r *Runner) ReapLeftover() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return ReapStale(filepath.Join(r.cfg.AppDir, pidFileName), r.cfg.HomeDir)
 }
 
 // Start writes configYAML and starts the core, returning once its

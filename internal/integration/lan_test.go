@@ -165,7 +165,7 @@ func TestLANServiceReloadsTheCore(t *testing.T) {
 	}
 
 	credentials := lan.NewCredentials(h.cfg.AppDir)
-	lanService := service.NewLANService(h.lan, credentials, lan.Source{}, h.service, testMixedPort)
+	lanService := service.NewLANService(h.lan, credentials, lan.Source{}, h.service, h.port)
 	get := func(host string, user *url.Userinfo) int {
 		t.Helper()
 		proxy := &url.URL{Scheme: "http", Host: net.JoinHostPort(host, fmt.Sprint(testMixedPort)), User: user}

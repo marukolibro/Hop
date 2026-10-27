@@ -135,10 +135,11 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 							})
 						})
 					},
+					d.portRow(c, t),
 					func() {
 						settingRow(c, t, "终端代理", "终端不走系统代理,粘贴这条命令后当前窗口就经过 Hop;增强模式下不需要", func() {
 							button(c, buttonSpec{label: "复制命令", icon: iconTerminal, style: mainSoftButton(t)}, func() {
-								c.WriteClipboard(service.TerminalProxyCommand(runtime.GOOS, d.proxyAddress))
+								c.WriteClipboard(service.TerminalProxyCommand(runtime.GOOS, d.proxyAddress()))
 								c.Toast("已复制终端代理命令,粘贴到终端即可")
 							})
 						})

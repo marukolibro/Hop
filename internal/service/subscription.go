@@ -97,6 +97,8 @@ type SubscriptionService struct {
 	tun *TunFlag
 	// lan is the LAN access every config built here carries.
 	lan *LANState
+	// port is the proxy port every config built here carries.
+	port *MixedPortState
 	// mu serializes every read and write: the core and the store are only ever
 	// changed one operation at a time, and no read races a commit sweeping old
 	// bodies.
@@ -107,12 +109,21 @@ type SubscriptionService struct {
 // settings, validates it with validator, applies it through applier and
 // reads the mode the core runs in through core. customRules are matched
 // ahead of every profile's own rules. tun is the flag saying whether TUN is
-// on, and lan the LAN access.
-func NewSubscriptionService(downloader Downloader, store SubscriptionStore, customRules CustomRuleStore, applier ConfigApplier, validator ConfigValidator, core ModeReader, settings RuntimeSettings, tun *TunFlag, lan *LANState) *SubscriptionService {
+// on, lan the LAN access and port the proxy port, which replaces the one in
+// settings in every config.
+func NewSubscriptionService(downloader Downloader, store SubscriptionStore, customRules CustomRuleStore, applier ConfigApplier, validator ConfigValidator, core ModeReader, settings RuntimeSettings, tun *TunFlag, lan *LANState, port *MixedPortState) *SubscriptionService {
 	return &SubscriptionService{
 		downloader: downloader, store: store, customRules: customRules,
-		applier: applier, validator: validator, core: core, settings: settings, tun: tun, lan: lan,
+		applier: applier, validator: validator, core: core, settings: settings, tun: tun, lan: lan, port: port,
 	}
+}
+
+// baseSettings are the settings every config is built under, with the proxy
+// port the user has now.
+func (s *SubscriptionService) baseSettings() RuntimeSettings {
+	settings := s.settings
+	settings.MixedPort = s.port.Get()
+	return settings
 }
 
 // List returns the subscriptions page: one summary per stored
@@ -675,7 +686,7 @@ func (s *SubscriptionService) Delete(ctx context.Context, id string, replacement
 func (s *SubscriptionService) StartupConfig() ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.startupConfigWith(s.settings)
+	return s.startupConfigWith(s.baseSettings())
 }
 
 // StartupConfigTun returns the startup config with TUN on or off, on the
@@ -683,7 +694,7 @@ func (s *SubscriptionService) StartupConfig() ([]byte, error) {
 func (s *SubscriptionService) StartupConfigTun(tun bool) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	settings := s.settings
+	settings := s.baseSettings()
 	settings.Tun = tun
 	return s.startupConfigWith(settings)
 }
@@ -767,6 +778,30 @@ func (s *SubscriptionService) ReloadRuntime(ctx context.Context) error {
 		return err
 	}
 	config, err := s.runtimeConfig(active.Raw, active.Rules, settings)
+	if err != nil {
+		return err
+	}
+	if err := s.validate(ctx, config); err != nil {
+		return err
+	}
+	if err := s.applier.ApplyConfig(ctx, config); err != nil {
+		return fmt.Errorf("the core did not accept the config: %w", err)
+	}
+	return nil
+}
+
+// ApplyCurrent rebuilds the config the core would start with now, a stored
+// subscription or the bootstrap profile when none is in use, checks it and
+// applies it. It is how a change of the proxy port reaches the core, which
+// holds a config even before any subscription is imported.
+func (s *SubscriptionService) ApplyCurrent(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings, err := s.liveSettings(ctx)
+	if err != nil {
+		return err
+	}
+	config, err := s.startupConfigWith(settings)
 	if err != nil {
 		return err
 	}
@@ -927,7 +962,7 @@ func (s *SubscriptionService) liveSettings(ctx context.Context) (RuntimeSettings
 	if err != nil {
 		return RuntimeSettings{}, fmt.Errorf("read the outbound mode the core runs in: %w", err)
 	}
-	settings := s.settings
+	settings := s.baseSettings()
 	settings.Mode = mode
 	settings.Tun = s.tun.On()
 	return settings, nil

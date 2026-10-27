@@ -105,15 +105,16 @@ type LANService struct {
 	credentials LANCredentialStore
 	addresses   LANAddressSource
 	reloader    RuntimeReloader
-	port        int
+	port        *MixedPortState
 	// mu serializes changes, so two never reload at once.
 	mu sync.Mutex
 }
 
 // NewLANService returns a service setting state, keeping the account in
 // credentials, reading addresses from addresses and reloading through
-// reloader; port is the proxy port devices connect to.
-func NewLANService(state *LANState, credentials LANCredentialStore, addresses LANAddressSource, reloader RuntimeReloader, port int) *LANService {
+// reloader; port is the proxy port devices connect to, wherever the user has
+// put it.
+func NewLANService(state *LANState, credentials LANCredentialStore, addresses LANAddressSource, reloader RuntimeReloader, port *MixedPortState) *LANService {
 	return &LANService{state: state, credentials: credentials, addresses: addresses, reloader: reloader, port: port}
 }
 
@@ -178,8 +179,9 @@ func (s *LANService) Status() (model.LANStatus, error) {
 	if err != nil {
 		return model.LANStatus{}, err
 	}
+	port := strconv.Itoa(s.port.Get())
 	for _, addr := range addrs {
-		status.Addresses = append(status.Addresses, net.JoinHostPort(addr.String(), strconv.Itoa(s.port)))
+		status.Addresses = append(status.Addresses, net.JoinHostPort(addr.String(), port))
 	}
 	return status, nil
 }

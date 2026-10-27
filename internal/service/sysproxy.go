@@ -28,12 +28,12 @@ var ErrSystemProxyTaken = errors.New("another app holds the system proxy")
 type SystemProxyService struct {
 	proxy ProxySetter
 	host  string
-	port  int
+	port  *MixedPortState
 }
 
 // NewSystemProxyService returns a service pointing the system proxy at
-// Hop's mixed port, host:port.
-func NewSystemProxyService(proxy ProxySetter, host string, port int) *SystemProxyService {
+// Hop's mixed port, host:port, wherever the user has put it.
+func NewSystemProxyService(proxy ProxySetter, host string, port *MixedPortState) *SystemProxyService {
 	return &SystemProxyService{proxy: proxy, host: host, port: port}
 }
 
@@ -43,7 +43,7 @@ func (s *SystemProxyService) Status(ctx context.Context) (model.SystemProxyStatu
 	if err != nil {
 		return model.SystemProxyStatus{}, err
 	}
-	return ProxyStatusOf(state, s.host, s.port), nil
+	return ProxyStatusOf(state, s.host, s.port.Get()), nil
 }
 
 // Enable points the system proxy at Hop, unless another app holds it.
@@ -55,10 +55,30 @@ func (s *SystemProxyService) Enable(ctx context.Context) error {
 	if status.Owner == model.ProxyOwnerOther {
 		return fmt.Errorf("%w (points at %s)", ErrSystemProxyTaken, status.Other)
 	}
-	if err := s.proxy.Set(ctx, s.host, s.port); err != nil {
-		return fmt.Errorf("point the system proxy at Hop (%s): %w", net.JoinHostPort(s.host, strconv.Itoa(s.port)), err)
+	port := s.port.Get()
+	if err := s.proxy.Set(ctx, s.host, port); err != nil {
+		return fmt.Errorf("point the system proxy at Hop (%s): %w", net.JoinHostPort(s.host, strconv.Itoa(port)), err)
 	}
-	slog.Info("system proxy points at hop", "host", s.host, "port", s.port)
+	slog.Info("system proxy points at hop", "host", s.host, "port", port)
+	return nil
+}
+
+// Follow moves a system proxy that pointed at Hop on port previous to the
+// port Hop has now. Another app's proxy, none, or one already elsewhere is
+// left as it is: only Hop's own is ever changed.
+func (s *SystemProxyService) Follow(ctx context.Context, previous int) error {
+	state, err := s.proxy.Current(ctx)
+	if err != nil {
+		return err
+	}
+	if ProxyStatusOf(state, s.host, previous).Owner != model.ProxyOwnerHop {
+		return nil
+	}
+	port := s.port.Get()
+	if err := s.proxy.Set(ctx, s.host, port); err != nil {
+		return fmt.Errorf("move the system proxy from port %d to %d: %w", previous, port, err)
+	}
+	slog.Info("system proxy follows hop to its new port", "host", s.host, "from", previous, "to", port)
 	return nil
 }
 

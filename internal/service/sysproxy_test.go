@@ -57,7 +57,7 @@ func TestSystemProxyNeverTouchesAnotherApps(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			proxy := &recordingProxy{state: tc.state}
-			s := NewSystemProxyService(proxy, "127.0.0.1", 17890)
+			s := NewSystemProxyService(proxy, "127.0.0.1", NewMixedPortState(17890))
 			status, err := s.Status(t.Context())
 			if err != nil {
 				t.Fatal(err)
@@ -79,7 +79,7 @@ func TestSystemProxyNeverTouchesAnotherApps(t *testing.T) {
 
 	t.Run("unreadable", func(t *testing.T) {
 		proxy := &recordingProxy{readErr: errors.New("scutil failed")}
-		s := NewSystemProxyService(proxy, "127.0.0.1", 17890)
+		s := NewSystemProxyService(proxy, "127.0.0.1", NewMixedPortState(17890))
 		if err := s.Enable(t.Context()); err == nil {
 			t.Fatal("Enable succeeded without reading the system proxy")
 		}

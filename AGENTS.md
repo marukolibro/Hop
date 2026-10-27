@@ -46,7 +46,8 @@ on this machine while developing Hop. Hop must never interfere with it.
 - A leftover core is stopped only through `mihomo.ReapStale`, which acts on
   the pid in Hop's own `mihomo.pid` and only when that process's command line
   carries Hop's home directory. Never kill a process by name or by port.
-- Hop listens only on `127.0.0.1:17890` (mixed) and `127.0.0.1:19090`
+- Hop listens only on `127.0.0.1:17890` (mixed, or the port the user chose in
+  settings, see below) and `127.0.0.1:19090`
   (controller), plus `127.0.0.1:17853` (the core's DNS, opened only for a
   subscription that points its node servers at other names, see below) and
   `127.0.0.1:17900`-`17907` (the probe listeners, see below). The
@@ -58,6 +59,28 @@ on this machine while developing Hop. Hop must never interfere with it.
   the installed Hop's TUN runs under it.
   The integration tests use `17891`/`19091`/`17854`/`17920`-`17927`. Check a port is free before
   adding one.
+- The mixed port is the one port the user can change (`service/mixed_port.go`,
+  settings 代理端口). `MixedPortState` is the live value, shared like `TunFlag`:
+  `SubscriptionService` overlays it on every config it builds (`baseSettings`),
+  and the system proxy, the LAN addresses, the runner's port wait and Hop's own
+  proxy clients read it, so nothing keeps an old port. Never copy
+  `cfg.MixedPort` into a long-lived value. `MixedPortService.Change` checks the
+  port (1024-65535, not one of `Config.OwnPorts`, free to bind), reloads the
+  core through `SubscriptionService.ApplyCurrent` (which also covers the
+  bootstrap profile), then dials the new port: the core answers a reload with
+  204 even when it could not bind the port, and has already dropped the old
+  listener, so a port that does not answer puts the old one back. Only then the
+  system proxy follows (`SystemProxyService.Follow`, only a proxy that pointed
+  at Hop on the old port) and the choice is saved (`mixed-port` file, apart from
+  `settings.json` so a settings save cannot put an older one back). The saved
+  port is validated at start (a corrupt or out-of-range one is an error). If the
+  core cannot start and the chosen port is held by another program, `startCore`
+  runs this time on the instance's own port (`FallBack`, only then, so a leftover
+  core or one the helper keeps under TUN is never mistaken for a taken port);
+  the choice stays saved and the settings row says which port was skipped. The dial cannot tell
+  the core from another program that took the port between the check and the
+  bind. Tests keep `17891`; `TestMixedPortChange` covers the change, the
+  rollback and the refusals against a real core.
 - LAN access (`service/lan.go`) is the one thing that opens the mixed port to
   the network, and only while the user turned it on (`Settings.AllowLAN`, off
   by default). `LANState` is the live value every config built by

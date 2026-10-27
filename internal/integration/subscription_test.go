@@ -171,6 +171,8 @@ type harness struct {
 	service *service.SubscriptionService
 	// lan is the LAN access every config the service builds carries.
 	lan *service.LANState
+	// port is the proxy port every config the service builds carries.
+	port *service.MixedPortState
 }
 
 // newHarness builds the harness around appDir, opening the store there.
@@ -198,8 +200,9 @@ func newHarness(t *testing.T, appDir string) *harness {
 		BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop", Mode: model.ModeRule,
 	}
 	lanState := service.NewLANState()
+	portState := service.NewMixedPortState(testMixedPort)
 	return &harness{
-		cfg: cfg, client: client, store: store, lan: lanState,
+		cfg: cfg, client: client, store: store, lan: lanState, port: portState,
 		service: service.NewSubscriptionService(
 			subscription.NewFetcher(&http.Client{Timeout: 10 * time.Second}),
 			store,
@@ -210,6 +213,7 @@ func newHarness(t *testing.T, appDir string) *harness {
 			settings,
 			service.NewTunFlag(),
 			lanState,
+			portState,
 		),
 	}
 }

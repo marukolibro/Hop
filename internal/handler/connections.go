@@ -53,7 +53,7 @@ func (d *Dashboard) connectionsPage(c *ui.Context, t *ui.Theme) {
 		switch {
 		case len(conns.Active) == 0:
 			emptyState(c, t, "还没有连接经过 Hop",
-				fmt.Sprintf("Hop 没有设为系统代理。把浏览器或应用的代理设为 %s(HTTP 或 SOCKS5),它们的连接就会出现在这里。", d.proxyAddress))
+				fmt.Sprintf("Hop 没有设为系统代理。把浏览器或应用的代理设为 %s(HTTP 或 SOCKS5),它们的连接就会出现在这里。", d.proxyAddress()))
 		case len(visible) == 0:
 			emptyState(c, t, "没有匹配的连接", fmt.Sprintf("没有连接的主机、规则或节点包含「%s」。", strings.TrimSpace(d.connections.filter)))
 		default:

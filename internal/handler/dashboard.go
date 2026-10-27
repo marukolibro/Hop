@@ -70,6 +70,14 @@ type LANService interface {
 	ResetAccount(ctx context.Context) error
 }
 
+// PortService changes the port Hop's proxy listens on.
+type PortService interface {
+	Current() int
+	// Skipped is the port the user chose that could not be used at start.
+	Skipped() int
+	Change(ctx context.Context, port int) error
+}
+
 // UnlockService finds which services work through which nodes.
 type UnlockService interface {
 	Detect(ctx context.Context, report func(service.UnlockReport)) error
@@ -193,6 +201,7 @@ type Services struct {
 	ExitIP        ExitIPService
 	Unlock        UnlockService
 	LAN           LANService
+	Port          PortService
 }
 
 // Updater runs fn on the window's UI thread, as mygo.Window does.
@@ -301,8 +310,9 @@ type logsState struct {
 // its results over through Updater.Update.
 type Dashboard struct {
 	services Services
-	// proxyAddress is where apps send traffic to use Hop, as host:port.
-	proxyAddress string
+	// proxyHost is the address Hop's proxy listens on; the port is the
+	// service's, since the user can change it.
+	proxyHost string
 	// appVersion is Hop's own version, as the settings row shows it.
 	appVersion string
 
@@ -318,6 +328,7 @@ type Dashboard struct {
 	sysProxy     sysProxyState
 	tun          tunState
 	lan          lanUIState
+	port         portUIState
 	// autoBusy is set while the background check refreshes what is due; it
 	// locks the controls like any other mutation.
 	autoBusy bool
@@ -406,16 +417,17 @@ type Dashboard struct {
 
 // NewDashboard returns a dashboard that has not started loading yet, on the
 // settings saved from the last run.
-func NewDashboard(services Services, proxyAddress string, settings model.Settings, appVersion string) *Dashboard {
+func NewDashboard(services Services, proxyHost string, settings model.Settings, appVersion string) *Dashboard {
 	d := &Dashboard{
 		services:     services,
-		proxyAddress: proxyAddress,
+		proxyHost:    proxyHost,
 		appVersion:   appVersion,
 		settings:     newSettingsState(settings),
 		status:       statusConnecting,
 		coreRestarts: make(chan model.CoreRestart, 8),
 	}
 	d.subscription.busyIDs = map[string]struct{}{}
+	d.port.input = strconv.Itoa(services.Port.Current())
 	if services.AppUpdate != nil {
 		d.appUpdate.enabled = services.AppUpdate.Enabled()
 		d.appUpdate.disabledReason = services.AppUpdate.DisabledReason()
@@ -817,6 +829,7 @@ const (
 	actionTestLatency         action = "测速失败"
 	actionCheckUnlock         action = "解锁检测失败"
 	actionLAN                 action = "设置局域网访问失败"
+	actionPort                action = "修改代理端口失败"
 	actionUseSubscription     action = "使用订阅失败"
 	actionAddSubscription     action = "添加订阅失败"
 	actionEditSubscription    action = "修改订阅失败"

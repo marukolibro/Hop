@@ -48,7 +48,7 @@ func (d *Dashboard) applyProxyStatus(status model.SystemProxyStatus, err error) 
 // Clearing it also ends the connections still open through Hop.
 func (d *Dashboard) beginSystemProxy(on bool) {
 	s := &d.sysProxy
-	if s.busy {
+	if s.busy || d.port.busy {
 		return
 	}
 	s.busy = true

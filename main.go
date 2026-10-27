@@ -113,6 +113,18 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
+	// The proxy port is the one the user chose, if any; everything below
+	// reads it from portState, which the port service moves while Hop runs.
+	ownPorts, err := cfg.OwnPorts()
+	if err != nil {
+		return err
+	}
+	mixedPort, err := service.StartupMixedPort(store, cfg.MixedPort, ownPorts)
+	if err != nil {
+		return err
+	}
+	cfg.MixedPort = mixedPort
+	portState := service.NewMixedPortState(mixedPort)
 	traffic, err := service.NewTrafficService(store)
 	if err != nil {
 		return err
@@ -154,6 +166,7 @@ func run() (err error) {
 		settings,
 		tunFlag,
 		lanState,
+		portState,
 	)
 
 	settingsService := service.NewSettingsService(store)
@@ -164,7 +177,7 @@ func run() (err error) {
 	mygo.Theme.SetSource(handler.AppearanceSource(userSettings.Appearance))
 	// The LAN access the user left on is part of the first config the core
 	// starts with.
-	lanService := service.NewLANService(lanState, lan.NewCredentials(cfg.AppDir), lan.Source{}, profiles, cfg.MixedPort)
+	lanService := service.NewLANService(lanState, lan.NewCredentials(cfg.AppDir), lan.Source{}, profiles, portState)
 	if err := lanService.Prepare(userSettings.AllowLAN, !userSettings.LANNoPassword); err != nil {
 		return err
 	}
@@ -193,7 +206,7 @@ func run() (err error) {
 
 	coreService := service.NewCoreService(
 		client,
-		corerelease.NewSource(hopProxyClient(cfg.MixedPort), corerelease.ReleaseAPI),
+		corerelease.NewSource(hopProxyClient(portState), corerelease.ReleaseAPI),
 		corestore.New(cfg.AppDir),
 		runner,
 		mihomo.NewCoreChecker(mihomo.ConfigPath(cfg.HomeDir), validateDir, validationTimeout),
@@ -206,7 +219,7 @@ func run() (err error) {
 	appUpdateService := service.NewAppUpdateService()
 	customRulesService := service.NewCustomRulesService(store, profiles)
 	geodataService := service.NewGeodataService(
-		geodata.NewSource(geodataDownloadClient(cfg.MixedPort), geodata.DefaultBaseURL),
+		geodata.NewSource(geodataDownloadClient(portState), geodata.DefaultBaseURL),
 		mihomo.NewConfigValidator(cfg.MihomoBinary, validateDir, validationTimeout),
 		profiles,
 		store,
@@ -218,7 +231,7 @@ func run() (err error) {
 		cfg.HomeDir,
 		validateDir,
 	)
-	systemProxy := service.NewSystemProxyService(sysproxy.New(), bindAddress, cfg.MixedPort)
+	systemProxy := service.NewSystemProxyService(sysproxy.New(), bindAddress, portState)
 	helperTool, toolErr := helper.BundledToolPath(resourcesDir)
 	if toolErr != nil {
 		// The app runs without TUN; turning it on then fails, naming what
@@ -273,6 +286,7 @@ func run() (err error) {
 	if tunErr != nil {
 		slog.Error("could not settle TUN at start; running Hop's own core", "error", tunErr)
 	}
+	portService := service.NewMixedPortService(portState, store, mihomo.PortProbe{}, profiles, systemProxy, runner, ownPorts)
 	dashboard := handler.NewDashboard(handler.Services{
 		Proxies:       service.NewProxyService(client),
 		Subscriptions: profiles,
@@ -287,15 +301,16 @@ func run() (err error) {
 		SystemProxy:   systemProxy,
 		Tun:           tun,
 		LoginItem:     mygo.App,
-		ExitIP:        service.NewExitIPService(exitip.NewClient(exitip.TraceURL, hopProxyClient(cfg.MixedPort))),
+		ExitIP:        service.NewExitIPService(exitip.NewClient(exitip.TraceURL, hopProxyClient(portState))),
 		Unlock:        service.NewUnlockService(client, unlockLanes(cfg.ProbePort)),
 		LAN:           lanService,
-	}, net.JoinHostPort(bindAddress, strconv.Itoa(cfg.MixedPort)), userSettings, appVersion)
+		Port:          portService,
+	}, bindAddress, userSettings, appVersion)
 	// The dashboard hears what supervision does after a crash before the
 	// core starts, so the first crash cannot go unreported.
 	runner.OnRestart(dashboard.ReportCoreRestart)
 	if !tunOn {
-		if err := runner.Start(startupConfig); err != nil {
+		if err := startCore(ctx, runner, profiles, portService, mihomo.PortProbe{}, instance.MixedPort, startupConfig); err != nil {
 			return err
 		}
 	}
@@ -340,6 +355,40 @@ func run() (err error) {
 	}
 	// The defer and OnQuit listener above have released the proxy and core.
 	return runErr
+}
+
+// startCore starts Hop's own core on startupConfig. When the proxy port the
+// user chose is held by another program, Hop runs this time on the instance's
+// own port, which the settings row says; the choice stays saved for the next
+// start. A listener on the port, once a leftover core of an earlier Hop is
+// stopped, is another program, and is seen at once; a core that fails to start
+// with the port taken is the same case seen late, after the wait for a port to
+// free up. Any other failure is returned as it is.
+func startCore(ctx context.Context, runner *mihomo.Runner, profiles *service.SubscriptionService, ports *service.MixedPortService, probe mihomo.PortProbe, instancePort int, startupConfig []byte) error {
+	chosen := ports.Current()
+	fallBack := func(cause error) error {
+		slog.Warn("the proxy port the user chose is held by another program; using the default", "chosen", chosen, "default", instancePort, "error", cause)
+		ports.FallBack(instancePort)
+		fallbackConfig, err := profiles.StartupConfig()
+		if err != nil {
+			return fmt.Errorf("build the config for the default proxy port: %w", err)
+		}
+		return runner.Start(fallbackConfig)
+	}
+	if chosen == instancePort {
+		return runner.Start(startupConfig)
+	}
+	if err := runner.ReapLeftover(); err != nil {
+		return err
+	}
+	if listenErr := probe.Listening(ctx, chosen); listenErr == nil {
+		return fallBack(fmt.Errorf("something listens on port %d", chosen))
+	}
+	startErr := runner.Start(startupConfig)
+	if startErr == nil || probe.Free(chosen) == nil {
+		return startErr
+	}
+	return fallBack(startErr)
 }
 
 // helperConnection is what the config applier and the TUN service need of the
@@ -387,8 +436,11 @@ func windowVibrancy() mygo.Vibrancy {
 // hopProxyClient reaches the internet through Hop's own core, so a download
 // or lookup works wherever the subscription's lines reach. It does not touch
 // the system proxy or any other client's.
-func hopProxyClient(mixedPort int) *http.Client {
-	return &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(hopProxyURL(mixedPort))}}
+func hopProxyClient(port *service.MixedPortState) *http.Client {
+	return &http.Client{Transport: &http.Transport{Proxy: func(*http.Request) (*url.URL, error) {
+		// The port is read for each request: the user can move it while Hop runs.
+		return hopProxyURL(port.Get()), nil
+	}}}
 }
 
 // unlockLanes is one checker per probe lane, each through its own listener,
@@ -412,8 +464,8 @@ func hopProxyURL(mixedPort int) *url.URL {
 // geodataDownloadClient reaches the databases through the same proxy, with
 // an overall timeout: a stuck connection must not hold the update lock
 // forever.
-func geodataDownloadClient(mixedPort int) *http.Client {
-	client := hopProxyClient(mixedPort)
+func geodataDownloadClient(port *service.MixedPortState) *http.Client {
+	client := hopProxyClient(port)
 	client.Timeout = geodataDownloadTimeout
 	return client
 }

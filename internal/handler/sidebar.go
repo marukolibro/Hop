@@ -105,8 +105,8 @@ func (d *Dashboard) groupSidebar(c *ui.Context, t *ui.Theme) {
 		ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Padding(0, gapSmall).Children(func() {
 			d.coreStatus(c, t)
 			ui.Box(c).Grow(1)
-			captionText(c, t, proxyPort(d.proxyAddress)).FontFeatures("tnum").NoWrap().
-				Tooltip("代理地址 " + d.proxyAddress)
+			captionText(c, t, proxyPort(d.proxyAddress())).FontFeatures("tnum").NoWrap().
+				Tooltip("代理地址 " + d.proxyAddress())
 		})
 	})
 }

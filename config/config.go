@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"hop/internal/model"
@@ -205,4 +207,30 @@ func newSecret() (string, error) {
 		return "", fmt.Errorf("generate controller secret: %w", err)
 	}
 	return hex.EncodeToString(raw), nil
+}
+
+// OwnPorts are the ports Hop's other listeners hold: the controller, the
+// core's DNS and the unlock checks' lanes. The proxy port may not take them.
+func (c Config) OwnPorts() ([]int, error) {
+	var ports []int
+	for _, addr := range []string{c.ControllerAddr, c.NodeDNSAddr} {
+		if addr == "" {
+			continue
+		}
+		_, raw, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, fmt.Errorf("listen address is not host:port (addr=%q): %w", addr, err)
+		}
+		port, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("listen address has no numeric port (addr=%q): %w", addr, err)
+		}
+		ports = append(ports, port)
+	}
+	if c.ProbePort > 0 {
+		for lane := range model.ProbeLanes {
+			ports = append(ports, c.ProbePort+lane)
+		}
+	}
+	return ports, nil
 }
