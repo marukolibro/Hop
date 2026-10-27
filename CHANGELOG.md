@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.4.14
+
+- 修复:macOS 上的应用图标(Dock、启动台、访达)是一整块直角方形,和其他应用的圆角图标不搭。现在换成了圆角方块、四周留有透明边距、带淡淡投影的图标,和 Windows 的一致。更新后图标可能还显示旧的,重新打开一次或运行 `killall Dock` 即可刷新
+
 ## 0.4.13
 
 - 改进:安装命令换成发布页上随每个版本一起发布的脚本:`curl -fsSL https://github.com/marukolibro/Hop/releases/latest/download/install.sh | sh`(macOS)和 `irm https://github.com/marukolibro/Hop/releases/latest/download/install.ps1 | iex`(Windows)。macOS 的会校验安装包的 Ed25519 签名,Windows 的会对照 `SHA256SUMS` 校验安装包;macOS 上 `sh install.sh --uninstall` 可以卸载。旧地址(raw.githubusercontent.com 上的 install.sh、install.ps1)仍然可用

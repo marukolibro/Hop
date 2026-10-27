@@ -386,13 +386,15 @@ The private key must
 stay outside the repository and out of output; `mygo.json` only points at
 its path.
 
-Icons: `resources/icon.png` is a square that fills the canvas, which macOS
-masks into its rounded shape. Windows masks nothing, so the Windows build
-swaps in `packaging/icon-windows.png` (the same art as a rounded tile on a
-transparent canvas, with a soft shadow) for the executable and the installer:
-the Windows job of `release.yml` copies it over `resources/icon.png` before
-`mygo build`. Keep the two in step when the artwork changes; `mygo dev` on
-Windows still shows the square one. `docs/icon.png` and `docs/favicon.png` are
+Icons: `resources/icon.png` is a square that fills the canvas. Neither macOS
+nor Windows masks an icon, and `mygo` only scales it into the `.icns` and
+`.ico`, so a release build swaps in a rounded one: the Windows job of
+`release.yml` copies `packaging/icon-windows.png` (the art as a rounded tile on
+a transparent canvas, with a soft shadow) and the macOS job copies
+`packaging/icon-macos.png` (the same on the macOS icon grid: an 824 pixel tile
+centred in 1024, made by `swift scripts/macos-icon.swift resources/icon.png
+packaging/icon-macos.png`) over `resources/icon.png` before `mygo build`. Keep
+them in step when the artwork changes; `mygo dev` still shows the square one. `docs/icon.png` and `docs/favicon.png` are
 the same tile at 128 and 64 pixels.
 
 The Windows counterpart is the `install.ps1` that `mygo build` makes
