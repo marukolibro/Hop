@@ -1,441 +1,491 @@
 <!doctype html>
-<html lang="zh-CN" data-palette="paper" data-mode="auto" data-lang="zh">
+<html lang="zh-CN" data-lang="zh" data-scheme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Hop — 原生 mihomo 代理客户端</title>
-<meta name="description" content="Hop is a native macOS and Windows proxy client for the mihomo core. Built in Go with MyGo: drawn natively, no webview.">
-<meta name="theme-color" content="#F4F4F4">
-<meta property="og:title" content="Hop — a native proxy client for mihomo">
-<meta property="og:description" content="原生的 macOS 与 Windows 代理客户端,基于 mihomo 内核,界面由 Go 与 MyGo 原生绘制。">
+<title>Hop – 原生 mihomo 代理客户端 · A native mihomo proxy client</title>
+<meta name="description" content="Hop is a native macOS and Windows proxy client for the mihomo core. Drawn in Go with MyGo, no webview. / 原生的 macOS 与 Windows 代理客户端,基于 mihomo 内核,没有 WebView。">
+<meta name="theme-color" content="#fbfbfa">
+<meta property="og:title" content="Hop – a native proxy client for mihomo">
+<meta property="og:description" content="原生的 macOS 与 Windows 代理客户端,基于 mihomo 内核,没有 WebView。">
 <meta property="og:image" content="https://raw.githubusercontent.com/marukolibro/Hop/main/docs/social-preview.png">
 <link rel="icon" type="image/png" href="favicon.png">
+<script>
+/* Set the language and the colour scheme before the first paint. */
+(function () {
+  var root = document.documentElement;
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  var lang = load("hop.lang");
+  if (lang !== "zh" && lang !== "en") lang = (navigator.language || "").toLowerCase().indexOf("zh") === 0 ? "zh" : "en";
+  var theme = load("hop.theme");
+  var dark = theme === "dark" || (theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  root.dataset.lang = lang;
+  root.dataset.scheme = dark ? "dark" : "light";
+  root.lang = lang === "zh" ? "zh-CN" : "en";
+})();
+</script>
 <style>
-/* ---------- tokens: three palettes x light / dark, taken from the app ---------- */
 :root {
-  --bg: #F4F4F4; --ink: #111111; --muted: #666666; --accent: #447DFC; --panel: #EBEBEB; --on-ink: #F4F4F4;
-  --line: color-mix(in srgb, var(--ink) 13%, transparent);
-  --rule: var(--ink);
-  --gut: max(16px, env(safe-area-inset-left, 0px));
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-  --sans: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --bg: #fbfbfa; --bg-soft: #f3f3f1; --ink: #1c1c1e; --muted: #6b6b70; --line: rgba(0, 0, 0, .09);
+  --accent: #2468e8; --on-accent: #ffffff; --card: #ffffff; --code: #f0f0ee;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 24px 60px -12px rgba(30, 50, 90, .28);
+  --gutter: max(20px, env(safe-area-inset-left, 0px));
   color-scheme: light;
 }
-:root[data-palette="ocean"] { --bg: #F5F8FD; --ink: #1D2B43; --muted: #4C5A6F; --accent: #237ABB; --panel: #E6EDF8; --on-ink: #F5F8FD; }
-:root[data-palette="dusk"]  { --bg: #F8F7FC; --ink: #1D2B43; --muted: #4C5A6F; --accent: #237ABB; --panel: #ECE8F6; --on-ink: #F8F7FC; }
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-mode="light"]) { --bg: #161616; --ink: #EDEDED; --muted: #A0A0A0; --accent: #7AA2FF; --panel: #202020; --on-ink: #161616; color-scheme: dark; }
-  :root:not([data-mode="light"])[data-palette="ocean"] { --bg: #19233A; --ink: #F0F4FC; --muted: #B7C5DC; --accent: #6CB8FF; --panel: #202C47; --on-ink: #19233A; }
-  :root:not([data-mode="light"])[data-palette="dusk"]  { --bg: #1D2237; --ink: #F0F4FC; --muted: #B7C5DC; --accent: #6CB8FF; --panel: #272B45; --on-ink: #1D2237; }
+:root[data-scheme="dark"] {
+  --bg: #0e0f11; --bg-soft: #17181b; --ink: #f1f1f3; --muted: #9b9ba3; --line: rgba(255, 255, 255, .11);
+  --accent: #6aa0ff; --on-accent: #0e0f11; --card: #17181b; --code: #1d1e22;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 24px 60px -12px rgba(0, 0, 0, .7);
+  color-scheme: dark;
 }
-:root[data-mode="dark"] { --bg: #161616; --ink: #EDEDED; --muted: #A0A0A0; --accent: #7AA2FF; --panel: #202020; --on-ink: #161616; color-scheme: dark; }
-:root[data-mode="dark"][data-palette="ocean"] { --bg: #19233A; --ink: #F0F4FC; --muted: #B7C5DC; --accent: #6CB8FF; --panel: #202C47; --on-ink: #19233A; }
-:root[data-mode="dark"][data-palette="dusk"]  { --bg: #1D2237; --ink: #F0F4FC; --muted: #B7C5DC; --accent: #6CB8FF; --panel: #272B45; --on-ink: #1D2237; }
-
-/* ---------- base ---------- */
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; transition: background .35s, color .35s; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 17px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+html[data-lang="zh"] [data-l="en"], html[data-lang="en"] [data-l="zh"] { display: none !important; }
 a { color: inherit; }
-button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-::selection { background: var(--accent); color: var(--bg); }
-span[lang="en"] { display: none; }
-:root[data-lang="en"] span[lang="zh"] { display: none; }
-:root[data-lang="en"] span[lang="en"] { display: inline; }
-.mono { font-family: var(--mono); font-size: 12px; letter-spacing: .02em; }
-.label { font: 600 11px/1.3 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+img { max-width: 100%; display: block; }
+code, .mono { font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace; }
+.wrap { width: 100%; max-width: 1120px; margin: 0 auto; padding-inline: var(--gutter); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+.narrow { max-width: 680px; margin-inline: auto; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 
-/* ---------- the 12-column grid ---------- */
-.frame { max-width: 1600px; margin-inline: auto; padding-inline: var(--gut); }
-.cols { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-.cols .frame { height: 100%; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); }
-.cols i { border-left: 1px solid var(--line); }
-.cols i:last-child { border-right: 1px solid var(--line); }
-.g { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); }
-.g > * { grid-column: var(--c, 1 / -1); padding-inline: 10px; min-width: 0; }
-main, header, footer { position: relative; z-index: 1; }
-
-/* ---------- top bar ---------- */
-.nums { border-bottom: 0; }
-.nums span { grid-column: auto; font: 11px/1 var(--mono); color: var(--muted); padding-top: 10px; display: block; }
-.bar { border-bottom: 1px solid var(--rule); padding-block: 6px 12px; align-items: end; }
-.bar .brand { --c: 1 / 4; display: flex; gap: 10px; align-items: center; font-weight: 700; font-size: 15px; }
-.bar .brand img { width: 26px; height: 26px; border-radius: 6px; }
-.bar nav { --c: 4 / 9; display: flex; gap: 22px; font-size: 14px; flex-wrap: wrap; }
-.bar nav a { text-decoration: none; color: var(--muted); transition: color .2s; }
-.bar nav a:hover { color: var(--accent); }
-.bar .ctl { --c: 9 / -1; display: flex; gap: 14px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
-.seg { display: inline-flex; border: 1px solid var(--ink); }
-.seg button { font: 11px/1 var(--mono); padding: 5px 8px; border-right: 1px solid var(--ink); }
-.seg button:last-child { border-right: 0; }
-.seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
-.dots { display: inline-flex; gap: 6px; }
-.dots button { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--ink); position: relative; }
-.dots button[aria-pressed="true"]::after { content: ""; position: absolute; inset: -5px; border: 1px solid var(--accent); border-radius: 50%; }
-.dots [data-p="paper"] { background: linear-gradient(135deg, #F4F4F4 50%, #447DFC 50%); }
-.dots [data-p="ocean"] { background: linear-gradient(135deg, #CBDCFA 50%, #237ABB 50%); }
-.dots [data-p="dusk"]  { background: linear-gradient(135deg, #E7D7EB 50%, #6F5FC0 50%); }
+/* ---------- nav ---------- */
+nav {
+  position: sticky; top: 0; z-index: 10;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: saturate(1.6) blur(14px); -webkit-backdrop-filter: saturate(1.6) blur(14px);
+  border-bottom: 1px solid transparent; transition: border-color .2s;
+}
+nav.scrolled { border-bottom-color: var(--line); }
+nav .wrap { display: flex; align-items: center; gap: 28px; height: 56px; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 17px; text-decoration: none; }
+.brand img { width: 24px; height: 24px; }
+.links { display: flex; gap: 22px; font-size: 14.5px; color: var(--muted); }
+.links a { text-decoration: none; }
+.links a:hover { color: var(--ink); }
+.tools { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.tool {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 8px;
+  background: none; border: 0; color: var(--muted); text-decoration: none;
+}
+.tool:hover { color: var(--ink); background: var(--bg-soft); }
+.tool svg { width: 16px; height: 16px; fill: currentColor; }
+#stars:empty { display: none; }
+.sun { display: none; }
+:root[data-scheme="dark"] .sun { display: block; }
+:root[data-scheme="dark"] .moon { display: none; }
 
 /* ---------- hero ---------- */
-.hero { position: relative; min-height: min(860px, calc(100svh - 70px)); padding-block: 36px 40px; overflow: clip; }
-.hero h1 { --c: 1 / 9; font-weight: 800; font-size: clamp(7.5rem, 23.5vw, 22rem); line-height: .78; letter-spacing: -.065em; margin-left: -.04em; position: relative; z-index: 2; padding-bottom: .2em; }
-.hero h1 em { font-style: normal; color: var(--accent); }
-.hero .lede { --c: 1 / 5; margin-top: 8px; position: relative; z-index: 2; }
-.hero .lede p.big { font-size: clamp(1.4rem, 2.5vw, 2.1rem); line-height: 1.28; font-weight: 500; letter-spacing: -.015em; text-wrap: balance; }
-.hero .lede p.sub { margin-top: 18px; color: var(--muted); max-width: 44ch; font-size: 15px; }
-.cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px; }
-.btn { display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--ink); padding: 12px 18px; font-weight: 600; font-size: 14px; text-decoration: none; transition: background .2s, color .2s, border-color .2s, transform .15s; }
-.btn:hover { border-color: var(--accent); color: var(--accent); }
-.btn.solid { background: var(--ink); color: var(--on-ink); }
-.btn.solid:hover { background: var(--accent); border-color: var(--accent); color: var(--on-ink); }
-.btn:active { transform: scale(.97); }
-.ring { position: absolute; right: -3%; top: 5%; width: min(56vw, 820px); z-index: 1; }
-.ring svg { width: 100%; height: auto; display: block; overflow: visible; }
-.ring .tick { stroke: var(--ink); }
-.ring .arcdl { stroke: var(--accent); }
-.ring .arcul { stroke: var(--ink); }
-.big-ver { position: absolute; right: 0; bottom: -17%; font-weight: 800; font-size: clamp(14rem, 38vw, 40rem); line-height: .8; letter-spacing: -.08em; color: var(--ink); z-index: 1; user-select: none; white-space: nowrap; }
-.big-ver.under { mix-blend-mode: normal; opacity: 1; }
-.readout { position: absolute; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; white-space: nowrap; }
-.readout b { display: block; font: 700 clamp(1.3rem, 2.4vw, 2.2rem)/1 var(--sans); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-.readout span { font: 11px/1.6 var(--mono); color: var(--muted); }
-.meta { margin-top: 36px; position: relative; z-index: 2; }
-.meta > div { padding-top: 12px; border-top: 1px solid var(--rule); font-size: 13px; }
-.meta .label { display: block; margin-bottom: 6px; }
-.meta .ok { color: var(--accent); }
+.hero { text-align: center; padding-top: clamp(48px, 9vw, 96px); }
+.pill {
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px; margin-bottom: 28px; border-radius: 99px;
+  border: 1px solid var(--line); font-size: 13.5px; color: var(--muted); text-decoration: none; background: var(--card);
+}
+.pill[hidden] { display: none; }
+.pill i { width: 6px; height: 6px; border-radius: 50%; background: #2fb36d; }
+.pill:hover { color: var(--ink); }
+h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.028em; line-height: 1.1; text-wrap: balance; }
+html[data-lang="zh"] h1, html[data-lang="zh"] h2 { letter-spacing: -.01em; line-height: 1.22; }
+h1 { font-size: clamp(40px, 7.4vw, 76px); font-weight: 560; }
+.lead { margin: 24px auto 0; max-width: 560px; font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); }
+.cta { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-top: 36px; }
+.cmd {
+  display: flex; flex-direction: column; width: min(100%, 800px); border: 1px solid var(--line); border-radius: 14px;
+  background: var(--card); text-align: left; overflow: hidden;
+}
+.cmd-tabs { display: flex; gap: 2px; padding: 6px 6px 0 12px; align-items: center; }
+.cmd-tabs button {
+  border: 0; background: none; padding: 4px 10px; border-radius: 7px; font-size: 13.5px; color: var(--muted);
+}
+.cmd-tabs button[aria-pressed="true"] { background: var(--bg-soft); color: var(--ink); font-weight: 600; }
+.cmd-row { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 16px; }
+.cmd code { flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow-x: auto; padding: 6px 0; scrollbar-width: none; }
+.cmd code::-webkit-scrollbar { display: none; }
+.copy {
+  flex: none; height: 36px; padding: 0 16px; border-radius: 9px; border: 0; background: var(--ink); color: var(--bg);
+  font-size: 14px; font-weight: 600;
+}
+.copy:hover { opacity: .85; }
+.fine { font-size: 13.5px; color: var(--muted); margin: 0; }
+.fine a { color: inherit; }
 
-/* ---------- sections ---------- */
-section { border-top: 1px solid var(--rule); padding-block: 22px 96px; position: relative; }
-.sec-head { align-items: baseline; margin-bottom: 52px; }
-.sec-head .no { --c: 1 / 2; font: 600 12px var(--mono); color: var(--accent); }
-.sec-head h2 { --c: 2 / 9; font-size: clamp(2.2rem, 5.4vw, 4.6rem); line-height: 1; letter-spacing: -.045em; font-weight: 800; text-wrap: balance; }
-.sec-head p { --c: 9 / -1; color: var(--muted); font-size: 14px; max-width: 38ch; }
+/* ---------- screenshots ---------- */
+.win {
+  container-type: inline-size; position: relative; width: 100%; max-width: 1040px; margin-inline: auto;
+  aspect-ratio: 2080 / 1400; border-radius: 1.1cqw; box-shadow: var(--shadow); overflow: hidden; background: var(--bg-soft);
+}
+.win img { width: 100%; height: 100%; }
+/* the window's traffic lights, which the rendered screenshots leave out */
+.win::before {
+  content: ""; position: absolute; z-index: 1; left: .8cqw; top: .8cqw; width: 1.15cqw; height: 1.15cqw; border-radius: 50%;
+  background: #ff5f57; box-shadow: 1.92cqw 0 #febc2e, 3.84cqw 0 #28c840;
+}
+.hero .win { margin-top: 64px; }
+.sample { margin-top: 18px; }
+.bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 56px; text-align: center; }
+.bar p { margin: 0; font-size: 15px; color: var(--muted); }
+.bar strong { display: block; color: var(--ink); font-size: 16px; font-weight: 600; margin-bottom: 2px; }
 
-/* feature index */
-.rows { border-top: 1px solid var(--rule); }
-.row { border-bottom: 1px solid var(--line); padding-block: 15px; transition: background .2s, padding .2s; }
-.row:hover { background: var(--panel); }
-.row .n { --c: 1 / 2; font: 12px/1.9 var(--mono); color: var(--muted); }
-.row .t { --c: 2 / 5; font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
-.row .d { --c: 5 / 12; color: var(--muted); font-size: 15px; max-width: 62ch; }
-.row:hover .n { color: var(--accent); }
+section { padding-top: clamp(88px, 12vw, 148px); }
+section > .wrap > header { text-align: center; margin-bottom: 52px; }
+h2 { font-size: clamp(30px, 4.6vw, 48px); }
+.sub { margin: 18px auto 0; max-width: 600px; color: var(--muted); font-size: clamp(16px, 2vw, 19px); }
 
-/* route lab */
-.lab { align-items: start; row-gap: 40px; }
-.lab .ctrl { --c: 1 / 6; }
-.lab .out { --c: 6 / -1; }
-.tabs { display: flex; border: 1px solid var(--ink); width: max-content; max-width: 100%; margin: 14px 0 26px; }
-.tabs button { padding: 10px 18px; font-weight: 600; font-size: 14px; border-right: 1px solid var(--ink); transition: background .2s, color .2s; }
-.tabs button:last-child { border-right: 0; }
-.tabs button[aria-selected="true"] { background: var(--ink); color: var(--on-ink); }
-.dest { list-style: none; border-top: 1px solid var(--rule); }
-.dest li button { width: 100%; text-align: left; padding: 12px 8px; display: grid; grid-template-columns: 2.2em 1fr auto; gap: 8px; align-items: baseline; border-bottom: 1px solid var(--line); transition: background .15s, padding-left .2s; }
-.dest li button:hover { background: var(--panel); }
-.dest li button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); padding-left: 14px; }
-.dest .host { font-weight: 600; }
-.dest .kind { font: 11px var(--mono); opacity: .65; }
-.dest .i { font: 11px var(--mono); opacity: .6; }
-.hint { margin-top: 14px; font-size: 13px; color: var(--muted); max-width: 46ch; }
-.path { position: relative; padding-left: 0; }
-.step { position: relative; display: grid; grid-template-columns: 54px 1fr; gap: 16px; padding-bottom: 34px; }
-.step:last-child { padding-bottom: 0; }
-.step::before { content: ""; position: absolute; left: 26px; top: 48px; bottom: 0; width: 2px; background: var(--line); }
-.step:last-child::before { display: none; }
-.step .node { width: 54px; height: 54px; border: 1px solid var(--ink); display: grid; place-items: center; font: 600 13px var(--mono); background: var(--bg); position: relative; z-index: 1; transition: background .3s, color .3s, border-color .3s; }
-.step.on .node { background: var(--accent); border-color: var(--accent); color: var(--on-ink); }
-.step.dead .node { background: var(--ink); color: var(--on-ink); }
-.step .k { font: 600 11px/1.3 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-.step .v { font-size: clamp(1.15rem, 2.2vw, 1.7rem); font-weight: 700; letter-spacing: -.02em; line-height: 1.2; margin-top: 4px; word-break: break-word; }
-.step .x { font: 12px/1.5 var(--mono); color: var(--muted); margin-top: 4px; }
-.step .fill { position: absolute; left: 26px; top: 48px; width: 2px; height: 0; background: var(--accent); transition: height .5s cubic-bezier(.2,.7,.2,1); }
-.step:last-child .fill { display: none; }
-.step.go .fill { height: calc(100% - 48px); }
-.step .body { opacity: .35; transition: opacity .4s; }
-.step.on .body, .step.dead .body { opacity: 1; }
+/* menu bar */
+.split { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: clamp(32px, 7vw, 96px); align-items: center; justify-content: center; max-width: 880px; margin-inline: auto; }
+.menubar { aspect-ratio: 680 / 1062; filter: drop-shadow(0 24px 40px rgba(20, 40, 80, .25)); }
+:root[data-scheme="dark"] .menubar { filter: drop-shadow(0 24px 40px rgba(0, 0, 0, .6)); }
+.split h2 { font-size: clamp(28px, 4vw, 40px); }
+.split .sub { margin-left: 0; }
+.split ul { margin: 22px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; color: var(--muted); font-size: 16px; }
+.split li::before { content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin: 0 12px 3px 0; }
 
-/* themes */
-.themes { gap: 0; row-gap: 20px; }
-.theme { --c: span 4; display: block; text-align: left; }
-.theme .sheet { aspect-ratio: 4 / 3; border: 1px solid var(--ink); position: relative; overflow: hidden; transition: transform .25s cubic-bezier(.2,.7,.2,1); }
-.theme:hover .sheet { transform: translateY(-4px); }
-.theme[aria-pressed="true"] .sheet { outline: 2px solid var(--accent); outline-offset: 5px; }
-.theme .win { position: absolute; inset: 12% 10%; display: grid; grid-template-columns: 28% 1fr; border: 1px solid rgba(0,0,0,.15); }
-.theme .win .side { padding: 10px 8px; display: grid; gap: 6px; align-content: start; }
-.theme .win .side b { height: 6px; border-radius: 3px; background: currentColor; opacity: .25; }
-.theme .win .side b:first-child { background: var(--ac); opacity: 1; width: 70%; }
-.theme .win .main { padding: 12px; display: grid; gap: 8px; align-content: start; }
-.theme .win .main .ringm { width: 46px; height: 46px; border-radius: 50%; border: 6px solid var(--ac); border-right-color: transparent; }
-.theme .win .main b { height: 6px; border-radius: 3px; background: currentColor; opacity: .22; }
-.theme .win .main b.s { width: 60%; }
-.theme .nm { display: flex; justify-content: space-between; padding: 12px 2px 0; font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
-.theme .nm > span:last-child { font: 11px var(--mono); color: var(--muted); font-weight: 400; align-self: center; }
-.t-paper .sheet { background: #F4F4F4; color: #111; } .t-paper .win { background: #F4F4F4; --ac: #447DFC; } .t-paper .side { background: #DDD; }
-.t-ocean .sheet { background: linear-gradient(135deg, #9FBCEF, #C3C8EF 55%, #CBDCFA); color: #1D2B43; } .t-ocean .win { background: rgba(255,255,255,.72); --ac: #237ABB; } .t-ocean .side { background: rgba(255,255,255,.5); }
-.t-dusk .sheet { background: linear-gradient(135deg, #B9B0DF, #ECC8D4 55%, #E7D7EB); color: #1D2B43; } .t-dusk .win { background: rgba(255,255,255,.72); --ac: #237ABB; } .t-dusk .side { background: rgba(255,255,255,.5); }
+/* cards */
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 28px 26px 30px; }
+.card h3 { font-size: 20px; letter-spacing: -.01em; margin-bottom: 10px; line-height: 1.3; }
+.card p { margin: 0; font-size: 15.5px; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 40px 32px; }
+.grid h3 { font-size: 17px; letter-spacing: 0; line-height: 1.4; margin-bottom: 6px; }
+.grid p { margin: 0; font-size: 15px; color: var(--muted); }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 
 /* install */
-.inst { row-gap: 40px; }
-.inst .os { --c: span 6; border-top: 1px solid var(--ink); padding-top: 16px; }
-.inst .os h3 { font-size: 1.9rem; letter-spacing: -.03em; line-height: 1.1; }
-.inst .os p { color: var(--muted); font-size: 14px; margin-top: 10px; max-width: 48ch; }
-.code { display: flex; align-items: stretch; margin-top: 22px; border: 1px solid var(--ink); background: var(--panel); }
-.code code { flex: 1; min-width: 0; padding: 14px; font: 13px/1.6 var(--mono); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-.code button { padding: 0 16px; border-left: 1px solid var(--ink); font: 600 12px var(--mono); transition: background .2s, color .2s; }
-.code button:hover { background: var(--ink); color: var(--on-ink); }
-.inst .os .btn { margin-top: 22px; }
-.inst ul { margin: 16px 0 0 1.1em; color: var(--muted); font-size: 14px; display: grid; gap: 4px; }
-
-/* how it works */
-.how { row-gap: 44px; }
-.how .flow { --c: 1 / 8; }
-.how .priv { --c: 8 / -1; }
-.diagram { border: 1px solid var(--ink); padding: 22px; display: grid; gap: 14px; background: var(--panel); }
-.diagram .bx { border: 1px solid var(--ink); background: var(--bg); padding: 12px 14px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.diagram .bx b { font-weight: 700; }
-.diagram .bx > span { font: 12px var(--mono); color: var(--muted); }
-.diagram .ar { font: 11px var(--mono); color: var(--accent); text-align: center; letter-spacing: .08em; }
-.ports { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 14px; }
-.ports th { text-align: left; font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 8px 0; border-bottom: 1px solid var(--ink); }
-.ports td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
-.ports td:first-child { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
-.priv h3 { font-size: 1.2rem; letter-spacing: -.01em; margin-bottom: 14px; }
-.priv ol { list-style: none; counter-reset: p; border-top: 1px solid var(--rule); }
-.priv li { counter-increment: p; padding: 13px 0 13px 2.4em; border-bottom: 1px solid var(--line); position: relative; font-size: 15px; }
-.priv li::before { content: counter(p, decimal-leading-zero); position: absolute; left: 0; top: 15px; font: 12px var(--mono); color: var(--accent); }
-
-footer { border-top: 1px solid var(--rule); padding-block: 22px 56px; font-size: 13px; color: var(--muted); }
-footer .a { --c: 1 / 6; } footer .b { --c: 6 / 10; } footer .c { --c: 10 / -1; text-align: right; }
-footer a { color: var(--ink); text-underline-offset: 3px; }
-footer a:hover { color: var(--accent); }
-footer .hop { font-weight: 800; font-size: clamp(3rem, 9vw, 8rem); line-height: .85; letter-spacing: -.06em; color: var(--ink); margin-bottom: 26px; display: block; padding-bottom: .18em; }
-footer .g { row-gap: 14px; }
-
-/* reveal */
-.rv { opacity: 0; transform: translateY(14px); transition: opacity .6s cubic-bezier(.2,.7,.2,1), transform .6s cubic-bezier(.2,.7,.2,1); }
-.rv.in { opacity: 1; transform: none; }
-
-/* ---------- responsive ---------- */
-@media (max-width: 980px) {
-  .hero h1 { --c: 1 / -1; }
-  .hero .lede { --c: 1 / -1; margin-top: 28px; }
-  .ring { position: relative; right: auto; top: auto; width: min(100%, 560px); margin: 36px auto 0; }
-  .big-ver { display: none; }
-  .hero { min-height: 0; }
-  .bar nav { --c: 1 / -1; order: 3; margin-top: 8px; }
-  .bar .brand { --c: 1 / 7; } .bar .ctl { --c: 7 / -1; }
-  .sec-head h2 { --c: 2 / -1; } .sec-head p { --c: 2 / -1; margin-top: 12px; }
-  .lab .ctrl, .lab .out { --c: 1 / -1; }
-  .theme { --c: span 12; }
-  .inst .os { --c: 1 / -1; }
-  .how .flow, .how .priv { --c: 1 / -1; }
-  .row .t { --c: 2 / 8; } .row .d { --c: 2 / -1; margin-top: 4px; }
-  footer .a, footer .b, footer .c { --c: 1 / -1; text-align: left; }
+.install { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.install .card { display: flex; flex-direction: column; gap: 14px; }
+.install .card p { font-size: 15px; }
+.install .cmd { width: 100%; background: var(--bg); }
+.install .cmd code { font-size: 12.5px; white-space: normal; word-break: break-all; line-height: 1.5; }
+.install small { color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 20px; border-radius: 10px;
+  background: var(--ink); color: var(--bg); font-weight: 600; font-size: 15px; text-decoration: none; align-self: flex-start;
 }
-@media (max-width: 640px) {
-  .cols .frame, .g { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .cols i:nth-child(n+5) { display: none; }
-  .cols i:nth-child(4) { border-right: 1px solid var(--line); }
-  .nums span:nth-child(n+5) { display: none; }
-  .g > * { grid-column: 1 / -1 !important; }
-  .nums span { grid-column: auto !important; }
-  .sec-head .no { grid-column: 1 / -1 !important; margin-bottom: 8px; }
-  .row .n { margin-bottom: 2px; }
-  .bar .ctl { justify-content: flex-start; margin-top: 8px; }
-  .code code { font-size: 12px; }
-}
+.btn:hover { opacity: .85; }
+
+/* faq */
+.faq { max-width: 720px; margin-inline: auto; border-top: 1px solid var(--line); }
+details { border-bottom: 1px solid var(--line); }
+summary { list-style: none; cursor: pointer; padding: 20px 36px 20px 0; font-size: 18px; font-weight: 560; position: relative; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; position: absolute; right: 4px; top: 16px; font-size: 24px; font-weight: 300; color: var(--muted); transition: transform .2s; }
+details[open] summary::after { transform: rotate(45deg); }
+details p { margin: 0 0 22px; color: var(--muted); font-size: 16px; }
+
+.closing { text-align: center; }
+.closing .cta { margin-top: 32px; }
+footer { margin-top: clamp(88px, 12vw, 148px); border-top: 1px solid var(--line); padding-block: 36px 56px; font-size: 14px; color: var(--muted); }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 32px; justify-content: space-between; }
+footer p { margin: 0; max-width: 520px; }
+footer nav { all: unset; display: flex; gap: 22px; flex-wrap: wrap; }
+footer a { text-decoration: none; }
+footer a:hover { color: var(--ink); }
+
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.hero > .wrap > * { animation: rise .7s cubic-bezier(.2, .7, .2, 1) both; }
+.hero > .wrap > :nth-child(2) { animation-delay: .06s; }
+.hero > .wrap > :nth-child(3) { animation-delay: .12s; }
+.hero > .wrap > :nth-child(4) { animation-delay: .18s; }
+.hero > .wrap > :nth-child(5) { animation-delay: .26s; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
-  .rv { opacity: 1; transform: none; }
+  .hero > .wrap > * { animation: none; }
+}
+
+@media (max-width: 880px) {
+  .links { display: none; }
+  .cards, .install { grid-template-columns: 1fr; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pair { grid-template-columns: 1fr; }
+  .split { grid-template-columns: 1fr; text-align: center; }
+  .split .menubar { max-width: 300px; margin-inline: auto; }
+  .split ul { text-align: left; max-width: 360px; margin-inline: auto; }
+  .split .sub { margin-inline: auto; }
+  .bar { grid-template-columns: 1fr; gap: 20px; }
+}
+@media (max-width: 520px) {
+  .grid { grid-template-columns: 1fr; }
+  .cmd code { white-space: normal; word-break: break-all; font-size: 12.5px; line-height: 1.5; }
+  nav .wrap { gap: 12px; }
+  .tool .t-label { display: none; }
 }
 </style>
 </head>
 <body>
 
-<div class="cols" aria-hidden="true"><div class="frame"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
-
-<header>
-  <div class="frame">
-    <div class="g nums" aria-hidden="true"><span>01</span><span>02</span><span>03</span><span>04</span><span>05</span><span>06</span><span>07</span><span>08</span><span>09</span><span>10</span><span>11</span><span>12</span></div>
-    <div class="g bar">
-      <a class="brand" href="#top" style="text-decoration:none"><img src="icon.png" width="26" height="26" alt="">Hop <span class="mono ver" style="color:var(--muted);font-weight:400" hidden></span></a>
-      <nav aria-label="Sections">
-        <a href="#features"><span lang="zh">功能</span><span lang="en">Features</span></a>
-        <a href="#route"><span lang="zh">路由演示</span><span lang="en">Route lab</span></a>
-        <a href="#look"><span lang="zh">外观</span><span lang="en">Look</span></a>
-        <a href="#install"><span lang="zh">安装</span><span lang="en">Install</span></a>
-        <a href="#how"><span lang="zh">原理</span><span lang="en">How</span></a>
-      </nav>
-      <div class="ctl">
-        <div class="dots" role="group" aria-label="Theme">
-          <button data-p="paper" aria-label="纸张 Paper" title="纸张 Paper"></button>
-          <button data-p="ocean" aria-label="海蓝 Ocean" title="海蓝 Ocean"></button>
-          <button data-p="dusk" aria-label="暮紫 Dusk" title="暮紫 Dusk"></button>
-        </div>
-        <div class="seg" role="group" aria-label="Appearance">
-          <button data-m="light">☀</button><button data-m="auto">AUTO</button><button data-m="dark">☾</button>
-        </div>
-        <div class="seg" role="group" aria-label="Language">
-          <button data-l="zh">中</button><button data-l="en">EN</button>
-        </div>
-      </div>
+<nav id="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="icon.png" alt="" width="24" height="24">Hop</a>
+    <div class="links">
+      <a href="#features"><span data-l="zh">功能</span><span data-l="en">Features</span></a>
+      <a href="#install"><span data-l="zh">安装</span><span data-l="en">Install</span></a>
+      <a href="#faq"><span data-l="zh">常见问题</span><span data-l="en">FAQ</span></a>
+      <a href="https://github.com/marukolibro/Hop/releases"><span data-l="zh">更新日志</span><span data-l="en">Changelog</span></a>
+    </div>
+    <div class="tools">
+      <a class="tool" href="https://github.com/marukolibro/Hop" aria-label="GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span id="stars" class="t-label"></span>
+      </a>
+      <button class="tool" id="lang" type="button" aria-label="Language"><span data-l="zh">EN</span><span data-l="en">中文</span></button>
+      <button class="tool" id="theme" type="button" aria-label="Theme">
+        <svg class="moon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.2a6.8 6.8 0 1 0 8.6 8.6A5.6 5.6 0 0 1 6.2 1.2z"/></svg>
+        <svg class="sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 0v2.4M8 13.6V16M0 8h2.4M13.6 8H16M2.3 2.3l1.7 1.7M12 12l1.7 1.7M13.7 2.3L12 4M4 12l-1.7 1.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
     </div>
   </div>
-</header>
+</nav>
 
 <main id="top">
-  <div class="frame">
-    <div class="hero">
-      <div class="g">
-        <h1>Hop<em>/</em></h1>
-        <div class="lede">
-          <p class="big"><span lang="zh">原生的 mihomo 代理客户端。</span><span lang="en">A native proxy client for mihomo.</span></p>
-          <p class="sub"><span lang="zh">界面由 Go 与 MyGo 直接绘制,没有 WebView。macOS 与 Windows 共用同一份代码。Hop 不提供节点,订阅需要自备。</span><span lang="en">Drawn natively in Go with MyGo, no webview, one codebase for macOS and Windows. Hop provides no servers: bring your own subscription.</span></p>
-          <div class="cta">
-            <a class="btn solid" href="#install"><span lang="zh">安装 Hop</span><span lang="en">Install Hop</span> <span aria-hidden="true">↓</span></a>
-            <a class="btn" href="https://github.com/marukolibro/Hop" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+  <div class="hero">
+    <div class="wrap">
+      <a class="pill" id="release" href="https://github.com/marukolibro/Hop/releases/latest" hidden>
+        <i></i><span id="release-text"></span>
+      </a>
+      <h1>
+        <span data-l="zh">一个原生的<br>mihomo 代理客户端。</span>
+        <span data-l="en">A native proxy<br>client for mihomo.</span>
+      </h1>
+      <p class="lead">
+        <span data-l="zh">界面由 Go 和 MyGo 直接绘制,没有 WebView。macOS 与 Windows 共用同一份代码。订阅自备。</span>
+        <span data-l="en">Drawn directly in Go and MyGo, with no webview. One codebase for macOS and Windows. Bring your own subscription.</span>
+      </p>
+      <div class="cta">
+        <div class="cmd" data-cmd>
+          <div class="cmd-tabs">
+            <button type="button" data-os="mac" aria-pressed="true">macOS</button>
+            <button type="button" data-os="win" aria-pressed="false">Windows</button>
+          </div>
+          <div class="cmd-row">
+            <code></code>
+            <button class="copy" type="button"><span data-l="zh">复制</span><span data-l="en">Copy</span></button>
           </div>
         </div>
+        <p class="fine" id="os-note" hidden>
+          <span data-l="zh">Hop 目前只支持 macOS 和 Windows,请在电脑上安装。</span>
+          <span data-l="en">Hop runs on macOS and Windows only. Install it on a computer.</span>
+        </p>
+        <p class="fine">
+          <span data-l="zh">在终端里运行,装好后自动打开 · 免费开源(GPL-3.0) · <a href="#install">更多安装方式</a></span>
+          <span data-l="en">Run it in a terminal; Hop opens when it's done · Free and open source (GPL-3.0) · <a href="#install">Other ways to install</a></span>
+        </p>
       </div>
-
-      <div class="big-ver" aria-hidden="true" id="bigver">0.4</div>
-      <div class="ring" aria-hidden="true">
-        <svg viewBox="0 0 600 600" id="ringsvg"></svg>
-        <div class="readout"><b id="rdDl">↓ 12.4 MB/s</b><span id="rdUl">↑ 1.8 MB/s · <span lang="zh">示意</span><span lang="en">illustrative</span></span></div>
-      </div>
-
-      <div class="g meta">
-        <div style="--c:1/4"><span class="label"><span lang="zh">平台</span><span lang="en">Platforms</span></span>macOS · Windows 10 / 11</div>
-        <div style="--c:4/6"><span class="label"><span lang="zh">内核</span><span lang="en">Core</span></span>mihomo</div>
-        <div style="--c:6/8"><span class="label"><span lang="zh">授权</span><span lang="en">License</span></span>GPL-3.0</div>
+      <div class="win" data-shot="nodes"
+           data-alt-zh="Hop 的节点页:出口节点、实时速度、按地区分组的节点和延迟"
+           data-alt-en="Hop's nodes page: the exit node, live speed, and nodes grouped by region with their latency"></div>
+      <p class="fine sample"><span data-l="zh">截图中的节点和流量为示例数据</span><span data-l="en">Nodes and traffic in the screenshots are sample data</span></p>
+      <div class="bar">
+        <p><strong><span data-l="zh">原生界面</span><span data-l="en">Native UI</span></strong><span data-l="zh">Go 与 MyGo 直接绘制,不是网页套壳</span><span data-l="en">Drawn in Go and MyGo, not a web page in a shell</span></p>
+        <p><strong>mihomo</strong><span data-l="zh">兼容 Clash 订阅与规则</span><span data-l="en">Works with Clash subscriptions and rules</span></p>
+        <p><strong><span data-l="zh">两个平台</span><span data-l="en">Two platforms</span></strong><span data-l="zh">macOS(Apple 芯片与 Intel)和 Windows 10 / 11</span><span data-l="en">macOS (Apple silicon and Intel) and Windows 10 / 11</span></p>
       </div>
     </div>
   </div>
 
-  <!-- 01 features -->
-  <section id="features">
-    <div class="frame">
-      <div class="g sec-head rv">
-        <span class="no">01</span>
-        <h2><span lang="zh">十二件该有的事</span><span lang="en">Twelve things it does</span></h2>
-        <p><span lang="zh">不多不少:订阅、规则、节点、系统集成、观测与更新。</span><span lang="en">Subscriptions, rules, nodes, system integration, insight and updates.</span></p>
-      </div>
-      <div class="rows" id="rows"></div>
-    </div>
-  </section>
-
-  <!-- 02 route lab -->
   <section id="route">
-    <div class="frame">
-      <div class="g sec-head rv">
-        <span class="no">02</span>
-        <h2><span lang="zh">一个请求怎么走</span><span lang="en">Where a request goes</span></h2>
-        <p><span lang="zh">选一个模式,再点一个目的地。规则与节点名均为示意。</span><span lang="en">Pick a mode, then a destination. Rules and node names are illustrative.</span></p>
-      </div>
-      <div class="g lab rv">
-        <div class="ctrl">
-          <div class="label"><span lang="zh">模式</span><span lang="en">Mode</span></div>
-          <div class="tabs" role="tablist" id="modes">
-            <button role="tab" data-mode="rule" aria-selected="true"><span lang="zh">规则</span><span lang="en">Rule</span></button>
-            <button role="tab" data-mode="global" aria-selected="false"><span lang="zh">全局</span><span lang="en">Global</span></button>
-            <button role="tab" data-mode="direct" aria-selected="false"><span lang="zh">直连</span><span lang="en">Direct</span></button>
-          </div>
-          <div class="label" style="margin-bottom:10px"><span lang="zh">目的地</span><span lang="en">Destination</span></div>
-          <ul class="dest" id="dest"></ul>
-          <p class="hint" id="modeHint"></p>
-        </div>
-        <div class="out">
-          <div class="path" id="path" aria-live="polite"></div>
+    <div class="wrap">
+      <header>
+        <h2><span data-l="zh">每个连接走了哪条路,看得见。</span><span data-l="en">See which route every connection takes.</span></h2>
+        <p class="sub"><span data-l="zh">连接页列出每个连接的应用、命中的规则和出口节点。可以按主机、应用、规则筛选,逐个或一次关掉。</span><span data-l="en">The connections page lists each connection's app, the rule that matched and the node it leaves by. Filter by host, app or rule; close one or all.</span></p>
+      </header>
+      <div class="win" data-shot="connections"
+           data-alt-zh="Hop 的连接页:每个连接的应用、规则和出口"
+           data-alt-en="Hop's connections page: the app, rule and exit of each connection"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <header>
+        <h2><span data-l="zh">两下,给任何一个连接加条规则。</span><span data-l="en">Two clicks to add a rule for any connection.</span></h2>
+        <p class="sub"><span data-l="zh">连接旁的 + 会打开已经填好的对话框:整个站点、域名、应用或地址。选直连、代理或拒绝,确定就生效。</span><span data-l="en">The + beside a connection opens the dialog already filled in: the whole site, the host, the app or the address. Choose direct, proxy or reject, and it takes effect.</span></p>
+      </header>
+      <div class="win" data-shot="add-rule"
+           data-alt-zh="添加规则对话框,已按所选连接填好"
+           data-alt-en="The add-rule dialog, filled in from the chosen connection"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="split">
+        <div class="menubar" data-shot="menubar"
+             data-alt-zh="Hop 的菜单栏面板:出口节点、模式、系统代理与 TUN 开关、线路列表"
+             data-alt-en="Hop's menu bar panel: the exit node, mode, system proxy and TUN switches, and the route list"></div>
+        <div>
+          <h2><span data-l="zh">不开窗口,也能换线路。</span><span data-l="en">Switch routes without opening the window.</span></h2>
+          <p class="sub"><span data-l="zh">菜单栏(macOS)或托盘(Windows)里的面板,能换线路和节点、切换模式、开关代理。</span><span data-l="en">The panel in the menu bar (macOS) or tray (Windows) switches routes, nodes and modes, and turns the proxy on and off.</span></p>
+          <ul>
+            <li><span data-l="zh">菜单栏图标旁可以显示实时速度</span><span data-l="en">The live speed can sit beside the menu bar icon</span></li>
+            <li><span data-l="zh">关掉窗口,Hop 继续在后台运行</span><span data-l="en">Close the window and Hop keeps running</span></li>
+            <li><span data-l="zh">可以开机自启</span><span data-l="en">Starts at login if you like</span></li>
+          </ul>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- 03 look -->
-  <section id="look">
-    <div class="frame">
-      <div class="g sec-head rv">
-        <span class="no">03</span>
-        <h2><span lang="zh">三种主题,这个页面也跟着换</span><span lang="en">Three themes. This page follows</span></h2>
-        <p><span lang="zh">浅色、深色或跟随系统,与配色主题互不影响。点一下试试。</span><span lang="en">Light, dark or system, independent of the colour theme. Try one.</span></p>
-      </div>
-      <div class="g themes rv">
-        <button class="theme t-paper" data-p="paper" aria-pressed="false"><div class="sheet"><div class="win"><div class="side"><b></b><b></b><b></b><b></b></div><div class="main"><div class="ringm"></div><b></b><b class="s"></b></div></div></div><div class="nm"><span lang="zh">纸张</span><span lang="en">Paper</span><span>#447DFC</span></div></button>
-        <button class="theme t-ocean" data-p="ocean" aria-pressed="false"><div class="sheet"><div class="win"><div class="side"><b></b><b></b><b></b><b></b></div><div class="main"><div class="ringm"></div><b></b><b class="s"></b></div></div></div><div class="nm"><span lang="zh">海蓝</span><span lang="en">Ocean</span><span>#237ABB</span></div></button>
-        <button class="theme t-dusk" data-p="dusk" aria-pressed="false"><div class="sheet"><div class="win"><div class="side"><b></b><b></b><b></b><b></b></div><div class="main"><div class="ringm"></div><b></b><b class="s"></b></div></div></div><div class="nm"><span lang="zh">暮紫</span><span lang="en">Dusk</span><span>#237ABB</span></div></button>
+  <section>
+    <div class="wrap">
+      <header>
+        <h2><span data-l="zh">流量去了哪里,一页说清。</span><span data-l="en">Where your traffic went, on one page.</span></h2>
+        <p class="sub"><span data-l="zh">今天、本月和最近 30 天,分成走代理的和直连的。本月的用量还能按订阅分开看。</span><span data-l="en">Today, this month and the last 30 days, split into proxied and direct. This month is also broken down by subscription.</span></p>
+      </header>
+      <div class="win" data-shot="stats"
+           data-alt-zh="Hop 的统计页:每日流量,分代理和直连"
+           data-alt-en="Hop's statistics page: daily traffic, proxied and direct"></div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <header>
+        <h2><span data-l="zh">三种接入方式,按需要选。</span><span data-l="en">Three ways to connect. Pick what you need.</span></h2>
+      </header>
+      <div class="cards">
+        <div class="card">
+          <h3><span data-l="zh">系统代理</span><span data-l="en">System proxy</span></h3>
+          <p><span data-l="zh">顶栏一个开关。别的程序已经占着系统代理时,Hop 不会抢;只清除指向自己的代理,退出时还原。</span><span data-l="en">One switch in the header. If another app already holds the system proxy, Hop leaves it alone; it clears only a proxy that points at itself, and puts things back when it quits.</span></p>
+        </div>
+        <div class="card">
+          <h3>TUN</h3>
+          <p><span data-l="zh">接管所有应用的流量。通过一个只装一次的特权辅助组件实现,内核按 TUN 需要的权限运行,Hop 本身不以管理员身份运行。</span><span data-l="en">Carries every app's traffic. A small privileged helper, installed once, gives the core the rights a TUN needs, so Hop itself never runs as administrator.</span></p>
+        </div>
+        <div class="card">
+          <h3><span data-l="zh">局域网共享</span><span data-l="en">LAN sharing</span></h3>
+          <p><span data-l="zh">手机和同一网络里的其他电脑,把这台电脑的地址填成 HTTP 或 SOCKS5 代理即可。默认关闭,开启后需要账号密码,只回应私有网络。</span><span data-l="en">Phones and other computers on the same network use this computer's address as an HTTP or SOCKS5 proxy. Off by default; once on it asks for an account, and only private networks are answered.</span></p>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- 04 install -->
+  <section>
+    <div class="wrap">
+      <header>
+        <h2><span data-l="zh">该有的都有,不多也不少。</span><span data-l="en">What you need, and no more.</span></h2>
+      </header>
+      <div class="grid">
+        <div><h3><span data-l="zh">订阅与本地配置</span><span data-l="en">Subscriptions and local configs</span></h3><p><span data-l="zh">导入订阅链接,或直接粘贴节点链接、Clash 配置。定时刷新,显示用量和到期时间。</span><span data-l="en">Import a subscription link, or paste node links or a Clash config. Refreshed on a schedule, with usage and expiry shown.</span></p></div>
+        <div><h3><span data-l="zh">智能规则</span><span data-l="en">Smart rules</span></h3><p><span data-l="zh">AI、流媒体、Telegram、Google、Apple、Microsoft 分组,地区分组,以及每周更新的国内直连。也可以沿用机场自己的规则。</span><span data-l="en">Groups for AI, streaming, Telegram, Google, Apple and Microsoft, region groups, and China-direct routing that updates weekly. Or keep the provider's own rules.</span></p></div>
+        <div><h3><span data-l="zh">测速与解锁检测</span><span data-l="en">Speed and unlock checks</span></h3><p><span data-l="zh">整组节点并发测速,按延迟排序。一次检测 ChatGPT、Netflix 和 YouTube Premium 在各分组里能不能用。</span><span data-l="en">Test a whole group at once and sort by latency. One check tries ChatGPT, Netflix and YouTube Premium through every group.</span></p></div>
+        <div><h3><span data-l="zh">出口 IP</span><span data-l="en">Exit address</span></h3><p><span data-l="zh">点一下复制当前出口的公网 IP 和国家。只在出口变化时查一次,不落盘。</span><span data-l="en">Click to copy the public IP and country traffic leaves by. Looked up once when the exit changes, kept in memory only.</span></p></div>
+        <div><h3><span data-l="zh">三种模式</span><span data-l="en">Three modes</span></h3><p><span data-l="zh">规则、全局、直连,每种模式都写明它做什么。</span><span data-l="en">Rule, Global and Direct, each with a note on what it does.</span></p></div>
+        <div><h3><span data-l="zh">实时日志</span><span data-l="en">Live logs</span></h3><p><span data-l="zh">内核日志实时滚动,可以按级别筛选。</span><span data-l="en">The core's log, live, with a level filter.</span></p></div>
+        <div><h3><span data-l="zh">自动更新</span><span data-l="en">Automatic updates</span></h3><p><span data-l="zh">装好之后 Hop 自己保持最新,每个更新都带签名,先验证再安装。</span><span data-l="en">After install Hop keeps itself current. Every update is signed, and verified before it installs.</span></p></div>
+        <div><h3><span data-l="zh">中文与英文</span><span data-l="en">English and Chinese</span></h3><p><span data-l="zh">界面有中文和英文,默认跟随系统,可以在设置里改。</span><span data-l="en">The interface comes in English and Chinese, following the system by default; change it in Settings.</span></p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <header>
+        <h2><span data-l="zh">浅色、深色,跟着系统走。</span><span data-l="en">Light and dark, following the system.</span></h2>
+        <p class="sub"><span data-l="zh">纸张、海蓝、暮紫三套配色,各有浅色和深色。</span><span data-l="en">Paper, Ocean and Dusk, each in light and dark.</span></p>
+      </header>
+      <div class="pair">
+        <div class="win" data-shot="nodes" data-scheme="light"
+             data-alt-zh="浅色外观" data-alt-en="Light appearance"></div>
+        <div class="win" data-shot="nodes" data-scheme="dark"
+             data-alt-zh="深色外观" data-alt-en="Dark appearance"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <header>
+        <h2><span data-l="zh">你的订阅,只在你的电脑上。</span><span data-l="en">Your subscription stays on your computer.</span></h2>
+      </header>
+      <div class="cards">
+        <div class="card">
+          <h3><span data-l="zh">订阅链接是凭据</span><span data-l="en">A subscription link is a credential</span></h3>
+          <p><span data-l="zh">不写进日志,只发给它自己的主机。链接在你的电脑上转换,没有任何第三方转换服务见过它。</span><span data-l="en">Never written to a log, sent only to its own host. Links are converted on your computer; no third-party converter ever sees one.</span></p>
+        </div>
+        <div class="card">
+          <h3><span data-l="zh">默认什么都不改</span><span data-l="en">Changes nothing until you ask</span></h3>
+          <p><span data-l="zh">系统代理和 TUN 默认关闭,只在你打开时才改动系统,退出时还原。</span><span data-l="en">System proxy and TUN are off by default. Hop touches the system only when you turn them on, and puts it back when it quits.</span></p>
+        </div>
+        <div class="card">
+          <h3><span data-l="zh">数据只在本机</span><span data-l="en">Data stays local</span></h3>
+          <p><span data-l="zh">所有数据存在本机,目录权限 0600。Hop 不读写其他 Clash 客户端的文件或进程,默认端口也避开了它们常用的端口。</span><span data-l="en">All data lives on this machine, mode 0600. Hop reads and writes nothing of another Clash client, and its default ports stay clear of the ones they use.</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section id="install">
-    <div class="frame">
-      <div class="g sec-head rv">
-        <span class="no">04</span>
-        <h2><span lang="zh">两个平台,各一步</span><span lang="en">Two platforms, one step each</span></h2>
-        <p><span lang="zh">装好之后 Hop 会自己更新,每个更新都带签名校验。</span><span lang="en">After that Hop updates itself; every update is signature-checked.</span></p>
-      </div>
-      <div class="g inst rv">
-        <div class="os">
-          <span class="label">macOS · Apple silicon + Intel</span>
-          <h3><span lang="zh">一行命令</span><span lang="en">One command</span></h3>
-          <p><span lang="zh">脚本不需要 sudo,会检查下载的大小、版本与代码签名,然后打开 Hop。再运行一次即可升级。</span><span lang="en">No sudo. It checks the download's size, version and signature, then opens Hop. Run it again to upgrade.</span></p>
-          <div class="code"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/marukolibro/Hop/main/install.sh | sh</code><button id="copy"><span lang="zh">复制</span><span lang="en">COPY</span></button></div>
-          <ul>
-            <li><span lang="zh">目前是临时(ad hoc)签名,所以请用脚本安装,不要打开下载的 .dmg。</span><span lang="en">Builds are ad hoc signed for now: use the script, not a downloaded .dmg.</span></li>
-          </ul>
+    <div class="wrap">
+      <header>
+        <h2><span data-l="zh">一行命令装好。</span><span data-l="en">One command to install.</span></h2>
+        <p class="sub"><span data-l="zh">再运行一次就是升级。装好之后 Hop 会自己更新。</span><span data-l="en">Run it again to upgrade. After that Hop updates itself.</span></p>
+      </header>
+      <div class="install">
+        <div class="card">
+          <h3>macOS</h3>
+          <p><span data-l="zh">Apple 芯片和 Intel 通用。脚本不需要 sudo,会检查下载文件的大小、版本和代码签名,然后打开 Hop。</span><span data-l="en">Apple silicon and Intel in one app. No sudo; the script checks the download's size, version and code signature, then opens Hop.</span></p>
+          <div class="cmd" data-cmd data-fixed="mac"><div class="cmd-row"><code></code><button class="copy" type="button"><span data-l="zh">复制</span><span data-l="en">Copy</span></button></div></div>
+          <small><span data-l="zh">现在的安装包是本机临时签名(ad hoc),所以请用这条命令安装,不要用浏览器下载的文件,否则 macOS 会拒绝打开。</span><span data-l="en">Builds are ad hoc signed for now, so install with this command rather than a file downloaded in a browser, which macOS would refuse to open.</span></small>
         </div>
-        <div class="os">
-          <span class="label">Windows · x64 · 10 / 11</span>
-          <h3><span lang="zh">下载安装包</span><span lang="en">Download the installer</span></h3>
-          <p><span lang="zh">玻璃效果需要 Windows 11 22H2 或更高;Windows 10 上是同样布局的实色窗口。</span><span lang="en">The glass look needs Windows 11 22H2+; Windows 10 gets a solid window with the same layout.</span></p>
-          <a class="btn solid" id="winbtn" href="https://github.com/marukolibro/Hop/releases/latest" rel="noopener"><span lang="zh">前往最新发布</span><span lang="en">Open the latest release</span> <span aria-hidden="true">↗</span></a>
-          <ul>
-            <li><span lang="zh">安装包尚未代码签名:SmartScreen 提示时选 <b>更多信息 → 仍要运行</b>。</span><span lang="en">The installer is not code signed yet: on SmartScreen choose <b>More info → Run anyway</b>.</span></li>
-          </ul>
+        <div class="card">
+          <h3>Windows</h3>
+          <p><span data-l="zh">x64,Windows 10 和 11。在 PowerShell 里运行,为当前用户静默安装,不需要管理员权限。</span><span data-l="en">x64, Windows 10 and 11. Run it in PowerShell; it installs silently for the current user, with no administrator rights.</span></p>
+          <div class="cmd" data-cmd data-fixed="win"><div class="cmd-row"><code></code><button class="copy" type="button"><span data-l="zh">复制</span><span data-l="en">Copy</span></button></div></div>
+          <small><span data-l="zh">也可以从<a href="https://github.com/marukolibro/Hop/releases/latest">发布页</a>下载安装包。安装包还没有代码签名,手动运行时 SmartScreen 会提示:选「更多信息 → 仍要运行」。</span><span data-l="en">Or download the installer from the <a href="https://github.com/marukolibro/Hop/releases/latest">releases page</a>. It isn't code signed yet, so SmartScreen asks when you run it by hand: choose "More info → Run anyway".</span></small>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- 05 how -->
-  <section id="how">
-    <div class="frame">
-      <div class="g sec-head rv">
-        <span class="no">05</span>
-        <h2><span lang="zh">小而克制</span><span lang="en">Small on purpose</span></h2>
-        <p><span lang="zh">Hop 自己生成内核配置:从订阅只取节点、分组和规则,端口、DNS、TUN 与控制器永远是 Hop 的。</span><span lang="en">Hop writes the core's configuration itself: from a subscription it takes only proxies, groups and rules.</span></p>
+  <section id="faq">
+    <div class="wrap">
+      <header>
+        <h2><span data-l="zh">你可能想知道的几件事。</span><span data-l="en">A few things you may want to know.</span></h2>
+      </header>
+      <div class="faq">
+        <details>
+          <summary><span data-l="zh">Hop 提供节点或订阅吗?</span><span data-l="en">Does Hop provide servers or subscriptions?</span></summary>
+          <p><span data-l="zh">不提供。你需要自己的订阅链接,或者自己的节点(粘贴节点链接或 Clash 配置)。请遵守你所在地区的法律法规。</span><span data-l="en">No. You bring your own subscription link or your own nodes (paste node links or a Clash config). Follow the laws where you live.</span></p>
+        </details>
+        <details>
+          <summary><span data-l="zh">能和其他 Clash 客户端一起装吗?</span><span data-l="en">Can it sit beside another Clash client?</span></summary>
+          <p><span data-l="zh">可以。Hop 不读写其他客户端的文件或进程,默认端口也避开了它们常用的端口。系统代理同一时间只能指向一个程序:别的程序占着时,Hop 会拒绝抢。</span><span data-l="en">Yes. Hop reads and writes nothing of another client, and its default ports stay clear of theirs. The system proxy can point at only one program at a time: if another holds it, Hop declines to take it.</span></p>
+        </details>
+        <details>
+          <summary><span data-l="zh">为什么 TUN 要装辅助组件?</span><span data-l="en">Why does TUN install a helper?</span></summary>
+          <p><span data-l="zh">TUN 需要管理员权限才能接管网络。Hop 自己不以管理员运行,而是让一个很小的辅助组件(macOS 上是 LaunchDaemon,Windows 上是服务)来启动内核。只在你开 TUN 时才需要,装一次、授权一次。</span><span data-l="en">A TUN needs administrator rights to take over the network. Hop never runs as administrator; a small helper (a LaunchDaemon on macOS, a service on Windows) starts the core instead. It's needed only when you turn TUN on, installed once with one authorization.</span></p>
+        </details>
+        <details>
+          <summary><span data-l="zh">macOS 提示「已损坏」或「无法打开」怎么办?</span><span data-l="en">macOS says the app is damaged or can't be opened.</span></summary>
+          <p><span data-l="zh">用上面的安装命令装,不要用浏览器下载的文件。浏览器下载的文件会带上隔离标记,而 Hop 目前没有 Apple 开发者证书,macOS 会因此拒绝打开;命令行下载不带这个标记。</span><span data-l="en">Install with the command above, not a file downloaded in a browser. A browser download carries a quarantine mark, and Hop has no Apple developer certificate yet, so macOS refuses it; a download from the command line carries no such mark.</span></p>
+        </details>
+        <details>
+          <summary><span data-l="zh">Windows 的 SmartScreen 拦住了安装包?</span><span data-l="en">Windows SmartScreen blocks the installer.</span></summary>
+          <p><span data-l="zh">安装包还没有代码签名。点「更多信息」,再点「仍要运行」。用上面的 PowerShell 命令安装一般不会遇到这个提示。</span><span data-l="en">The installer isn't code signed yet. Choose "More info", then "Run anyway". Installing with the PowerShell command above usually avoids the prompt.</span></p>
+        </details>
       </div>
-      <div class="g how rv">
-        <div class="flow">
-          <div class="diagram" role="img" aria-label="Hop talks to the mihomo core over REST and WebSocket; a privileged helper runs the core for TUN">
-            <div class="bx"><b>Hop</b><span><span lang="zh">MyGo 原生界面</span><span lang="en">MyGo native UI</span></span></div>
-            <div class="ar">REST / WebSocket · loopback</div>
-            <div class="bx"><b>mihomo core</b><span><span lang="zh">作为子进程,崩溃自动重启</span><span lang="en">sidecar, restarted on crash</span></span></div>
-            <div class="ar">▲ TUN</div>
-            <div class="bx"><b><span lang="zh">特权助手</span><span lang="en">Privileged helper</span></b><span><span lang="zh">仅 TUN 时,一次安装</span><span lang="en">TUN only, installed once</span></span></div>
+    </div>
+  </section>
+
+  <section class="closing">
+    <div class="wrap">
+      <h2><span data-l="zh">试一试 Hop。</span><span data-l="en">Give Hop a try.</span></h2>
+      <p class="sub"><span data-l="zh">免费、开源,一行命令装好。</span><span data-l="en">Free and open source. One command to install.</span></p>
+      <div class="cta">
+        <div class="cmd" data-cmd>
+          <div class="cmd-tabs">
+            <button type="button" data-os="mac" aria-pressed="true">macOS</button>
+            <button type="button" data-os="win" aria-pressed="false">Windows</button>
           </div>
-          <table class="ports">
-            <thead><tr><th><span lang="zh">端口</span><span lang="en">Port</span></th><th><span lang="zh">用途</span><span lang="en">What</span></th></tr></thead>
-            <tbody>
-              <tr><td>127.0.0.1:17890</td><td><span lang="zh">混合代理(HTTP 与 SOCKS5)</span><span lang="en">Mixed proxy (HTTP and SOCKS5)</span></td></tr>
-              <tr><td>127.0.0.1:19090</td><td><span lang="zh">内核控制器</span><span lang="en">Core controller</span></td></tr>
-              <tr><td>127.0.0.1:17853</td><td><span lang="zh">内核 DNS(仅部分订阅会用到)</span><span lang="en">Core DNS (only for some subscriptions)</span></td></tr>
-            </tbody>
-          </table>
-          <p class="hint"><span lang="zh">这些端口刻意避开了其他 Clash 客户端的常用端口。</span><span lang="en">Chosen to stay clear of the ports other Clash clients use.</span></p>
-        </div>
-        <div class="priv">
-          <h3><span lang="zh">隐私与安全</span><span lang="en">Privacy and safety</span></h3>
-          <ol>
-            <li><span lang="zh">订阅链接是凭据:不写日志,也只发给它自己的主机。</span><span lang="en">Your subscription link is a credential: never logged, sent only to its own host.</span></li>
-            <li><span lang="zh">链接在你的机器上转换,没有任何转换服务见过它。</span><span lang="en">Links are converted on your machine, by no third-party service.</span></li>
-            <li><span lang="zh">系统代理与 TUN 默认关闭,只在你打开时改动,退出时还原。</span><span lang="en">System proxy and TUN are off by default and restored when Hop quits.</span></li>
-            <li><span lang="zh">不读写其他 Clash 客户端的文件或进程。</span><span lang="en">Reads and writes nothing of another Clash client.</span></li>
-            <li><span lang="zh">所有数据只在本机,目录权限 0600。</span><span lang="en">All data stays on your machine, mode 0600.</span></li>
-          </ol>
+          <div class="cmd-row">
+            <code></code>
+            <button class="copy" type="button"><span data-l="zh">复制</span><span data-l="en">Copy</span></button>
+          </div>
         </div>
       </div>
     </div>
@@ -443,13 +493,17 @@ footer .g { row-gap: 14px; }
 </main>
 
 <footer>
-  <div class="frame">
-    <span class="hop" aria-hidden="true">Hop/</span>
-    <div class="g">
-      <div class="a"><span lang="zh">Hop 是开源软件(GPL-3.0),不提供任何服务器或订阅。请遵守你所在地区的法律法规。</span><span lang="en">Hop is open source (GPL-3.0) and provides no servers or subscriptions. Follow the laws where you live.</span></div>
-      <div class="b"><a href="https://github.com/marukolibro/Hop">GitHub</a> · <a href="https://github.com/marukolibro/Hop/releases">Releases</a> · <a href="https://github.com/marukolibro/Hop/issues">Issues</a><br><a href="https://github.com/MetaCubeX/mihomo">mihomo</a> · <a href="https://github.com/egoist/mygo">MyGo</a></div>
-      <div class="c mono">io.github.marukolibro.hop</div>
-    </div>
+  <div class="wrap">
+    <p>
+      <span data-l="zh">Hop 是开源软件(GPL-3.0),不提供任何服务器或订阅。请遵守你所在地区的法律法规。</span>
+      <span data-l="en">Hop is open source (GPL-3.0) and provides no servers or subscriptions. Follow the laws where you live.</span>
+    </p>
+    <nav aria-label="Links">
+      <a href="https://github.com/marukolibro/Hop">GitHub</a>
+      <a href="https://github.com/marukolibro/Hop/releases">Releases</a>
+      <a href="https://github.com/marukolibro/Hop/issues">Issues</a>
+      <a href="https://github.com/MetaCubeX/mihomo">mihomo</a>
+    </nav>
   </div>
 </footer>
 
@@ -457,186 +511,138 @@ footer .g { row-gap: 14px; }
 (function () {
   "use strict";
   var root = document.documentElement;
-
-  /* ---------- preferences (per-viewer convenience only) ---------- */
-  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable: preference lasts for this visit */ } }
-
-  var lang = load("hop.lang") || ((navigator.language || "").toLowerCase().indexOf("zh") === 0 ? "zh" : "en");
-  var palette = load("hop.palette") || "paper";
-  var mode = load("hop.mode") || "auto";
-  var THEME_COLOR = { paper: ["#F4F4F4", "#161616"], ocean: ["#F5F8FD", "#19233A"], dusk: ["#F8F7FC", "#1D2237"] };
-
-  function apply() {
-    root.dataset.lang = lang; root.dataset.palette = palette; root.dataset.mode = mode;
-    root.lang = lang === "zh" ? "zh-CN" : "en";
-    var dark = mode === "dark" || (mode === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
-    document.querySelector('meta[name="theme-color"]').content = THEME_COLOR[palette][dark ? 1 : 0];
-    document.querySelectorAll("[data-p]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.p === palette)); });
-    document.querySelectorAll("[data-m]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.m === mode)); });
-    document.querySelectorAll("[data-l]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.l === lang)); });
-    renderRoute();
-  }
-  document.addEventListener("click", function (e) {
-    var b = e.target.closest("[data-p],[data-m],[data-l]"); if (!b) return;
-    if (b.dataset.p) { palette = b.dataset.p; save("hop.palette", palette); }
-    if (b.dataset.m) { mode = b.dataset.m; save("hop.mode", mode); }
-    if (b.dataset.l) { lang = b.dataset.l; save("hop.lang", lang); }
-    apply();
-  });
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", apply);
-
-  /* ---------- feature index ---------- */
-  var FEATURES = [
-    ["订阅", "Subscriptions", "多个订阅随时切换,定时刷新,显示用量与到期。支持 Clash 配置和节点链接,全部在本机转换。", "Keep several, switch freely, refresh on a schedule, see usage and expiry. Clash profiles and node links, converted locally."],
-    ["本地配置", "Local profiles", "没有订阅链接?粘贴节点链接或 Clash 配置,Hop 留一份副本,原文件移走也不影响。", "No link? Paste node links or a Clash config. Hop keeps its own copy, so the original can move or vanish."],
-    ["智能规则", "Smart rules", "AI、流媒体、Telegram、Google、Apple、Microsoft 分组,地区分组,以及每周更新的国内直连。", "AI, streaming, Telegram, Google, Apple and Microsoft groups, region groups, and China-direct from weekly geodata."],
-    ["自定义规则", "Your own rules", "域名后缀、完整域名、关键字、IP 段或应用,直连、代理或拒绝。在连接页点 + 就是现成的规则。", "Domain, keyword, IP range or app: direct, proxy or reject. The + on any connection fills the dialog for you."],
-    ["节点", "Nodes", "按用途分组、按地区排列,显示协议与 UDP 支持。整组并发测速,可按延迟排序。", "Groups by purpose, nodes by region, with protocol and UDP support. Test a whole group at once; sort by latency."],
-    ["路由", "The route", "环形仪表:出口国旗、外圈下载内圈上传、经过的分组、两分钟走势与实时速度。点击复制出口 IP。", "A ring gauge with the exit's flag, the groups traffic crosses, a two-minute trace and live speed. Click to copy the exit IP."],
-    ["系统代理", "System proxy", "顶栏一个开关。别的应用已占用时拒绝,只清除指向自己的代理,退出时放回原样。", "One switch in the header. Refuses if another app holds it, clears only its own, restores on quit."],
-    ["增强模式", "Enhanced mode (TUN)", "一次安装特权助手,让所有应用的流量走 TUN。核心以所需权限运行,Hop 自己从不提权。", "Install the helper once and every app's traffic goes through TUN. The core gets the rights; Hop never does."],
-    ["菜单栏与托盘", "Menu bar and tray", "菜单栏可显示实时网速。不开主窗口就能切路由、节点、模式和代理开关。", "Live speed beside the icon. Switch routes, nodes, modes and the proxy without opening the window."],
-    ["连接与日志", "Connections and logs", "每条连接的应用、命中规则和出口节点;核心日志实时输出并按级别过滤。", "Every connection with its app, matched rule and exit node; the core's log, live, filtered by level."],
-    ["统计", "Statistics", "今天、本月、近 30 天,代理与直连分开统计;本月按订阅拆分。", "Today, this month and 30 days, proxied versus direct, and this month per subscription."],
-    ["自动更新", "Updates", "更新带签名并在安装前校验,能只下载差异。内核可在设置里升级,失败自动回滚。", "Signed updates, verified before install, downloading only what changed. The core upgrades from Settings and rolls back on failure."]
-  ];
-  var rows = document.getElementById("rows");
-  FEATURES.forEach(function (f, i) {
-    var r = document.createElement("div"); r.className = "g row";
-    r.innerHTML = '<span class="n">' + String(i + 1).padStart(2, "0") + '</span>' +
-      '<span class="t"><span lang="zh">' + f[0] + '</span><span lang="en">' + f[1] + '</span></span>' +
-      '<span class="d"><span lang="zh">' + f[2] + '</span><span lang="en">' + f[3] + '</span></span>';
-    rows.appendChild(r);
-  });
-
-  /* ---------- route lab ---------- */
-  var T = function (zh, en) { return lang === "zh" ? zh : en; };
-  var DESTS = [
-    { host: "chatgpt.com", kind: "DOMAIN-SUFFIX", rule: "DOMAIN-SUFFIX,chatgpt.com", group: ["AI", "AI"], out: "日本 · 东京 02" , outEn: "Japan · Tokyo 02", app: "Safari" },
-    { host: "netflix.com", kind: "DOMAIN-SUFFIX", rule: "GEOSITE,netflix", group: ["流媒体", "Streaming"], out: "新加坡 03", outEn: "Singapore 03", app: "Chrome" },
-    { host: "t.me", kind: "DOMAIN", rule: "GEOSITE,telegram", group: ["Telegram", "Telegram"], out: "新加坡 01", outEn: "Singapore 01", app: "Telegram" },
-    { host: "baidu.com", kind: "GEOSITE", rule: "GEOSITE,cn", group: ["国内直连", "China direct"], out: "DIRECT", outEn: "DIRECT", direct: true, app: "Safari" },
-    { host: "192.168.1.20", kind: "IP-CIDR", rule: "IP-CIDR,192.168.0.0/16", group: ["局域网", "LAN"], out: "DIRECT", outEn: "DIRECT", direct: true, app: "Finder" },
-    { host: "doubleclick.net", kind: "你的规则", kindEn: "your rule", rule: "DOMAIN-SUFFIX,doubleclick.net", group: ["自定义规则", "Your rule"], out: "REJECT", outEn: "REJECT", reject: true, app: "Chrome" }
-  ];
-  var GLOBAL_NODE = ["日本 · 东京 02", "Japan · Tokyo 02"];
-  var curDest = 0, curMode = "rule", runId = 0;
-
-  var destEl = document.getElementById("dest");
-  DESTS.forEach(function (d, i) {
-    var li = document.createElement("li");
-    li.innerHTML = '<button data-i="' + i + '" aria-pressed="false"><span class="i">' + String(i + 1).padStart(2, "0") + '</span><span class="host">' + d.host + '</span><span class="kind">' + (d.kindEn ? '<span lang="zh">' + d.kind + '</span><span lang="en">' + d.kindEn + '</span>' : d.kind) + '</span></button>';
-    destEl.appendChild(li);
-  });
-  destEl.addEventListener("click", function (e) { var b = e.target.closest("button[data-i]"); if (!b) return; curDest = +b.dataset.i; renderRoute(); });
-  document.getElementById("modes").addEventListener("click", function (e) {
-    var b = e.target.closest("button[data-mode]"); if (!b) return; curMode = b.dataset.mode;
-    document.querySelectorAll("#modes button").forEach(function (x) { x.setAttribute("aria-selected", String(x === b)); });
-    renderRoute();
-  });
-
-  function steps() {
-    var d = DESTS[curDest], out = lang === "zh" ? d.out : d.outEn, outFinal;
-    var s = [
-      { k: T("应用", "App"), v: d.app, x: T("请求 ", "requests ") + d.host, st: "on" },
-      { k: "Hop", v: "127.0.0.1:17890", x: T("混合代理 · HTTP / SOCKS5", "mixed proxy · HTTP / SOCKS5"), st: "on" }
-    ];
-    if (curMode === "rule") {
-      s.push({ k: T("规则", "Rule"), v: d.group[lang === "zh" ? 0 : 1], x: d.rule, st: "on" });
-      outFinal = d.reject ? { k: T("结果", "Result"), v: T("拒绝连接", "Rejected"), x: "REJECT", st: "dead" }
-        : d.direct ? { k: T("出口", "Exit"), v: T("直连", "Direct"), x: "DIRECT", st: "on" }
-        : { k: T("出口", "Exit"), v: out, x: T("节点", "node") + " · " + d.group[lang === "zh" ? 0 : 1], st: "on" };
-    } else if (curMode === "global") {
-      s.push({ k: T("规则", "Rule"), v: T("跳过规则", "Rules skipped"), x: "MODE · GLOBAL", st: "on" });
-      outFinal = { k: T("出口", "Exit"), v: GLOBAL_NODE[lang === "zh" ? 0 : 1], x: T("全局选中的节点", "the node picked for Global"), st: "on" };
-    } else {
-      s.push({ k: T("规则", "Rule"), v: T("跳过规则", "Rules skipped"), x: "MODE · DIRECT", st: "on" });
-      outFinal = { k: T("出口", "Exit"), v: T("直连", "Direct"), x: "DIRECT", st: "on" };
-    }
-    s.push(outFinal);
-    return s;
-  }
-
-  var HINTS = {
-    rule: ["按规则分流:命中哪条,就走哪个分组的节点。", "Rule: the first matching rule decides which group's node carries it."],
-    global: ["全局:所有流量走同一个选中的节点,规则被跳过。", "Global: everything leaves through one chosen node; rules are skipped."],
-    direct: ["直连:全部不经节点,Hop 只是路过。", "Direct: nothing uses a node; Hop only passes it through."]
+  var REPO = "marukolibro/Hop";
+  var COMMANDS = {
+    mac: "curl -fsSL https://raw.githubusercontent.com/" + REPO + "/main/install.sh | sh",
+    win: "irm https://raw.githubusercontent.com/" + REPO + "/main/install.ps1 | iex"
   };
+  /* detectOS names the visitor's system: "mac", "win", or "other" (a phone, a tablet, Linux). */
+  function detectOS(nav) {
+    var ua = nav.userAgent || "";
+    var platform = (nav.userAgentData && nav.userAgentData.platform) || nav.platform || "";
+    if (/iPhone|iPad|iPod|Android/i.test(ua)) return "other";
+    if (/Win/i.test(platform) || /Windows/i.test(ua)) return "win";
+    // An iPad asks for the desktop site as a Mac, but has a touch screen.
+    if (/Mac/i.test(platform) || /Macintosh/i.test(ua)) return nav.maxTouchPoints > 1 ? "other" : "mac";
+    return "other";
+  }
+  var detected = detectOS(navigator);
+  var os = detected === "win" ? "win" : "mac";
+  if (detected === "other") document.getElementById("os-note").hidden = false;
 
-  function renderRoute() {
-    document.querySelectorAll("#dest button").forEach(function (b) { b.setAttribute("aria-pressed", String(+b.dataset.i === curDest)); });
-    document.getElementById("modeHint").textContent = HINTS[curMode][lang === "zh" ? 0 : 1];
-    var el = document.getElementById("path"), list = steps(), id = ++runId;
-    el.innerHTML = list.map(function (s, i) {
-      return '<div class="step" data-i="' + i + '"><div class="node">' + String(i + 1).padStart(2, "0") + '</div><div class="body"><div class="k">' + s.k + '</div><div class="v">' + s.v + '</div><div class="x">' + s.x + '</div></div><span class="fill"></span></div>';
-    }).join("");
-    var nodes = el.querySelectorAll(".step"), reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    nodes.forEach(function (n, i) {
-      var go = function () { if (id !== runId) return; n.classList.add(list[i].st === "dead" ? "dead" : "on"); if (i < nodes.length - 1) n.classList.add("go"); };
-      if (reduce) go(); else setTimeout(go, i * 260);
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* the choice lasts for this visit only */ } }
+
+  /* ---------- screenshots follow the language and the scheme ---------- */
+  function paintShots() {
+    var lang = root.dataset.lang;
+    document.querySelectorAll("[data-shot]").forEach(function (box) {
+      var scheme = box.dataset.scheme || root.dataset.scheme;
+      var src = "assets/" + lang + "/" + box.dataset.shot + "-" + scheme + ".webp";
+      var img = box.querySelector("img");
+      if (!img) {
+        img = new Image();
+        img.decoding = "async";
+        img.loading = box.closest(".hero") ? "eager" : "lazy";
+        box.appendChild(img);
+      }
+      if (img.getAttribute("src") !== src) img.src = src;
+      img.alt = box.dataset["alt" + (lang === "zh" ? "Zh" : "En")];
     });
   }
 
-  /* ---------- the ring gauge ---------- */
-  var NS = "http://www.w3.org/2000/svg", svg = document.getElementById("ringsvg");
-  function mk(tag, attrs) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e; }
-  var C = 300, P = Math.PI / 180;
-  function pt(r, a) { return [C + r * Math.sin(a * P), C - r * Math.cos(a * P)]; }
-  for (var a = 0; a < 360; a += 3) { var major = a % 30 === 0, p1 = pt(292, a), p2 = pt(major ? 270 : 281, a); mk("line", { class: "tick", x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1], "stroke-width": major ? 2 : 1 }); }
-  mk("circle", { cx: C, cy: C, r: 256, fill: "none", stroke: "var(--ink)", "stroke-width": 1 });
-  for (var b = 0; b < 120; b++) { var q1 = pt(246, b * 3), q2 = pt(228, b * 3); mk("line", { x1: q1[0], y1: q1[1], x2: q2[0], y2: q2[1], stroke: "var(--ink)", "stroke-width": b % 5 === 0 ? 2.4 : 1, opacity: b % 5 === 0 ? 1 : .55 }); }
-  mk("circle", { cx: C, cy: C, r: 206, fill: "none", stroke: "var(--ink)", "stroke-width": 1, "stroke-dasharray": "1 7", "stroke-linecap": "round" });
-  mk("circle", { cx: C, cy: C, r: 176, fill: "none", stroke: "var(--ink)", "stroke-width": 1, opacity: .5 });
-  var R1 = 150, R2 = 118;
-  mk("circle", { cx: C, cy: C, r: R1, fill: "none", stroke: "var(--ink)", "stroke-width": 10, opacity: .09 });
-  mk("circle", { cx: C, cy: C, r: R2, fill: "none", stroke: "var(--ink)", "stroke-width": 10, opacity: .09 });
-  var L1 = 2 * Math.PI * R1, L2 = 2 * Math.PI * R2;
-  var dl = mk("circle", { class: "arcdl", cx: C, cy: C, r: R1, fill: "none", "stroke-width": 10, "stroke-linecap": "round", transform: "rotate(-90 " + C + " " + C + ")", "stroke-dasharray": "0 " + L1 });
-  var ul = mk("circle", { class: "arcul", cx: C, cy: C, r: R2, fill: "none", "stroke-width": 10, "stroke-linecap": "round", transform: "rotate(-90 " + C + " " + C + ")", "stroke-dasharray": "0 " + L2 });
-  mk("circle", { cx: C, cy: C, r: 78, fill: "none", stroke: "var(--ink)", "stroke-width": 1 });
-  ["00", "15", "30", "45"].forEach(function (t, i) { var p = pt(318, i * 90); var x = mk("text", { x: p[0], y: p[1] + 4, "text-anchor": "middle", "font-family": "ui-monospace,Menlo,monospace", "font-size": 13, fill: "var(--ink)" }); x.textContent = t; });
-
-  var rdDl = document.getElementById("rdDl"), rdUl = document.getElementById("rdUl"), frame = 0, last = 0;
-  var reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  function level(t, k) { return Math.max(.04, Math.min(.98, .52 + .28 * Math.sin(t * .6 + k) + .12 * Math.sin(t * 1.7 + k * 2) + .06 * Math.sin(t * 3.1))); }
-  function tick(ms) {
-    var t = ms / 1000, d = level(t, 0), u = level(t, 2.2) * .35;
-    dl.setAttribute("stroke-dasharray", (d * L1 * .75).toFixed(1) + " " + L1);
-    ul.setAttribute("stroke-dasharray", (u * L2 * .75).toFixed(1) + " " + L2);
-    if (ms - last > 250) {
-      last = ms;
-      rdDl.textContent = "↓ " + (d * 24).toFixed(1) + " MB/s";
-      rdUl.firstChild.textContent = "↑ " + (u * 24).toFixed(1) + " MB/s · ";
-    }
-    if (!reduceMotion) frame = requestAnimationFrame(tick);
+  function apply() {
+    root.lang = root.dataset.lang === "zh" ? "zh-CN" : "en";
+    document.querySelector('meta[name="theme-color"]').content = root.dataset.scheme === "dark" ? "#0e0f11" : "#fbfbfa";
+    paintShots();
+    renderRelease();
   }
-  tick(3000);
 
-  /* ---------- copy ---------- */
-  var copyBtn = document.getElementById("copy");
-  copyBtn.addEventListener("click", function () {
-    var text = document.getElementById("cmd").textContent, done = function () {
-      var old = copyBtn.innerHTML; copyBtn.textContent = "✓"; setTimeout(function () { copyBtn.innerHTML = old; }, 1400);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { selectCmd(); });
-    else selectCmd();
+  document.getElementById("lang").addEventListener("click", function () {
+    root.dataset.lang = root.dataset.lang === "zh" ? "en" : "zh";
+    save("hop.lang", root.dataset.lang);
+    apply();
   });
-  function selectCmd() { var r = document.createRange(); r.selectNodeContents(document.getElementById("cmd")); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  document.getElementById("theme").addEventListener("click", function () {
+    var next = root.dataset.scheme === "dark" ? "light" : "dark";
+    root.dataset.scheme = next;
+    save("hop.theme", next);
+    apply();
+  });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function (e) {
+    if (load("hop.theme")) return;
+    root.dataset.scheme = e.matches ? "dark" : "light";
+    apply();
+  });
 
-  /* ---------- latest version label ---------- */
-  fetch("https://api.github.com/repos/marukolibro/Hop/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
-    .then(function (r) { if (!r.ok) throw new Error("releases/latest returned " + r.status); return r.json(); })
-    .then(function (rel) {
-      var v = String(rel.tag_name || "").replace(/^v/, ""); if (!v) return;
-      document.querySelectorAll(".ver").forEach(function (e) { e.textContent = "v" + v; e.hidden = false; });
-      document.getElementById("bigver").textContent = v.split(".").slice(0, 2).join(".");
-    })
-    .catch(function (err) { console.warn("Could not read the latest release:", err); });
+  /* ---------- install commands ---------- */
+  document.querySelectorAll("[data-cmd]").forEach(function (box) {
+    var code = box.querySelector("code");
+    var tabs = box.querySelectorAll("[data-os]");
+    var fixed = box.dataset.fixed;
+    function show(which) {
+      code.textContent = COMMANDS[which];
+      tabs.forEach(function (t) { t.setAttribute("aria-pressed", String(t.dataset.os === which)); });
+    }
+    show(fixed || os);
+    tabs.forEach(function (t) { t.addEventListener("click", function () { show(t.dataset.os); }); });
+    var button = box.querySelector(".copy");
+    button.addEventListener("click", function () {
+      var done = function () {
+        var spans = button.querySelectorAll("span");
+        var before = [].map.call(spans, function (s) { return s.textContent; });
+        spans[0].textContent = "已复制"; spans[1].textContent = "Copied";
+        setTimeout(function () { spans.forEach(function (s, i) { s.textContent = before[i]; }); }, 1400);
+      };
+      var select = function () {
+        var range = document.createRange();
+        range.selectNodeContents(code);
+        var sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code.textContent).then(done, select);
+      } else {
+        select();
+      }
+    });
+  });
 
-  /* ---------- reveal on scroll ---------- */
-  var io = "IntersectionObserver" in window ? new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }); }, { rootMargin: "0px 0px -8% 0px" }) : null;
-  document.querySelectorAll(".rv").forEach(function (el) { if (io) io.observe(el); else el.classList.add("in"); });
+  /* ---------- latest release and stars, from GitHub ---------- */
+  var latest = null;
+  function renderRelease() {
+    var pill = document.getElementById("release");
+    if (!latest) return;
+    document.getElementById("release-text").textContent = root.dataset.lang === "zh"
+      ? latest + " 已发布 · 查看更新" : latest + " is out · What's new";
+    pill.hidden = false;
+  }
+  function getJSON(url, key, ttlMs) {
+    try {
+      var cached = JSON.parse(sessionStorage.getItem(key) || "null");
+      if (cached && Date.now() - cached.at < ttlMs) return Promise.resolve(cached.data);
+    } catch (e) { /* no cache: ask GitHub */ }
+    return fetch(url, { headers: { Accept: "application/vnd.github+json" } }).then(function (r) {
+      if (!r.ok) throw new Error(url + " answered " + r.status);
+      return r.json();
+    }).then(function (data) {
+      try { sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), data: data })); } catch (e) { /* uncached */ }
+      return data;
+    });
+  }
+  getJSON("https://api.github.com/repos/" + REPO + "/releases/latest", "hop.release", 600000).then(function (r) {
+    latest = r.tag_name;
+    renderRelease();
+  }).catch(function () { /* the pill stays hidden */ });
+  getJSON("https://api.github.com/repos/" + REPO, "hop.repo", 600000).then(function (r) {
+    var n = r.stargazers_count;
+    document.getElementById("stars").textContent = n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
+  }).catch(function () { /* the count stays hidden */ });
+
+  /* ---------- nav border once scrolled ---------- */
+  var nav = document.getElementById("nav");
+  function onScroll() { nav.classList.toggle("scrolled", window.scrollY > 8); }
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
 
   apply();
 })();

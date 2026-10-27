@@ -24,8 +24,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/nodes-dark.png">
-    <img src="docs/screenshots/nodes-light.png" width="860" alt="The nodes page: the route's exit, live traffic, and the nodes by region">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/en/nodes-dark.png">
+    <img src="docs/screenshots/en/nodes-light.png" width="860" alt="The nodes page: the route's exit, live traffic, and the nodes by region">
   </picture>
 </p>
 
@@ -137,23 +137,23 @@ running in a webview, and the same code runs on macOS and Windows.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/stats-dark.png">
-    <img src="docs/screenshots/stats-light.png" width="620" alt="The statistics page">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/en/stats-dark.png">
+    <img src="docs/screenshots/en/stats-light.png" width="620" alt="The statistics page">
   </picture>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/connections-light.png" width="420" alt="The connections page">
-  <img src="docs/screenshots/dusk-dark.png" width="420" alt="The dusk theme in dark appearance">
+  <img src="docs/screenshots/en/connections-light.png" width="420" alt="The connections page">
+  <img src="docs/screenshots/en/connections-dark.png" width="420" alt="The connections page in dark appearance">
 </p>
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/menubar-dark.png">
-    <img src="docs/screenshots/menubar-light.png" width="240" alt="The menu bar panel">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/en/menubar-dark.png">
+    <img src="docs/screenshots/en/menubar-light.png" width="240" alt="The menu bar panel">
   </picture>
   &nbsp;
-  <img src="docs/screenshots/add-rule-light.png" width="560" alt="Adding a rule from a connection">
+  <img src="docs/screenshots/en/add-rule-light.png" width="560" alt="Adding a rule from a connection">
 </p>
 
 ### Updates
@@ -179,7 +179,7 @@ a confirmation (see [Install](#install)).
 | Platform | Runs on | How |
 | --- | --- | --- |
 | macOS | Apple silicon and Intel (one universal app) | the install script below |
-| Windows | x64, Windows 10 and 11 (glass needs Windows 11 22H2 or later) | `Hop Setup <version> amd64.exe` from the [latest release](https://github.com/marukolibro/Hop/releases/latest) |
+| Windows | x64, Windows 10 and 11 (glass needs Windows 11 22H2 or later) | the install script below, or `Hop Setup <version> amd64.exe` from the [latest release](https://github.com/marukolibro/Hop/releases/latest) |
 
 Linux is not supported.
 
@@ -197,7 +197,19 @@ what lets macOS open the app.
 
 ### Windows
 
-Download `Hop Setup <version> amd64.exe` from the
+In PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/marukolibro/Hop/main/install.ps1 | iex
+```
+
+The script downloads the latest installer, runs it silently for the current
+user (no administrator rights), checks the version it installed, and opens Hop.
+It asks Hop to quit first if it is running. The macOS command also works in a
+shell on Windows (Git Bash): it detects the system and hands over to this
+script. Running it again installs a newer version.
+
+Or download `Hop Setup <version> amd64.exe` from the
 [latest release](https://github.com/marukolibro/Hop/releases/latest) and run it.
 The installer is not code signed yet, so Windows SmartScreen asks you to
 confirm the first run: choose **More info → Run anyway**.
