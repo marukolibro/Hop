@@ -1,6 +1,7 @@
 #!/bin/sh
 # Installs or updates Hop from the latest signed release: one universal app
-# for Apple silicon and Intel Macs.
+# for Apple silicon and Intel Macs. In a shell on Windows (Git Bash, MSYS2) it
+# hands over to install.ps1.
 # The manifest carries the archive's size and an Ed25519 signature, but no
 # SHA-256. Verifying Ed25519 in POSIX sh is not practical, so this script
 # checks the size and relies on HTTPS for the download; the app's own updater
@@ -30,7 +31,14 @@ say() {
 
 case "$(uname -s)" in
 Darwin) ;;
-*) die "Hop 只支持 macOS" ;;
+MINGW* | MSYS* | CYGWIN*)
+	# A shell on Windows (Git Bash, MSYS2): the Windows installer is a
+	# PowerShell script.
+	command -v powershell.exe >/dev/null 2>&1 || die "powershell.exe is required"
+	exec powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
+		"irm https://raw.githubusercontent.com/$repo/main/install.ps1 | iex"
+	;;
+*) die "Hop 只支持 macOS 和 Windows" ;;
 esac
 
 command -v curl >/dev/null 2>&1 || die "curl is required"
