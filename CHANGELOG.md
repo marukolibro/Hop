@@ -1,6 +1,6 @@
 # 更新日志
 
-## 未发布
+## 0.4.13
 
 - 改进:安装命令换成发布页上随每个版本一起发布的脚本:`curl -fsSL https://github.com/marukolibro/Hop/releases/latest/download/install.sh | sh`(macOS)和 `irm https://github.com/marukolibro/Hop/releases/latest/download/install.ps1 | iex`(Windows)。macOS 的会校验安装包的 Ed25519 签名,Windows 的会对照 `SHA256SUMS` 校验安装包;macOS 上 `sh install.sh --uninstall` 可以卸载。旧地址(raw.githubusercontent.com 上的 install.sh、install.ps1)仍然可用
 - 改进:Windows 安装包改名为 `hop-setup-<版本>-amd64.exe`;「设置 → 应用」里会显示发布者
