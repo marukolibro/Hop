@@ -113,7 +113,7 @@ Hop 还很年轻,而且有意保持小。没有 Linux 版;没有配置脚本或�
 | 平台 | 支持 | 方式 |
 | --- | --- | --- |
 | macOS | Apple 芯片和 Intel(同一个通用安装包) | 下面的安装脚本 |
-| Windows | x64,Windows 10 和 11(玻璃效果需要 Windows 11 22H2 或更新) | 下面的安装脚本,或从[最新发布](https://github.com/marukolibro/Hop/releases/latest)下载 `Hop Setup <版本> amd64.exe` |
+| Windows | x64,Windows 10 和 11(玻璃效果需要 Windows 11 22H2 或更新) | 下面的安装脚本,或从[最新发布](https://github.com/marukolibro/Hop/releases/latest)下载 `hop-setup-<版本>-amd64.exe` |
 
 不支持 Linux。
 
@@ -135,7 +135,7 @@ irm https://raw.githubusercontent.com/marukolibro/Hop/main/install.ps1 | iex
 
 脚本下载最新的安装包,以当前用户身份静默安装(不需要管理员权限),检查装好的版本,然后打开 Hop。Hop 正在运行时会先请它退出。上面的 macOS 命令在 Windows 的 shell(Git Bash)里也能用:它会识别系统,转交给这个脚本。再运行一次就会装上新版本。
 
-也可以从[最新发布](https://github.com/marukolibro/Hop/releases/latest)下载 `Hop Setup <版本> amd64.exe` 并运行。安装包还没有代码签名,第一次运行时 Windows SmartScreen 会要你确认:点「更多信息 → 仍要运行」。
+也可以从[最新发布](https://github.com/marukolibro/Hop/releases/latest)下载 `hop-setup-<版本>-amd64.exe` 并运行。安装包还没有代码签名,第一次运行时 Windows SmartScreen 会要你确认:点「更多信息 → 仍要运行」。
 
 之后两个平台的 Hop 都会自己保持最新。
 

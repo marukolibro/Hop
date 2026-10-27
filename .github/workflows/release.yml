@@ -123,7 +123,7 @@ jobs:
       - name: Check the installer exists and the update manifest is signed
         run: |
           ls build/windows-amd64
-          test -n "$(ls build/windows-amd64/*Setup*.exe)"
+          test -n "$(ls build/windows-amd64/*-setup-*.exe)"
           manifest=build/windows-amd64/update-windows-amd64.json
           test "$(jq -r .version "$manifest")" = "${GITHUB_REF_NAME#v}"
           test -n "$(jq -r '.signature // empty' "$manifest")"

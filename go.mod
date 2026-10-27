@@ -1,12 +1,12 @@
 module hop
 
-go 1.27.2
+go 1.27.3
 
 tool github.com/egoist/mygo/cmd/mygo
 
 require (
 	github.com/coder/websocket v1.8.15
-	github.com/egoist/mygo v0.6.2
+	github.com/egoist/mygo v0.7.1
 	github.com/metacubex/mihomo v1.19.33
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/sys v0.49.0

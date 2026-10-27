@@ -397,7 +397,8 @@ Windows still shows the square one. `docs/icon.png` and `docs/favicon.png` are
 the same tile at 128 and 64 pixels.
 
 `install.ps1` is the Windows counterpart (`irm .../install.ps1 | iex`): it
-reads `update-windows-amd64.json`, downloads `Hop.Setup.<version>.amd64.exe`
+reads `update-windows-amd64.json`, downloads `hop-setup-<version>-amd64.exe`
+(`Hop.Setup.<version>.amd64.exe` up to 0.4.12, before MyGo 0.7 renamed it)
 next to the update archive, asks a running Hop to quit (never kills it, which
 would leave the system proxy set), runs it with `/S` (per user, no
 administrator rights), and checks the installed version in the uninstall key.

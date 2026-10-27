@@ -49,8 +49,15 @@ function Install-Hop {
 		return
 	}
 
-	# The installer sits beside the update archive; GitHub names it with dots.
-	$installerUrl = ($manifest.url -replace '/[^/]+$', '') + "/Hop.Setup.$version.amd64.exe"
+	# The installer sits beside the update archive. MyGo 0.7 renamed it from
+	# "Hop Setup <version> amd64.exe" (dotted by GitHub) to "hop-setup-<version>-amd64.exe";
+	# 0.4.12 is the last release with the old name.
+	if ([version]$version -le [version]'0.4.12') {
+		$installerName = "Hop.Setup.$version.amd64.exe"
+	} else {
+		$installerName = "hop-setup-$version-amd64.exe"
+	}
+	$installerUrl = ($manifest.url -replace '/[^/]+$', '') + "/$installerName"
 	$work = Join-Path ([IO.Path]::GetTempPath()) ("hop-install-" + [Guid]::NewGuid().ToString('N'))
 	New-Item -ItemType Directory -Path $work | Out-Null
 	try {
