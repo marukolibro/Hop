@@ -433,6 +433,18 @@ uses) and `docs/screenshots/en/` (English, for `README.md`) with
 page plain: a sentence and a real screenshot per section, no decoration.
 Check it at desktop and phone width, in both languages and both schemes.
 
+The page follows the `landing-page-design` skill (from
+`elayadesign/ai-design-skills`, kept locally in `.claude/skills/` and not committed): Tailwind's type scale and radii, the fixed
+spacing steps, the decelerating `--ease` curve with transform and opacity only,
+scroll reveals and the tagline through `IntersectionObserver` / one
+`requestAnimationFrame` scroll handler, and no italics, background gradients or
+hyphens in the English copy. Two deliberate departures: the hero heading has
+no gradient, and Chinese headings are one size smaller than the Latin ones so
+they keep their line breaks. Geist is self-hosted in `docs/assets/fonts/`
+(SIL OFL) rather than loaded from Google Fonts, so a visit sends nothing to a
+third party. `docs/social-preview.png` (1280×640) and `docs/404.html` belong
+to the same design; redo the preview when the hero changes.
+
 ## Git
 
 Small commits with messages that say why. End commit messages with the

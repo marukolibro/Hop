@@ -6,3 +6,6 @@ mygo_windows_*.syso
 /resources/darwin-*/
 /resources/windows-*/
 /resources/geodata/
+
+# Third-party agent skills installed for local use.
+/.claude/skills/
