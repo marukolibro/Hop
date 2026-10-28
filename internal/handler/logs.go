@@ -42,6 +42,7 @@ func (d *Dashboard) logsPage(c *ui.Context, t *ui.Theme) {
 			slidingSwitch(c, locales.LogsLevel(), &d.logs.level, labels, pageSwitchStyle(t, 52), func(int) {})
 			mutedText(c, t, locales.LogsLines(len(visible))).FontFeatures("tnum")
 			ui.Box(c).Grow(1)
+			button(c, buttonSpec{label: locales.LogsOpenFolder(), style: mainSoftButton(t)}, d.openLogFolder)
 			button(c, buttonSpec{label: locales.LogsClear(), style: mainSoftButton(t), disabled: len(d.logs.entries) == 0}, func() { d.logs.entries = nil })
 		})
 		if len(visible) == 0 {
@@ -56,6 +57,13 @@ func (d *Dashboard) logsPage(c *ui.Context, t *ui.Theme) {
 			})
 		})
 	})
+}
+
+// openLogFolder shows the folder of the log files, which outlive the window.
+func (d *Dashboard) openLogFolder() {
+	if err := d.services.Folders.OpenPath(d.services.LogDir); err != nil {
+		d.fail(actionOpenLogFolder, err)
+	}
 }
 
 func logRow(c *ui.Context, t *ui.Theme, entry model.LogEntry, last bool) {

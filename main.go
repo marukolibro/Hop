@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -27,6 +28,7 @@ import (
 	"hop/internal/repository/geodata"
 	"hop/internal/repository/helper"
 	"hop/internal/repository/lan"
+	"hop/internal/repository/logfile"
 	"hop/internal/repository/mihomo"
 	"hop/internal/repository/profile"
 	"hop/internal/repository/routetable"
@@ -55,6 +57,11 @@ const (
 	// geodataHelperTimeout bounds giving the helper new geodata, which
 	// restarts its core once the ports are free again.
 	geodataHelperTimeout = 90 * time.Second
+	// logFileName, logFileBytes and logFileCount keep the log to a few
+	// megabytes: the newest file and two older ones.
+	logFileName          = "hop.log"
+	logFileBytes   int64 = 2 << 20
+	logFileCount         = 3
 	bindAddress          = "127.0.0.1"
 	coreLogLevel         = "info"
 	bootstrapGroup       = "Hop"
@@ -102,6 +109,15 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
+	logs, err := logfile.Open(cfg.LogDir, logFileName, logFileBytes, logFileCount)
+	if err != nil {
+		return err
+	}
+	defer logs.Close()
+	// Hop's own log goes to the file as well as the console. The core's goes
+	// there too, warnings and errors only: the Logs page shows the rest live.
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.MultiWriter(os.Stderr, logs), nil)))
+	cfg.CoreOutput = io.MultiWriter(os.Stderr, logfile.NewWarningsOnly(logs))
 	// appGeodataDir is Hop's own copy of the geo databases: updates write
 	// there, never into the app bundle, and the helper is seeded from it.
 	appGeodataDir := filepath.Join(cfg.AppDir, "geodata")
@@ -302,6 +318,8 @@ func run() (err error) {
 		SystemProxy:   systemProxy,
 		Tun:           tun,
 		LoginItem:     mygo.App,
+		Folders:       mygo.Shell,
+		LogDir:        cfg.LogDir,
 		ExitIP:        service.NewExitIPService(exitip.NewClient(exitip.TraceURL, hopProxyClient(portState))),
 		Unlock:        service.NewUnlockService(client, unlockLanes(cfg.ProbePort)),
 		LAN:           lanService,

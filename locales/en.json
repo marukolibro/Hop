@@ -14,6 +14,7 @@
   "actionLoadGroups": "Couldn't read the node list",
   "actionLoadSource": "Couldn't read the subscription details",
   "actionOpenAtLogin": "Couldn't change launch at login",
+  "actionOpenLogFolder": "Couldn't open the log folder",
   "actionPort": "Couldn't change the proxy port",
   "actionReadCore": "Couldn't read the core version",
   "actionReadGeodata": "Couldn't read the rule data status",
@@ -259,6 +260,7 @@
   "logsEmpty": "No log yet",
   "logsEmptyHint": "The core's activity appears here live, such as which rule a connection matched and why a node failed to connect.",
   "logsLevel": "Log level",
+  "logsOpenFolder": "Open log folder",
   "logsLines": "{count, plural, one {# line} other {# lines}}",
   "@logsLines": {
     "placeholders": {

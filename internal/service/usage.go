@@ -12,8 +12,8 @@ import (
 // ParseUsage reads a subscription-userinfo header, such as
 // "upload=5845982050; download=27080936224; total=214748364800;
 // expire=1796918400". Byte counts are in bytes and expire is a Unix time;
-// a missing or zero total or expire means no limit. Unknown fields are
-// ignored, as providers add their own.
+// a missing, empty or zero total or expire means no limit. Unknown fields
+// are ignored, as providers add their own.
 func ParseUsage(header string) (model.Usage, error) {
 	var usage model.Usage
 	for _, field := range strings.Split(header, ";") {
@@ -25,6 +25,10 @@ func ParseUsage(header string) (model.Usage, error) {
 		switch key {
 		case "upload", "download", "total", "expire":
 		default:
+			continue
+		}
+		// Some providers send "expire=" for an account that never expires.
+		if value == "" {
 			continue
 		}
 		// Some providers send decimals; the fraction of a byte is noise.
