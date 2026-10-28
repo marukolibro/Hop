@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"time"
+
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
@@ -18,7 +20,22 @@ const (
 	statusOnFillAlpha  float32 = 0.14
 	statusOnHoverAlpha float32 = 0.2
 	statusOnLineAlpha  float32 = 0.55
-	statusOffDotAlpha  float32 = 0.55
+
+	// A traffic switch shows a small switch: a track miniTrackW by miniTrackH
+	// with a knob miniKnobInset inside its ends.
+	miniTrackW    float32 = 22
+	miniTrackH    float32 = 13
+	miniKnobInset float32 = 2
+	miniOffAlpha  float32 = 0.35
+
+	// The hint ring breathes hintBreaths times, each hintBreath long with
+	// hintRest between, and then holds still: a nudge, not an alarm, and no
+	// frames once it is done.
+	hintBreaths         = 3
+	hintBreath          = 1600 * time.Millisecond
+	hintRest            = 900 * time.Millisecond
+	hintSpread  float32 = 4
+	hintAlpha   float32 = 0.35
 )
 
 // pillSpec is what a toggle pill shows and whether it takes clicks now.
@@ -26,32 +43,35 @@ type pillSpec struct {
 	label    string
 	on       bool
 	disabled bool
-	// busy shows a spinner in place of the dot while the change runs.
+	// busy shows a spinner in place of the dot or switch while the change
+	// runs.
 	busy bool
+	// hint breathes a ring around the pill, to point at it.
+	hint bool
 }
 
-// togglePill is a capsule with a dot that lights in the accent while its
-// choice is on: the outbound modes, one of which is always on, and the
-// system proxy, which is on or off. Its fill, outline and dot ease between
-// the two.
-func togglePill(c *ui.Context, t *ui.Theme, spec pillSpec, onClick func()) ui.Element {
+// togglePill is a capsule that takes the accent's tint while its choice is
+// on, with lead drawn before its label: the outbound modes, one of which is
+// always on, and the traffic switches, which are on or off. Its fill and
+// outline ease between the two.
+func togglePill(c *ui.Context, t *ui.Theme, spec pillSpec, lead func(), onClick func()) ui.Element {
 	b := ui.ButtonBase(c).Key(spec.label).Label(spec.label).Height(switchHeight).Padding(0, 12).Gap(gapTight).
 		Radius(switchHeight / 2).AlignItems(ui.Center).Justify(ui.Center).Disabled(spec.disabled || spec.busy)
 	// Off, a pill is only a faint fill; on, it takes the accent's tint and
 	// outline, so the choices that are on stand out of the row. On glass
 	// both sit on a near-opaque backing, so their text never meets the
 	// desktop.
-	fill, line, dot, ink := t.Text.Alpha(softFillAlpha), ui.Transparent, t.TextMuted.Alpha(pillOffDotAlpha), t.TextMuted
+	fill, line, ink := t.Text.Alpha(softFillAlpha), ui.Transparent, t.TextMuted
 	if onGlass(t) {
 		backing := controlBacking(t)
 		fill, line = backing, t.Text.Alpha(0.24)
 		if spec.on {
-			fill, line, dot, ink = t.Accent.Alpha(pillOnFillAlpha).Over(backing), t.Accent.Alpha(pillOnLineAlpha), t.Accent, t.Text
+			fill, line, ink = t.Accent.Alpha(pillOnFillAlpha).Over(backing), t.Accent.Alpha(pillOnLineAlpha), t.Text
 		} else if b.Hovered() && !spec.disabled {
 			fill = backing.Mix(t.Text, softFillAlpha)
 		}
 	} else if spec.on {
-		fill, line, dot, ink = t.Accent.Alpha(pillOnFillAlpha), t.Accent.Alpha(pillOnLineAlpha), t.Accent, t.Text
+		fill, line, ink = t.Accent.Alpha(pillOnFillAlpha), t.Accent.Alpha(pillOnLineAlpha), t.Text
 	} else if b.Hovered() && !spec.disabled {
 		fill = t.Text.Alpha(softHoverAlpha)
 	}
@@ -68,17 +88,14 @@ func togglePill(c *ui.Context, t *ui.Theme, spec pillSpec, onClick func()) ui.El
 		b.Cursor(ui.CursorPointer)
 	}
 	b.OnClick(onClick)
-	dotColor := b.AnimateColor("dot", dot, ui.Smooth)
 	b.Children(func() {
+		if spec.hint {
+			hintRing(c, t.Accent)
+		}
 		if spec.busy {
 			spinner(c, iconInline, t.Accent)
 		} else {
-			glow := ui.Transparent
-			if spec.on {
-				glow = t.Accent.Alpha(pillDotGlowAlpha)
-			}
-			ui.Box(c).Key("dot").Width(pillDot).Height(pillDot).Radius(pillDot/2).Background(dotColor).
-				Shadow(0, 0, 0, 3, glow)
+			lead()
 		}
 		ui.Text(c, spec.label).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(ink).
 			NoWrap().Translate(0, -opticalLift)
@@ -86,13 +103,58 @@ func togglePill(c *ui.Context, t *ui.Theme, spec pillSpec, onClick func()) ui.El
 	return b
 }
 
+// pillDotMark is the dot of a mode pill: it lights in the accent, with a
+// faint glow, while its mode is on.
+func pillDotMark(c *ui.Context, t *ui.Theme, on bool) {
+	color, glow := t.TextMuted.Alpha(pillOffDotAlpha), ui.Transparent
+	if on {
+		color, glow = t.Accent, t.Accent.Alpha(pillDotGlowAlpha)
+	}
+	dot := ui.Box(c).Key("dot").Width(pillDot).Height(pillDot).Radius(pillDot / 2)
+	dot.Background(dot.AnimateColor("dot", color, ui.Smooth)).Shadow(0, 0, 0, 3, glow)
+}
+
+// miniSwitch is the small switch a traffic switch shows, so it reads as on
+// or off at a glance: a grey track with the knob at the left when off, a
+// track in onColor with the knob at the right when on. The knob slides and
+// the track eases between the two.
+func miniSwitch(c *ui.Context, t *ui.Theme, on bool, onColor ui.Color) {
+	track, target := t.TextMuted.Alpha(miniOffAlpha), float32(0)
+	if on {
+		track, target = onColor, 1
+	}
+	box := ui.Box(c).Key("miniSwitch").Width(miniTrackW).Height(miniTrackH)
+	trackColor := box.AnimateColor("track", track, ui.Smooth)
+	pos := box.AnimateTo("knob", target, ui.Snappy)
+	knob := ui.RGBA(255, 255, 255, 1)
+	box.Draw(func(p *ui.Painter, r ui.Rect) {
+		p.Fill(r, trackColor, r.H/2)
+		radius := r.H/2 - miniKnobInset
+		left, right := r.X+r.H/2, r.X+r.W-r.H/2
+		p.Fill(circle(left+(right-left)*pos, r.Y+r.H/2, radius), knob, radius)
+	})
+}
+
+// hintRing breathes a glow in color around the pill it is built in, a few
+// times, to show where to start. It is built only while the hint applies,
+// so it breathes again each time the hint comes back.
+func hintRing(c *ui.Context, color ui.Color) {
+	ring := ui.Box(c).Key("hint").Absolute().Left(0).Top(0).Right(0).Bottom(0).Radius(switchHeight / 2)
+	v := ring.Keyframes("breathe", []ui.Keyframe{
+		{At: 0, Value: 0},
+		{At: hintBreath / 2, Value: 1, Ease: ui.EaseInOut},
+		{At: hintBreath, Value: 0, Ease: ui.EaseInOut},
+	}, ui.KeyframeOptions{Repeat: hintBreaths - 1, RepeatDelay: hintRest})
+	ring.Shadow(0, 0, 0, hintSpread*v, color.Alpha(hintAlpha*v))
+}
+
 // statusToggle is a capsule button for something that is on or off, made to
-// be found at a glance. Off, it is a plain outlined button with a grey dot;
-// on, it turns green: a tinted fill and outline, and a dot that ripples once
-// as the core takes the traffic. A spinner takes the dot's place while the
-// change runs, without dimming the button; tip says what it does.
+// be found at a glance. Off, it is a plain outlined button with a grey
+// switch; on, it turns green: a tinted fill and outline, and the switch
+// slides on. A spinner takes the switch's place while the change runs,
+// without dimming the button; tip says what it does.
 func statusToggle(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onClick func()) ui.Element {
-	b := ui.ButtonBase(c).Key(spec.label).Label(spec.label).Tooltip(tip).Height(switchHeight).Padding(0, 12, 0, 8).Gap(2).
+	b := ui.ButtonBase(c).Key(spec.label).Label(spec.label).Tooltip(tip).Height(switchHeight).Padding(0, 12, 0, 9).Gap(gapTight).
 		Radius(switchHeight / 2).AlignItems(ui.Center).Justify(ui.Center).Disabled(spec.disabled)
 	hovered := b.Hovered() && !spec.disabled && !spec.busy
 	fill, line, weight, ink := t.Surface, t.Border, weightMedium, t.Text
@@ -135,20 +197,22 @@ func statusToggle(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onClick
 		}
 	})
 	b.Children(func() {
-		// The dot is built in every state, hidden under the spinner while a
-		// change runs, so that it keeps its motion state across the change and
-		// ripples once when the switch turns on.
-		dotColor := t.Success
-		if !spec.on {
-			dotColor = t.TextMuted.Alpha(statusOffDotAlpha)
+		if spec.hint {
+			hintRing(c, t.Success)
 		}
+		// The switch is built in every state, hidden under the spinner while
+		// a change runs, so that it keeps its motion state across the change
+		// and slides on when the change is done.
+		face := float32(1)
 		if spec.busy {
-			dotColor = dotColor.Alpha(0)
+			face = 0
 		}
-		ui.Box(c).Key("dot").Width(16).Height(16).Center().Children(func() {
-			statusDot(c, dotColor, spec.on && !spec.busy)
+		ui.Box(c).Key("lead").Width(miniTrackW).Height(16).Center().Children(func() {
+			ui.Box(c).Key("face").Opacity(face).Children(func() {
+				miniSwitch(c, t, spec.on, t.Success)
+			})
 			if spec.busy {
-				ui.Box(c).Absolute().Left(2).Top(2).Width(iconInline).Height(iconInline).Children(func() {
+				ui.Box(c).Absolute().Left((miniTrackW - iconInline) / 2).Top(2).Width(iconInline).Height(iconInline).Children(func() {
 					spinner(c, iconInline, t.Success)
 				})
 			}
@@ -161,7 +225,9 @@ func statusToggle(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onClick
 
 // modePill is the pill of the i'th outbound mode.
 func (d *Dashboard) modePill(c *ui.Context, t *ui.Theme, i int) ui.Element {
-	return togglePill(c, t, pillSpec{label: modeLabels()[i], on: d.modeIndex == i, disabled: d.modeLocked()}, func() {
+	on := d.modeIndex == i
+	lead := func() { pillDotMark(c, t, on) }
+	return togglePill(c, t, pillSpec{label: modeLabels()[i], on: on, disabled: d.modeLocked()}, lead, func() {
 		if d.modeIndex == i {
 			return
 		}
@@ -176,9 +242,9 @@ func (d *Dashboard) systemProxyPill(c *ui.Context, t *ui.Theme) ui.Element {
 	s := &d.sysProxy
 	taken := s.status.Owner == model.ProxyOwnerOther
 	return togglePill(c, t, pillSpec{
-		label: locales.SystemProxy(), on: s.on, busy: s.busy,
+		label: locales.SystemProxy(), on: s.on, busy: s.busy, hint: d.trafficHint(),
 		disabled: !s.loaded || (taken && !s.on),
-	}, func() { d.beginSystemProxy(!s.on) })
+	}, func() { miniSwitch(c, t, s.on, t.Accent) }, func() { d.beginSystemProxy(!s.on) })
 }
 
 // tunPill turns TUN mode on and off. While another client's TUN holds the
@@ -188,5 +254,15 @@ func (d *Dashboard) tunPill(c *ui.Context, t *ui.Theme) ui.Element {
 	return togglePill(c, t, pillSpec{
 		label: locales.Tun(), on: s.on, busy: s.busy,
 		disabled: !s.loaded || d.controlsLocked() || (s.taken && !s.on),
-	}, func() { d.beginTun(!s.on) })
+	}, func() { miniSwitch(c, t, s.on, t.Accent) }, func() { d.beginTun(!s.on) })
+}
+
+// trafficHint says whether to point at the system proxy switch: the core
+// runs, yet neither the system proxy nor TUN sends traffic to it, and no
+// other client holds either, so Hop is doing nothing for the user until one
+// is turned on.
+func (d *Dashboard) trafficHint() bool {
+	sp, tun := &d.sysProxy, &d.tun
+	return d.status != statusFailed && sp.loaded && !sp.on && !sp.busy && !tun.on && !tun.busy &&
+		sp.status.Owner != model.ProxyOwnerOther && !tun.taken
 }

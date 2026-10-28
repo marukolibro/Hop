@@ -213,7 +213,7 @@ func statusDot(c *ui.Context, color ui.Color, live bool) {
 }
 
 // trafficSwitches are the header's buttons for how traffic reaches Hop, the
-// system proxy and TUN, each lit by a green dot while on. The header holds
+// system proxy and TUN, each with a switch that turns green while on. The header holds
 // them so every page shows them. A switch another client holds says so
 // before them, and so does a core Hop cannot reach.
 func (d *Dashboard) trafficSwitches(c *ui.Context, t *ui.Theme) {
@@ -227,7 +227,7 @@ func (d *Dashboard) trafficSwitches(c *ui.Context, t *ui.Theme) {
 	}
 	sp, tun := &d.sysProxy, &d.tun
 	statusToggle(c, t, pillSpec{
-		label: locales.SystemProxy(), on: sp.on, busy: sp.busy,
+		label: locales.SystemProxy(), on: sp.on, busy: sp.busy, hint: d.trafficHint(),
 		disabled: !sp.loaded || (sp.status.Owner == model.ProxyOwnerOther && !sp.on),
 	}, locales.SystemProxyHint(), func() { d.beginSystemProxy(!sp.on) })
 	statusToggle(c, t, pillSpec{
