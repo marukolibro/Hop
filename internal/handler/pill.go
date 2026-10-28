@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"math"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -28,14 +29,17 @@ const (
 	miniKnobInset float32 = 2
 	miniOffAlpha  float32 = 0.35
 
-	// The hint ring breathes hintBreaths times, each hintBreath long with
-	// hintRest between, and then holds still: a nudge, not an alarm, and no
-	// frames once it is done.
-	hintBreaths         = 3
-	hintBreath          = 1600 * time.Millisecond
-	hintRest            = 900 * time.Millisecond
-	hintSpread  float32 = 4
-	hintAlpha   float32 = 0.35
+	// The hint ring breathes once every hintCycle, glowing for hintBreath
+	// of it and resting for the rest: slow enough to be a nudge, not an
+	// alarm, and kept up for as long as the hint applies, so it is there
+	// whenever the user looks.
+	hintCycle          = 4 * time.Second
+	hintBreath         = 1600 * time.Millisecond
+	hintSpread float32 = 4
+	hintAlpha  float32 = 0.35
+	// hintFPS is the frame rate the ring breathes at: a slow glow looks as
+	// smooth at 30 frames a second as at the display's rate.
+	hintFPS float32 = 30
 )
 
 // pillSpec is what a toggle pill shows and whether it takes clicks now.
@@ -135,17 +139,32 @@ func miniSwitch(c *ui.Context, t *ui.Theme, on bool, onColor ui.Color) {
 	})
 }
 
-// hintRing breathes a glow in color around the pill it is built in, a few
-// times, to show where to start. It is built only while the hint applies,
-// so it breathes again each time the hint comes back.
+// hintRing breathes a glow in color around the pill it is built in, to
+// show where to start, for as long as it is built: the caller builds it
+// only while the hint applies. It animates in Draw, so the breathing only
+// repaints the ring, at hintFPS while it glows and not at all while it
+// rests. The box reaches hintSpread past the pill on every side, where the
+// glow is drawn.
 func hintRing(c *ui.Context, color ui.Color) {
-	ring := ui.Box(c).Key("hint").Absolute().Left(0).Top(0).Right(0).Bottom(0).Radius(switchHeight / 2)
-	v := ring.Keyframes("breathe", []ui.Keyframe{
-		{At: 0, Value: 0},
-		{At: hintBreath / 2, Value: 1, Ease: ui.EaseInOut},
-		{At: hintBreath, Value: 0, Ease: ui.EaseInOut},
-	}, ui.KeyframeOptions{Repeat: hintBreaths - 1, RepeatDelay: hintRest})
-	ring.Shadow(0, 0, 0, hintSpread*v, color.Alpha(hintAlpha*v))
+	ring := ui.Box(c).Key("hint").Absolute().Left(-hintSpread).Top(-hintSpread).Right(-hintSpread).Bottom(-hintSpread)
+	ring.Draw(func(p *ui.Painter, r ui.Rect) {
+		at := time.Duration(p.Now().UnixMilli()%hintCycle.Milliseconds()) * time.Millisecond
+		if at >= hintBreath {
+			p.After(hintCycle - at)
+			return
+		}
+		p.AnimationFrameRate(hintFPS)
+		v := breath(at)
+		pill := ui.Rect{X: r.X + hintSpread, Y: r.Y + hintSpread, W: r.W - 2*hintSpread, H: r.H - 2*hintSpread}
+		p.Shadow(pill, pill.H/2, 0, 0, 0, hintSpread*v, color.Alpha(hintAlpha*v))
+	})
+}
+
+// breath is how far the hint ring glows at t into its breath, from 0 to 1:
+// it eases up and back down over hintBreath.
+func breath(t time.Duration) float32 {
+	x := float64(t) / float64(hintBreath)
+	return float32((1 - math.Cos(2*math.Pi*x)) / 2)
 }
 
 // statusToggle is a capsule button for something that is on or off, made to
