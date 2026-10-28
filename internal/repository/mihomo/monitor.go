@@ -87,6 +87,19 @@ func (c *Client) StreamConnections(ctx context.Context, handle func(model.Connec
 	})
 }
 
+// Connections returns the connection table as it is now.
+func (c *Client) Connections(ctx context.Context) (model.Connections, error) {
+	raw, err := c.do(ctx, c.timeout, http.MethodGet, "/connections", nil, http.StatusOK)
+	if err != nil {
+		return model.Connections{}, err
+	}
+	var msg connectionsMessage
+	if err := json.Unmarshal(raw, &msg); err != nil {
+		return model.Connections{}, fmt.Errorf("decode mihomo connections response (size=%d): %w", len(raw), err)
+	}
+	return toConnections(msg), nil
+}
+
 func toConnections(msg connectionsMessage) model.Connections {
 	active := make([]model.Connection, len(msg.Connections))
 	for i, m := range msg.Connections {

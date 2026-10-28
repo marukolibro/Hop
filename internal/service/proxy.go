@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
@@ -17,6 +18,8 @@ type Controller interface {
 	Snapshot(ctx context.Context) (model.Snapshot, error)
 	Mode(ctx context.Context) (string, error)
 	SelectProxy(ctx context.Context, group string, proxy string) error
+	Connections(ctx context.Context) (model.Connections, error)
+	CloseConnection(ctx context.Context, id string) error
 	TestProxyDelay(ctx context.Context, proxy string, testURL string, timeout time.Duration) (int, error)
 	StreamTraffic(ctx context.Context, handle func(model.Traffic)) error
 }
@@ -168,9 +171,39 @@ func leafNodes(snapshot model.Snapshot, groups []string) []string {
 	return leaves
 }
 
-// Select makes group use proxy.
+// Select makes group use proxy, then closes the connections group still
+// sends another way: the core keeps an open connection on the proxy it began
+// with, so without this a site already open would stay on the old proxy
+// until it closed the connection itself.
 func (s *ProxyService) Select(ctx context.Context, group string, proxy string) error {
-	return s.controller.SelectProxy(ctx, group, proxy)
+	if err := s.controller.SelectProxy(ctx, group, proxy); err != nil {
+		return err
+	}
+	conns, err := s.controller.Connections(ctx)
+	if err != nil {
+		return fmt.Errorf("list the connections to move after switching (group=%q proxy=%q): %w", group, proxy, err)
+	}
+	var errs []error
+	for _, id := range LeftBehind(conns, group, proxy) {
+		if err := s.controller.CloseConnection(ctx, id); err != nil {
+			errs = append(errs, fmt.Errorf("close a connection left on the old proxy (group=%q id=%q): %w", group, id, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// LeftBehind returns the IDs of the connections that pass through group but
+// leave it for something other than proxy.
+func LeftBehind(conns model.Connections, group string, proxy string) []string {
+	var ids []string
+	for _, conn := range conns.Active {
+		i := slices.Index(conn.Chain, group)
+		if i < 0 || i+1 >= len(conn.Chain) || conn.Chain[i+1] == proxy {
+			continue
+		}
+		ids = append(ids, conn.ID)
+	}
+	return ids
 }
 
 // WatchTraffic calls handle for every traffic sample until ctx is done or
