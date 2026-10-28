@@ -174,6 +174,16 @@ func (msgs Messages) ActionOpenAtLogin() string {
 	return Catalog.Format(msgs.locale, "actionOpenAtLogin", nil)
 }
 
+// ActionOpenLogFolder says "Couldn't open the log folder"
+// in the language the app shows.
+func ActionOpenLogFolder() string { return In(i18n.Locale()).ActionOpenLogFolder() }
+
+// ActionOpenLogFolder says "Couldn't open the log folder"
+// in the language of msgs.
+func (msgs Messages) ActionOpenLogFolder() string {
+	return Catalog.Format(msgs.locale, "actionOpenLogFolder", nil)
+}
+
 // ActionPort says "Couldn't change the proxy port"
 // in the language the app shows.
 func ActionPort() string { return In(i18n.Locale()).ActionPort() }
@@ -1492,6 +1502,16 @@ func LogsLevel() string { return In(i18n.Locale()).LogsLevel() }
 // in the language of msgs.
 func (msgs Messages) LogsLevel() string {
 	return Catalog.Format(msgs.locale, "logsLevel", nil)
+}
+
+// LogsOpenFolder says "Open log folder"
+// in the language the app shows.
+func LogsOpenFolder() string { return In(i18n.Locale()).LogsOpenFolder() }
+
+// LogsOpenFolder says "Open log folder"
+// in the language of msgs.
+func (msgs Messages) LogsOpenFolder() string {
+	return Catalog.Format(msgs.locale, "logsOpenFolder", nil)
 }
 
 // LogsLines says "{count, plural, one {# line} other {# lines}}"

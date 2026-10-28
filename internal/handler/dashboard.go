@@ -188,6 +188,12 @@ type LoginItem interface {
 	SetOpenAtLogin(open bool) error
 }
 
+// Folders shows a folder in the system's file manager: mygo.Shell in
+// production.
+type Folders interface {
+	OpenPath(path string) error
+}
+
 // Services are the business services the dashboard drives.
 type Services struct {
 	Proxies       ProxyService
@@ -203,10 +209,13 @@ type Services struct {
 	SystemProxy   SystemProxyService
 	Tun           TunService
 	LoginItem     LoginItem
-	ExitIP        ExitIPService
-	Unlock        UnlockService
-	LAN           LANService
-	Port          PortService
+	Folders       Folders
+	// LogDir is the folder Hop's log files are in.
+	LogDir string
+	ExitIP ExitIPService
+	Unlock UnlockService
+	LAN    LANService
+	Port   PortService
 }
 
 // Updater runs fn on the window's UI thread, as mygo.Window does.
@@ -832,6 +841,7 @@ var (
 	actionWatchTraffic        = action{"watch-traffic", locales.ActionWatchTraffic}
 	actionWatchConnections    = action{"watch-connections", locales.ActionWatchConnections}
 	actionWatchLogs           = action{"watch-logs", locales.ActionWatchLogs}
+	actionOpenLogFolder       = action{"open-log-folder", locales.ActionOpenLogFolder}
 	actionSwitchNode          = action{"switch-node", locales.ActionSwitchNode}
 	actionSwitchMode          = action{"switch-mode", locales.ActionSwitchMode}
 	actionTestLatency         = action{"test-latency", locales.ActionTestLatency}

@@ -122,7 +122,9 @@ running in a webview, and the same code runs on macOS and Windows.
 - **Connections.** Every connection the core carries, with its application,
   the rule that matched and the node it leaves by. Filter by host, application,
   rule or route; close one or all; add a rule.
-- **Logs.** The core's log, live, with a level filter.
+- **Logs.** The core's log, live, with a level filter. Hop also keeps a log file
+  (Hop's own messages and the core's warnings and errors, no browsing history)
+  that "Open log folder" shows, to send when something goes wrong.
 - **Statistics.** Today, this month and the last 30 days, split into proxied and
   direct traffic, and this month per subscription.
 

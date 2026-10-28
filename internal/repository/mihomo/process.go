@@ -74,8 +74,8 @@ func launch(ctx context.Context, cfg config.Config, binary string) (*Process, er
 	// Ask the core to shut down before the context kills it.
 	cmd.Cancel = func() error { return requestStop(cmd.Process) }
 	cmd.WaitDelay = stopGrace
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = cfg.CoreOutput
+	cmd.Stderr = cfg.CoreOutput
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start mihomo (binary=%q home=%q): %w", binary, cfg.HomeDir, err)
 	}

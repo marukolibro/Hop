@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -84,6 +85,10 @@ type Config struct {
 	NodeDNSAddr string
 	// ProbePort is the first loopback port of the unlock checks' listeners.
 	ProbePort int
+	// LogDir is where Hop keeps its log files.
+	LogDir string
+	// CoreOutput is where the core's own output goes.
+	CoreOutput io.Writer
 	// Secret authenticates controller requests; it is kept between starts so
 	// a core TUN mode left running under the helper still answers after Hop
 	// comes back.
@@ -118,6 +123,8 @@ func Load(instance Instance, userConfigDir string, resourcesDir string) (Config,
 		ControllerAddr: instance.ControllerAddr,
 		NodeDNSAddr:    instance.NodeDNSAddr,
 		ProbePort:      instance.ProbePort,
+		LogDir:         filepath.Join(appDir, "logs"),
+		CoreOutput:     os.Stderr,
 		Secret:         secret,
 	}, nil
 }

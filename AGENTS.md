@@ -142,6 +142,10 @@ on this machine while developing Hop. Hop must never interfere with it.
   (it carries node passwords). Never log either, print it, put it in errors
   (use `subscription.Redact` / host or file name only), or paste it into chat.
 - Hop's data lives in `~/Library/Application Support/hop/` (files mode 0600); the dev build's in `hop-dev/`.
+- The log file is `logs/hop.log` there (`internal/repository/logfile`, 2 MiB, three files). It holds Hop's own
+  `slog` output and the core's warnings and errors, never the core's info lines: those name the host of every
+  connection, a browsing history. The Logs page's "Open log folder" shows it; a user sends it for support.
+  The TUN helper keeps its own log (`hop-helper.log` on Windows).
 
 ## Architecture
 
