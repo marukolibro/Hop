@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -47,6 +48,9 @@ type Client struct {
 	http       *http.Client
 	// timeout bounds each request; a delay test adds its own timeout to it.
 	timeout time.Duration
+	// streams are the WebSocket streams open now, which CloseStreams ends.
+	streamsMu sync.Mutex
+	streams   map[*websocket.Conn]struct{}
 }
 
 // NewClient returns a client for the controller listening on addr
@@ -54,7 +58,7 @@ type Client struct {
 // core was started with, which ApplyConfig rewrites. timeout bounds each
 // request, so httpClient should carry none of its own.
 func NewClient(addr string, secret string, configPath string, httpClient *http.Client, timeout time.Duration) *Client {
-	return &Client{addr: addr, secret: secret, configPath: configPath, http: httpClient, timeout: timeout}
+	return &Client{addr: addr, secret: secret, configPath: configPath, http: httpClient, timeout: timeout, streams: map[*websocket.Conn]struct{}{}}
 }
 
 // CloseIdleConnections closes the keep-alive connections to the controller.
@@ -64,6 +68,18 @@ func NewClient(addr string, secret string, configPath string, httpClient *http.C
 // user's core for half a minute.
 func (c *Client) CloseIdleConnections() {
 	c.http.CloseIdleConnections()
+}
+
+// CloseStreams ends every stream open now from this side, at once: each
+// stream's reader returns an error. A core about to stop is then not the
+// side that closes them, which on macOS would keep the controller's port
+// from a core run by another user for TIME_WAIT, 30 s.
+func (c *Client) CloseStreams() {
+	c.streamsMu.Lock()
+	defer c.streamsMu.Unlock()
+	for conn := range c.streams {
+		_ = conn.CloseNow()
+	}
 }
 
 type versionResponse struct {
@@ -263,7 +279,15 @@ func (c *Client) stream(ctx context.Context, path string, handle func(raw []byte
 	if err != nil {
 		return fmt.Errorf("dial mihomo stream (addr=%q path=%q): %w", c.addr, path, err)
 	}
-	defer conn.CloseNow()
+	c.streamsMu.Lock()
+	c.streams[conn] = struct{}{}
+	c.streamsMu.Unlock()
+	defer func() {
+		c.streamsMu.Lock()
+		delete(c.streams, conn)
+		c.streamsMu.Unlock()
+		_ = conn.CloseNow()
+	}()
 	// A busy connection table is far larger than the library's 32 KiB default.
 	conn.SetReadLimit(maxBodySize)
 	for {

@@ -58,10 +58,13 @@ type RouteTable interface {
 	Read(ctx context.Context) (routetable.Table, error)
 }
 
-// IdleCloser closes the keep-alive connections a client holds to the
-// controller.
-type IdleCloser interface {
+// ControllerConns closes the connections Hop holds to the controller: its
+// keep-alive connections and its streams. Hop closes them itself before the
+// helper's core stops: a connection the root core ends first holds the
+// controller's port from Hop's own core for TIME_WAIT, 30 s on macOS.
+type ControllerConns interface {
 	CloseIdleConnections()
+	CloseStreams()
 }
 
 // TunRunner is Hop's own core, which TUN mode stops while the helper's runs.
@@ -125,7 +128,7 @@ type TunService struct {
 	state *TunFlag
 	// controller is Hop's client of the controller, whose idle connections
 	// are closed before the helper's core stops.
-	controller IdleCloser
+	controller ControllerConns
 }
 
 // NewTunService returns a TUN service whose helper talks on the helper
@@ -133,7 +136,7 @@ type TunService struct {
 // geodataDir and installing the helper from toolSource with bundledCore when
 // the user asks for one. state is the flag the service sets and the rest of
 // Hop reads.
-func NewTunService(helperClient HelperControl, installer HelperInstall, routes RouteTable, runner TunRunner, configs TunConfigs, validator TunValidator, cores TunCores, port *MixedPortState, bundledCore string, geodataDir string, toolSource string, state *TunFlag, controller IdleCloser) *TunService {
+func NewTunService(helperClient HelperControl, installer HelperInstall, routes RouteTable, runner TunRunner, configs TunConfigs, validator TunValidator, cores TunCores, port *MixedPortState, bundledCore string, geodataDir string, toolSource string, state *TunFlag, controller ControllerConns) *TunService {
 	return &TunService{
 		helper:     helperClient,
 		install:    installer,
@@ -334,10 +337,7 @@ func (s *TunService) Disable(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("build the config without TUN: %w", err)
 	}
-	// Hop closes its connections to the root core first: closed by the core,
-	// they would hold the controller's port from Hop's own core for 30 s.
-	s.controller.CloseIdleConnections()
-	if err := s.helper.StopCore(ctx); err != nil {
+	if err := s.stopHelperCore(ctx); err != nil {
 		return fmt.Errorf("stop the helper's core: %w", err)
 	}
 	s.state.Set(false)
@@ -360,7 +360,7 @@ func (s *TunService) Startup(ctx context.Context, wanted bool) (bool, error) {
 		// TUN. Its core may hold the ports and the routes: stop it and leave
 		// TUN off; the user updates the helper by turning TUN on.
 		slog.Warn("the installed helper is another version; leaving TUN off until it is updated", "installed", version, "want", helper.Version)
-		if err := s.helper.StopCore(ctx); err != nil {
+		if err := s.stopHelperCore(ctx); err != nil {
 			return false, fmt.Errorf("stop the helper's core before updating it: %w", err)
 		}
 		return false, nil
@@ -376,7 +376,7 @@ func (s *TunService) Startup(ctx context.Context, wanted bool) (bool, error) {
 			return true, nil
 		}
 		slog.Info("stopping the helper's core at start: TUN is off in the settings")
-		if err := s.helper.StopCore(ctx); err != nil {
+		if err := s.stopHelperCore(ctx); err != nil {
 			return false, fmt.Errorf("stop the helper's leftover core: %w", err)
 		}
 		return false, nil
@@ -408,11 +408,21 @@ func (s *TunService) Release(ctx context.Context) error {
 	if !s.state.On() {
 		return nil
 	}
-	if err := s.helper.StopCore(ctx); err != nil {
+	if err := s.stopHelperCore(ctx); err != nil {
 		return fmt.Errorf("stop the helper's core: %w", err)
 	}
 	s.state.Set(false)
 	return nil
+}
+
+// stopHelperCore stops the helper's core after Hop closed its own
+// connections to it, streams included: closed by the root core, they would
+// hold the controller's port from Hop's own core, and from the next Hop
+// after a quit or an update, for TIME_WAIT, 30 s on macOS.
+func (s *TunService) stopHelperCore(ctx context.Context) error {
+	s.controller.CloseStreams()
+	s.controller.CloseIdleConnections()
+	return s.helper.StopCore(ctx)
 }
 
 // Uninstall removes the helper entirely. A TUN that is on is turned off
