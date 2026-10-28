@@ -390,14 +390,18 @@ The private key must
 stay outside the repository and out of output; `mygo.json` only points at
 its path.
 
-Icons: `resources/icon.png` is a square that fills the canvas, which macOS
-masks into its rounded shape. Windows masks nothing, so the Windows build
-swaps in `packaging/icon-windows.png` (the same art as a rounded tile on a
-transparent canvas, with a soft shadow) for the executable and the installer:
-the Windows job of `release.yml` copies it over `resources/icon.png` before
-`mygo build`. Keep the two in step when the artwork changes; `mygo dev` on
-Windows still shows the square one. `docs/icon.png` and `docs/favicon.png` are
-the same tile at 128 and 64 pixels.
+Icons: `resources/icon.png` is the master, a square that fills the canvas
+(the README and `mygo dev` use it). Windows and macOS before 26 draw no mask
+around an icon, so the release builds swap in a rounded tile on a transparent
+canvas with a soft shadow, copied over `resources/icon.png` before `mygo
+build`: `packaging/icon-macos.png` (824 pixel tile, the macOS icon grid) in the
+macOS job and `packaging/icon-windows.png` (944 pixel tile) in the Windows job.
+macOS 26 and later mask a square icon themselves and show the rounded one as
+it is. Both are made from the master by `scripts/platform-icon.swift`, which
+needs a Mac (`swift scripts/platform-icon.swift resources/icon.png
+packaging/icon-macos.png 824`, and `... packaging/icon-windows.png 944`); run
+it again when the artwork changes. `docs/icon.png` and `docs/favicon.png` are
+the Windows tile at 128 and 64 pixels. `mygo dev` shows the square icon.
 
 The Windows counterpart is the `install.ps1` that `mygo build` makes
 (`irm .../releases/latest/download/install.ps1 | iex`): it downloads the

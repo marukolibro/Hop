@@ -68,6 +68,10 @@ jobs:
             echo "::error::the MYGO_UPDATER_PRIVATE_KEY secret is not set; installed apps would not accept this release"
             exit 1
           }
+      # macOS before 26 draws no mask around an icon, so its icon carries the
+      # rounded shape itself; resources/icon.png stays the square artwork.
+      - name: Use the macOS icon
+        run: cp packaging/icon-macos.png resources/icon.png
       # No disk image: an ad hoc signed app opened from a downloaded .dmg is
       # blocked by Gatekeeper, so people install with install.sh instead.
       - name: Build, sign and upload
@@ -110,7 +114,7 @@ jobs:
             exit 1
           }
       # Windows draws no mask around an icon, so its icon carries the rounded
-      # shape itself; macOS masks resources/icon.png and keeps that one.
+      # shape itself.
       - name: Use the Windows icon
         run: cp packaging/icon-windows.png resources/icon.png
       # The installer is not code signed: Windows SmartScreen asks people to
