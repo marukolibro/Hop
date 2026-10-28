@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"hop/internal/model"
 )
 
 // APIError is a helper answer that was not a success.
@@ -64,11 +66,12 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	return body, nil
 }
 
-// InstallCore copies the mihomo binary at path into the helper, after the
-// helper itself checked it is a mihomo, and seeds the geodata databases from
-// geodataDir when it is not empty.
-func (c *Client) InstallCore(ctx context.Context, path string, geodataDir string) error {
-	return c.call(ctx, http.MethodPost, "/core/install", InstallRequest{Path: path, Geodata: geodataDir}, nil)
+// InstallCore has the helper install the core in archive: the helper checks
+// the archive against the digest GitHub publishes for its release, asking
+// GitHub through proxy (Hop's own loopback proxy, "" to go direct), and
+// unpacks and installs the core only when they match.
+func (c *Client) InstallCore(ctx context.Context, archive model.CoreArchive, proxy string) error {
+	return c.call(ctx, http.MethodPost, "/core/install", InstallRequest{Archive: archive.Path, Tag: archive.Tag, Proxy: proxy}, nil)
 }
 
 // InstallGeodata replaces the geodata databases in the helper's home with

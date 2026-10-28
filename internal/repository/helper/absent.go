@@ -3,6 +3,8 @@ package helper
 import (
 	"context"
 	"errors"
+
+	"hop/internal/model"
 )
 
 // ErrAbsent says this build keeps away from the privileged helper: the helper
@@ -19,7 +21,7 @@ func (Absent) Version(context.Context) (string, error) { return "", ErrAbsent }
 
 func (Absent) Status(context.Context) (Status, error) { return Status{}, ErrAbsent }
 
-func (Absent) InstallCore(context.Context, string, string) error { return ErrAbsent }
+func (Absent) InstallCore(context.Context, model.CoreArchive, string) error { return ErrAbsent }
 
 func (Absent) InstallGeodata(context.Context, string) error { return ErrAbsent }
 

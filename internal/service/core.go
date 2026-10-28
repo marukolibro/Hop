@@ -36,12 +36,16 @@ type CoreVersionReader interface {
 // CoreReleases finds and downloads mihomo releases.
 type CoreReleases interface {
 	Latest(ctx context.Context) (model.CoreRelease, error)
-	Download(ctx context.Context, release model.CoreRelease, binaryPath string, progress func(done int64, total int64)) error
+	Release(ctx context.Context, tag string) (model.CoreRelease, error)
+	Download(ctx context.Context, release model.CoreRelease, archivePath string, binaryPath string, progress func(done int64, total int64)) error
+	DownloadArchive(ctx context.Context, release model.CoreRelease, archivePath string, progress func(done int64, total int64)) error
 }
 
 // CoreInstalls keeps the cores Hop downloaded.
 type CoreInstalls interface {
 	BinaryPath(tag string) (string, error)
+	ArchivePath(tag string) (string, error)
+	KeptArchive(tag string) (string, bool, error)
 	Activate(tag string) error
 	Deactivate() error
 	Remove(tag string) error
@@ -147,9 +151,13 @@ func (s *CoreService) Upgrade(ctx context.Context, progress func(model.CoreProgr
 	if err != nil {
 		return err
 	}
+	archive, err := s.installs.ArchivePath(release.Tag)
+	if err != nil {
+		return err
+	}
 
 	progress(model.CoreProgress{Stage: model.CoreStageDownload, Total: release.Size})
-	err = s.releases.Download(ctx, release, binary, func(done int64, total int64) {
+	err = s.releases.Download(ctx, release, archive, binary, func(done int64, total int64) {
 		progress(model.CoreProgress{Stage: model.CoreStageDownload, Done: done, Total: total})
 	})
 	if err != nil {
@@ -178,6 +186,34 @@ func (s *CoreService) Upgrade(ctx context.Context, progress func(model.CoreProgr
 		slog.Warn("could not remove older downloaded cores", "error", err)
 	}
 	return nil
+}
+
+// HelperArchive returns the release archive of the core running now, which
+// the privileged helper verifies against GitHub before it runs that core
+// itself. An upgraded core kept its archive; for any other, such as the
+// bundled one, the archive of the same release is downloaded once and kept.
+func (s *CoreService) HelperArchive(ctx context.Context) (model.CoreArchive, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	info, err := s.info(ctx)
+	if err != nil {
+		return model.CoreArchive{}, err
+	}
+	path, kept, err := s.installs.KeptArchive(info.Version)
+	if err != nil {
+		return model.CoreArchive{}, fmt.Errorf("the running core cannot run under the helper: %w", err)
+	}
+	if kept {
+		return model.CoreArchive{Tag: info.Version, Path: path}, nil
+	}
+	release, err := s.releases.Release(ctx, info.Version)
+	if err != nil {
+		return model.CoreArchive{}, err
+	}
+	if err := s.releases.DownloadArchive(ctx, release, path, func(int64, int64) {}); err != nil {
+		return model.CoreArchive{}, err
+	}
+	return model.CoreArchive{Tag: info.Version, Path: path}, nil
 }
 
 // RestoreBundled goes back to the core that ships with the app, forgetting

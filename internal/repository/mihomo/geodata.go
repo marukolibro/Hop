@@ -7,7 +7,13 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+
+	"hop/internal/repository/plainfile"
 )
+
+// maxGeodataBytes bounds one geodata file read: the databases are a few
+// megabytes.
+const maxGeodataBytes = 128 << 20
 
 // geodataFiles are the geodata databases a config Hop generates can need,
 // under the exact names the core looks for in its home dir (case matters on
@@ -25,7 +31,8 @@ const GeoSiteFile = "GeoSite.dat"
 // missing there. A file already in the home dir is never overwritten: the
 // core may have fetched a newer one itself. A file missing from srcDir is
 // warned about and skipped; the core downloads geodata itself when a config
-// needs one Hop did not seed.
+// needs one Hop did not seed. Only plain files are read (plainfile.Read): the
+// privileged helper seeds from a directory Hop names.
 func SeedGeodata(srcDir string, homeDir string) error {
 	for _, name := range geodataFiles {
 		src := filepath.Join(srcDir, name)
@@ -35,7 +42,7 @@ func SeedGeodata(srcDir string, homeDir string) error {
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("check for geodata in the core's home (path=%q): %w", dst, err)
 		}
-		data, err := os.ReadFile(src)
+		data, err := plainfile.Read(src, maxGeodataBytes)
 		if errors.Is(err, os.ErrNotExist) {
 			slog.Warn("the app ships no bundled geodata, the core will download it", "file", name, "dir", srcDir)
 			continue
@@ -59,13 +66,15 @@ func SeedGeodata(srcDir string, homeDir string) error {
 // half a database in place. Unlike SeedGeodata it overwrites what is there:
 // the caller has verified the new files and wants the core to read them. perm
 // is their mode: owner-only in Hop's own directories, readable by the root
-// core under the helper.
+// core under the helper. Only plain files are read (plainfile.Read): the
+// privileged helper replaces from a directory Hop names, and must never copy
+// a file the user cannot read into a place the user can.
 func ReplaceGeodata(srcDir string, dir string, perm os.FileMode) error {
 	if err := os.MkdirAll(dir, homeDirPerm); err != nil {
 		return fmt.Errorf("create geodata dir (path=%q): %w", dir, err)
 	}
 	for _, name := range geodataFiles {
-		data, err := os.ReadFile(filepath.Join(srcDir, name))
+		data, err := plainfile.Read(filepath.Join(srcDir, name), maxGeodataBytes)
 		if err != nil {
 			return fmt.Errorf("read geodata to replace (path=%q): %w", filepath.Join(srcDir, name), err)
 		}

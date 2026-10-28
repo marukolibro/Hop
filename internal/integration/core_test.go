@@ -139,7 +139,7 @@ func TestCoreUpgrade(t *testing.T) {
 	store := corestore.New(appDir)
 	core := service.NewCoreService(
 		olderVersion{},
-		corerelease.NewSource(&http.Client{}, releases.server.URL+"/latest"),
+		corerelease.NewSource(&http.Client{}, releases.server.URL),
 		store, runner,
 		mihomo.NewCoreChecker(mihomo.ConfigPath(cfg.HomeDir), filepath.Join(appDir, "validate"), validateTimeout),
 		binary, binary, model.CoreBundled,

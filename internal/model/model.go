@@ -421,14 +421,21 @@ type CoreInfo struct {
 	Origin  CoreOrigin
 }
 
-// CoreRelease is the newest mihomo release for this platform, with the one
-// asset Hop would install and the digest GitHub published for it.
+// CoreRelease is a mihomo release for this platform, with the one asset Hop
+// would install and the digest GitHub published for it.
 type CoreRelease struct {
 	Tag       string
 	AssetName string
 	AssetURL  string
 	Size      int64
 	SHA256    string
+}
+
+// CoreArchive is the GitHub release archive of a core version, kept on disk:
+// what the privileged helper verifies against GitHub before it runs a core.
+type CoreArchive struct {
+	Tag  string
+	Path string
 }
 
 // AppUpdate is what checking for a newer Hop found with mygo's signed

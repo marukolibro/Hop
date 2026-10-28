@@ -268,9 +268,9 @@ func installCore(src string) error {
 		os.Remove(stagedName)
 		return fmt.Errorf("make the staged core executable (path=%q): %w", stagedName, err)
 	}
-	if err := checkMihomo(context.Background(), stagedName); err != nil {
+	if _, err := mihomo.BinaryVersion(context.Background(), stagedName); err != nil {
 		os.Remove(stagedName)
-		return err
+		return fmt.Errorf("the file to install is not a mihomo core (path=%q): %w", src, err)
 	}
 	if err := os.Rename(stagedName, helper.CorePath); err != nil {
 		os.Remove(stagedName)

@@ -9,8 +9,8 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -24,9 +24,11 @@ import (
 
 	"hop/config"
 	"hop/internal/model"
+	"hop/internal/repository/corerelease"
 	"hop/internal/repository/helper"
 	"hop/internal/repository/mihomo"
 	"hop/internal/repository/netservice"
+	"hop/internal/repository/plainfile"
 	"hop/internal/repository/sysdns"
 )
 
@@ -43,8 +45,8 @@ const (
 	// shutdownTimeout bounds draining the socket server at shutdown, before
 	// the core is stopped.
 	shutdownTimeout = 5 * time.Second
-	// coreCheckTimeout bounds `core -v` while installing a core.
-	coreCheckTimeout = 15 * time.Second
+	// releaseAskTimeout bounds one request to GitHub for a release's digest.
+	releaseAskTimeout = 15 * time.Second
 
 	// dnsBackupFileName is the record of the DNS the helper replaced, under
 	// the helper's home; dnsBackupPerm keeps it owner-only.
@@ -53,6 +55,12 @@ const (
 	// dnsOpTimeout bounds one takeover or restore.
 	dnsOpTimeout = 30 * time.Second
 )
+
+// bundledCoreVersion is the release of the core the app this helper ships
+// with bundles, set at build time from mihomo.version by
+// scripts/build-helper.sh. The helper installs no older core: an older
+// release may carry a flaw the bundled one fixed.
+var bundledCoreVersion string
 
 // managedResolvers are the public resolvers the helper points the system
 // DNS at while TUN is on. Their packets route into the TUN, where the core's
@@ -97,6 +105,9 @@ type server struct {
 	lastRestart  *model.CoreRestart
 	parentCtx    context.Context
 	parentCancel context.CancelFunc
+	// coreVersion is the release of the installed core, read from the core
+	// itself once and kept until an install replaces it; "" until read.
+	coreVersion string
 
 	// dnsMu serializes the DNS takeover and restore; dnsManaged says whether
 	// the helper holds the system DNS now.
@@ -227,6 +238,7 @@ func (s *server) status() helper.Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	status.LastRestart = s.lastRestart
+	status.CoreVersion = s.installedCoreVersion()
 	if s.runner == nil {
 		return status
 	}
@@ -238,17 +250,61 @@ func (s *server) status() helper.Status {
 	return status
 }
 
-// handleInstall copies the mihomo binary at the request's path over the
-// helper's own core, after the binary itself says it is a mihomo, and seeds
-// the geodata databases when a directory to seed from came along. A running
-// core is never replaced.
+// installedCoreVersion returns the release of the installed core, under mu:
+// the core's own answer to -v, read once. The core is the helper's own file,
+// root-owned, so running it is safe; "" says there is none or it does not
+// answer.
+func (s *server) installedCoreVersion() string {
+	if s.coreVersion != "" {
+		return s.coreVersion
+	}
+	if _, err := os.Stat(s.opts.core); errors.Is(err, os.ErrNotExist) {
+		return ""
+	}
+	version, err := mihomo.BinaryVersion(context.Background(), s.opts.core)
+	if err != nil {
+		slog.Warn("could not read the installed core's version", "core", s.opts.core, "error", err)
+		return ""
+	}
+	s.coreVersion = version
+	return version
+}
+
+// handleInstall installs the core of the release archive the request names:
+// it copies the archive in, asks GitHub for the digest of that release's
+// asset and unpacks the core over its own only when the copy matches. Nothing
+// the caller sent runs before that, so a caller can only ever install a core
+// MetaCubeX published, and none older than the bundled one. A running core is
+// never replaced.
 func (s *server) handleInstall(w http.ResponseWriter, r *http.Request) {
 	var req helper.InstallRequest
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if req.Path == "" {
-		writeError(w, http.StatusBadRequest, errors.New("path is required"))
+	if req.Archive == "" {
+		writeError(w, http.StatusBadRequest, errors.New("archive is required"))
+		return
+	}
+	if err := corerelease.CheckTag(req.Tag); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if bundledCoreVersion == "" {
+		writeError(w, http.StatusInternalServerError, errors.New("this helper was built without the bundled core's version; build it with scripts/build-helper.sh"))
+		return
+	}
+	older, err := corerelease.Older(req.Tag, bundledCoreVersion)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("compare with the bundled core's version (bundled=%q): %w", bundledCoreVersion, err))
+		return
+	}
+	if older {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("core %s is older than the bundled %s; the helper installs no older core", req.Tag, bundledCoreVersion))
+		return
+	}
+	client, err := releaseClient(req.Proxy)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	s.mu.Lock()
@@ -258,32 +314,82 @@ func (s *server) handleInstall(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, errors.New("the core is running; stop it before installing another"))
 		return
 	}
-	// The file is copied first and then checked as copied: what -v approves
-	// and what is renamed into place is the very same bytes, so the source
-	// can change in between without swapping in an unchecked binary.
-	staged, err := stageCore(req.Path, s.opts.home, filepath.Ext(s.opts.core))
+	// The archive is copied first and then checked as copied: what matches
+	// the digest and what is unpacked are the very same bytes, so the source
+	// can change in between without slipping in an unchecked core.
+	staged, err := stageArchive(req.Archive, s.opts.home)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	defer os.Remove(staged)
+	release, err := corerelease.NewSource(client, corerelease.ReleasesAPI).Release(r.Context(), req.Tag)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, fmt.Errorf("ask GitHub for release %s: %w", req.Tag, err))
+		return
+	}
+	sum, err := corerelease.SHA256(staged)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	defer os.Remove(staged)
-	if err := checkMihomo(r.Context(), staged); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+	if sum != release.SHA256 {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("the archive does not match the digest GitHub publishes for %s (want sha256 %s)", release.AssetName, release.SHA256))
 		return
 	}
-	if err := os.Rename(staged, s.opts.core); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Errorf("put the installed core in place (path=%q): %w", s.opts.core, err))
+	if err := corerelease.Unpack(staged, release.AssetName, s.opts.core); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	if req.Geodata != "" {
-		// Geodata reaches the core's home before it starts, so a config with
-		// GEOIP or GEOSITE rules never waits for a download.
-		if err := mihomo.SeedGeodata(req.Geodata, s.opts.home); err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
+	s.mu.Lock()
+	s.coreVersion = req.Tag
+	s.mu.Unlock()
+	slog.Info("installed a verified core into the helper", "tag", req.Tag, "asset", release.AssetName, "sha256", sum, "core", s.opts.core)
+}
+
+// releaseClient is the client the helper asks GitHub through: direct, or
+// through proxy, which must be an HTTP proxy on the loopback. A proxy cannot
+// change GitHub's answer, which comes over TLS; the loopback rule keeps the
+// helper from being sent to dial anywhere else.
+func releaseClient(proxy string) (*http.Client, error) {
+	transport := &http.Transport{Proxy: nil}
+	if proxy != "" {
+		u, err := url.Parse(proxy)
+		if err != nil {
+			return nil, fmt.Errorf("parse the proxy address (proxy=%q): %w", proxy, err)
 		}
+		addr, err := netip.ParseAddrPort(u.Host)
+		if u.Scheme != "http" || u.User != nil || (u.Path != "" && u.Path != "/") || err != nil || !addr.Addr().IsLoopback() {
+			return nil, fmt.Errorf("the proxy must be http://127.0.0.1:<port> (proxy=%q)", proxy)
+		}
+		transport.Proxy = http.ProxyURL(u)
 	}
-	slog.Info("installed a core into the helper", "source", req.Path, "core", s.opts.core, "geodata", req.Geodata)
+	return &http.Client{Transport: transport, Timeout: releaseAskTimeout}, nil
+}
+
+// stageArchive copies the release archive at src into dir under a temporary
+// name, root's own: only a plain file is read (plainfile.Read), so a link
+// cannot have the helper read a file the caller could not.
+func stageArchive(src string, dir string) (string, error) {
+	data, err := plainfile.Read(src, corerelease.MaxArchiveSize)
+	if err != nil {
+		return "", fmt.Errorf("read the archive to install: %w", err)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("create the helper's home (dir=%q): %w", dir, err)
+	}
+	tmp, err := os.CreateTemp(dir, ".core-archive-*")
+	if err != nil {
+		return "", fmt.Errorf("stage the archive in the helper's home (dir=%q): %w", dir, err)
+	}
+	name := tmp.Name()
+	_, writeErr := tmp.Write(data)
+	closeErr := tmp.Close()
+	if writeErr != nil || closeErr != nil {
+		os.Remove(name)
+		return "", fmt.Errorf("write the staged archive (path=%q): %w", name, errors.Join(writeErr, closeErr))
+	}
+	return name, nil
 }
 
 // handleGeodataInstall replaces the helper's geo databases with those in the
@@ -791,52 +897,6 @@ func checkLANSources(sources []string) error {
 		}
 	}
 	return nil
-}
-
-// checkMihomo runs `binary -v` and requires the answer to say mihomo, so a
-// wrong file is never installed as the core.
-func checkMihomo(ctx context.Context, binary string) error {
-	checkCtx, cancel := context.WithTimeout(ctx, coreCheckTimeout)
-	defer cancel()
-	out, err := exec.CommandContext(checkCtx, binary, "-v").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("the file at %s does not run as the core (-v): %w", binary, err)
-	}
-	if !strings.Contains(strings.ToLower(string(out)), "mihomo") {
-		return fmt.Errorf("the file at %s is not a mihomo core (-v says %q)", binary, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
-// stageCore copies src into dir under a temporary name and makes the copy
-// executable: what -v approves and what is later renamed into place are the
-// very same bytes, so the source cannot change between the check and the
-// install. suffix is the core's own extension: Windows will not run a file
-// named without .exe.
-func stageCore(src string, dir string, suffix string) (string, error) {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return "", fmt.Errorf("read the file to install (path=%q): %w", src, err)
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", fmt.Errorf("create the helper's home (dir=%q): %w", dir, err)
-	}
-	tmp, err := os.CreateTemp(dir, ".core-*"+suffix)
-	if err != nil {
-		return "", fmt.Errorf("stage the core in the helper's home (dir=%q): %w", dir, err)
-	}
-	name := tmp.Name()
-	_, writeErr := tmp.Write(data)
-	closeErr := tmp.Close()
-	if writeErr != nil || closeErr != nil {
-		os.Remove(name)
-		return "", fmt.Errorf("write the staged core (path=%q): %w", name, errors.Join(writeErr, closeErr))
-	}
-	if err := os.Chmod(name, 0o755); err != nil {
-		os.Remove(name)
-		return "", fmt.Errorf("make the staged core executable (path=%q): %w", name, err)
-	}
-	return name, nil
 }
 
 // readPidFile reads the pid Hop's own process code records for the core.

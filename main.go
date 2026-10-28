@@ -52,8 +52,9 @@ const (
 	// helper's core at quit.
 	quitReleaseTimeout = 10 * time.Second
 	// helperCallTimeout bounds one request to the privileged helper; a
-	// start waits for the core's controller, which can take seconds.
-	helperCallTimeout = 20 * time.Second
+	// start waits for the core's controller, which can take seconds, and an
+	// install asks GitHub for the release's digest, with retries.
+	helperCallTimeout = 60 * time.Second
 	// geodataHelperTimeout bounds giving the helper new geodata, which
 	// restarts its core once the ports are free again.
 	geodataHelperTimeout = 90 * time.Second
@@ -223,7 +224,7 @@ func run() (err error) {
 
 	coreService := service.NewCoreService(
 		client,
-		corerelease.NewSource(hopProxyClient(portState), corerelease.ReleaseAPI),
+		corerelease.NewSource(hopProxyClient(portState), corerelease.ReleasesAPI),
 		corestore.New(cfg.AppDir),
 		runner,
 		mihomo.NewCoreChecker(mihomo.ConfigPath(cfg.HomeDir), validateDir, validationTimeout),
@@ -262,7 +263,9 @@ func run() (err error) {
 		runner,
 		profiles,
 		mihomo.NewConfigValidator(cfg.MihomoBinary, validateDir, validationTimeout),
-		cfg.MihomoBinary,
+		coreService,
+		portState,
+		cfg.BundledBinary,
 		appGeodataDir,
 		helperTool,
 		tunFlag,

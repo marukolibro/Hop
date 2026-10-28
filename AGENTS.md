@@ -100,7 +100,7 @@ on this machine while developing Hop. Hop must never interfere with it.
   inside `helper.LANSources` (the one list the app writes too), and refuses a
   listener that is not on the loopback; `TestHelperServesItsCore` checks that
   against a real helper. That rule is a privileged boundary: widening it needs
-  the user's say, and it changes `helper.Version` (now 8), which makes an
+  the user's say, and it changes `helper.Version` (now 9), which makes an
   installed older helper be replaced on the user's authorization.
 - The unlock check (`service/unlock.go`, `repository/unlock`) needs a request
   through one chosen group, which the controller cannot make: its delay test
@@ -169,7 +169,21 @@ handler → service → repository, interfaces defined where they are used.
   `service.CoreService.Upgrade` checks a candidate with `mihomo -v` and `-t`
   on the running config before `mihomo.Runner.Restart`, and puts the old core
   back when the new one does not come up. Core downloads go through Hop's own
-  loopback proxy, never the system's or another client's.
+  loopback proxy, never the system's or another client's. A download keeps
+  its release archive beside the core (`corestore.ArchivePath`): the
+  privileged helper takes a core only as a release archive, which it copies
+  in (`plainfile.Read`: no links), checks against the digest GitHub
+  publishes for that release (asked over TLS, through Hop's proxy) and
+  unpacks itself, and it refuses a release older than the bundled one
+  (`scripts/build-helper.sh` stamps that from `mihomo.version`). Nothing a
+  caller sends runs as root before that check, so a process running as the
+  user can never make the helper run its own binary. `TunService.Enable`
+  installs the release Hop's own core runs when the helper reports another,
+  fetching the archive of that release once when Hop has none (the bundled
+  core); a start with TUN on keeps the helper's core. The administrator's
+  install of the helper copies the bundled core in directly. The helper reads
+  geodata through `plainfile.Read` too. This is a privileged boundary: never
+  let the helper run or install a file it has not verified.
 - `internal/repository/subscription` — downloads, retries with warnings,
   keeps the `subscription-userinfo` header.
 - `internal/repository/exitip` — one HTTPS GET of

@@ -10,20 +10,40 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
 
 	"hop/internal/model"
+	"hop/internal/repository/corerelease"
 	"hop/internal/repository/helper"
 	"hop/internal/repository/mihomo"
 	"hop/internal/service"
 )
 
+// bundledTag is the core release mihomo.version pins, what the build script
+// stamps into the helper.
+func bundledTag(t *testing.T, repoRoot string) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(repoRoot, "mihomo.version"))
+	if err != nil {
+		t.Fatalf("read mihomo.version: %v", err)
+	}
+	for line := range strings.SplitSeq(string(raw), "\n") {
+		if tag, ok := strings.CutPrefix(line, "MIHOMO_VERSION="); ok {
+			return strings.TrimSpace(tag)
+		}
+	}
+	t.Fatal("mihomo.version names no MIHOMO_VERSION")
+	return ""
+}
+
 // TestHelperServesItsCore builds the helper, runs it unprivileged in a temp
 // directory (every path from its flags) and drives it through Hop's client:
-// version, core install, a TUN-off core on the test ports, status, stop.
-// A helper serving only another uid then refuses every request.
+// version, the core install refusals and a real install verified against
+// GitHub, a TUN-off core on the test ports, status, stop. A helper serving
+// only another uid then refuses every request.
 func TestHelperServesItsCore(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("the helper's peer-credential check is darwin's")
@@ -44,9 +64,11 @@ func TestHelperServesItsCore(t *testing.T) {
 	core := filepath.Join(dir, "helper-core")
 	sock := filepath.Join(dir, "helper.sock")
 
-	// The helper is built from the module beside this test, never installed.
+	// The helper is built from the module beside this test, never installed,
+	// stamped with the bundled core's release as scripts/build-helper.sh does.
 	repoRoot := filepath.Join("..", "..")
-	build := exec.CommandContext(ctx, "go", "build", "-o", helperBin, "hop/cmd/hop-helper")
+	tag := bundledTag(t, repoRoot)
+	build := exec.CommandContext(ctx, "go", "build", "-ldflags", "-X main.bundledCoreVersion="+tag, "-o", helperBin, "hop/cmd/hop-helper")
 	build.Dir = repoRoot
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build the helper: %v\n%s", err, out)
@@ -103,6 +125,20 @@ func TestHelperServesItsCore(t *testing.T) {
 	}()
 	waitServing(t)
 
+	// The administrator's install puts a core in place itself; the helper
+	// reports its release.
+	coreBytes, err := os.ReadFile(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(core, coreBytes, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	installedTag, err := mihomo.BinaryVersion(ctx, binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	version, err := client.Version(ctx)
 	if err != nil {
 		t.Fatalf("read the helper's version: %v", err)
@@ -117,10 +153,52 @@ func TestHelperServesItsCore(t *testing.T) {
 	if status.Running {
 		t.Error("the helper reports a running core before one was started")
 	}
+	if status.CoreVersion != installedTag {
+		t.Errorf("the helper reports core %q, want %q", status.CoreVersion, installedTag)
+	}
 
-	// The core Hop would install: the very binary this test runs it with.
-	if err := client.InstallCore(ctx, binary, ""); err != nil {
-		t.Fatalf("install the core into the helper: %v", err)
+	// A core reaches the helper only as a GitHub release archive the helper
+	// verifies itself: anything else is refused and the core stays as it was.
+	var apiErr *helper.APIError
+	fake := filepath.Join(dir, "fake-archive")
+	if err := os.WriteFile(fake, gzipBytes(t, []byte("#!/bin/sh\necho mihomo v9.9.9\n")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	linked := filepath.Join(dir, "linked-archive")
+	if err := os.Symlink(fake, linked); err != nil {
+		t.Fatal(err)
+	}
+	for name, req := range map[string]struct {
+		archive model.CoreArchive
+		proxy   string
+	}{
+		"an archive that is not the release's": {model.CoreArchive{Tag: tag, Path: fake}, ""},
+		"a release older than the bundled one": {model.CoreArchive{Tag: "v1.0.0", Path: fake}, ""},
+		"a tag that is no plain version":       {model.CoreArchive{Tag: "v1.19.33/../../x", Path: fake}, ""},
+		"an archive behind a symbolic link":    {model.CoreArchive{Tag: tag, Path: linked}, ""},
+		"a proxy that is not on the loopback":  {model.CoreArchive{Tag: tag, Path: fake}, "http://192.0.2.1:7890"},
+	} {
+		if err := client.InstallCore(ctx, req.archive, req.proxy); !errors.As(err, &apiErr) || apiErr.Status != http.StatusBadRequest {
+			t.Errorf("install with %s = %v, want a 400", name, err)
+		}
+	}
+	if got, err := os.ReadFile(core); err != nil || !bytes.Equal(got, coreBytes) {
+		t.Fatalf("a refused install changed the helper's core (err %v)", err)
+	}
+
+	// The real release archive of the bundled core, straight from GitHub, is
+	// installed: the helper checks it against the digest GitHub publishes.
+	releases := corerelease.NewSource(&http.Client{}, corerelease.ReleasesAPI)
+	release, err := releases.Release(ctx, tag)
+	if err != nil {
+		t.Fatalf("ask GitHub for release %s: %v", tag, err)
+	}
+	archive := filepath.Join(dir, "release-archive")
+	if err := releases.DownloadArchive(ctx, release, archive, func(int64, int64) {}); err != nil {
+		t.Fatalf("download release %s: %v", tag, err)
+	}
+	if err := client.InstallCore(ctx, model.CoreArchive{Tag: tag, Path: archive}, ""); err != nil {
+		t.Fatalf("install the release archive into the helper: %v", err)
 	}
 	info, err := os.Stat(core)
 	if err != nil {
@@ -128,6 +206,12 @@ func TestHelperServesItsCore(t *testing.T) {
 	}
 	if info.Mode()&0o111 == 0 {
 		t.Error("the helper's core is not executable")
+	}
+	if got, err := mihomo.BinaryVersion(ctx, core); err != nil || got != tag {
+		t.Errorf("the installed core reports %q (err %v), want %q", got, err, tag)
+	}
+	if status, err := client.Status(ctx); err != nil || status.CoreVersion != tag {
+		t.Errorf("the helper reports core %q (err %v) after the install, want %q", status.CoreVersion, err, tag)
 	}
 
 	// A TUN-off config, on the ports the integration tests own.
@@ -187,7 +271,6 @@ func TestHelperServesItsCore(t *testing.T) {
 	if bytes.Equal(allowsLAN, second) {
 		t.Fatal("the test config does not carry allow-lan: false")
 	}
-	var apiErr *helper.APIError
 	if err := client.ApplyConfig(ctx, allowsLAN); !errors.As(err, &apiErr) || apiErr.Status != http.StatusBadRequest {
 		t.Fatalf("apply with allow-lan = %v, want a 400", err)
 	}
@@ -266,6 +349,29 @@ func TestHelperServesItsCore(t *testing.T) {
 	}
 	if mode, err := coreClient.Mode(ctx); err != nil || mode != model.ModeGlobal {
 		t.Errorf("mode after the geodata restart = %q (err %v), want %q", mode, err, model.ModeGlobal)
+	}
+
+	// Geodata behind a symbolic link is refused: the helper never copies a
+	// file the caller could not read into its world-readable home.
+	secret := filepath.Join(dir, "secret")
+	if err := os.WriteFile(secret, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	linkedGeodata := filepath.Join(dir, "linked-geodata")
+	if err := os.MkdirAll(linkedGeodata, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(linkedGeodata, "GeoSite.dat")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(linkedGeodata, "geoip.metadb"), []byte("ip"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := geodataClient.InstallGeodata(ctx, linkedGeodata); err == nil {
+		t.Error("geodata behind a symbolic link was installed")
+	}
+	if got, err := os.ReadFile(filepath.Join(home, "GeoSite.dat")); err != nil || string(got) != "new-site" {
+		t.Errorf("the helper's GeoSite.dat = %q (err %v) after a refused install, want %q", got, err, "new-site")
 	}
 
 	if err := client.StopCore(ctx); err != nil {

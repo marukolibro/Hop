@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -30,7 +32,7 @@ var ErrTunTaken = errors.New("another TUN holds the default routes")
 type HelperControl interface {
 	Version(ctx context.Context) (string, error)
 	Status(ctx context.Context) (helper.Status, error)
-	InstallCore(ctx context.Context, path string, geodataDir string) error
+	InstallCore(ctx context.Context, archive model.CoreArchive, proxy string) error
 	InstallGeodata(ctx context.Context, geodataDir string) error
 	StartCore(ctx context.Context, config []byte) error
 	StopCore(ctx context.Context) error
@@ -42,6 +44,13 @@ type HelperInstall interface {
 	InstalledVersion(ctx context.Context) (string, error)
 	Install(ctx context.Context, toolSource string, coreSource string, geodataDir string, uid int) error
 	Uninstall(ctx context.Context) error
+}
+
+// TunCores says which core Hop runs and hands over its release archive, the
+// one form of a core the helper accepts.
+type TunCores interface {
+	Info(ctx context.Context) (model.CoreInfo, error)
+	HelperArchive(ctx context.Context) (model.CoreArchive, error)
 }
 
 // RouteTable reads the system's IPv4 routing table.
@@ -101,10 +110,14 @@ type TunService struct {
 	runner    TunRunner
 	configs   TunConfigs
 	validator TunValidator
-	// binary is Hop's current core, which every enable refreshes into the
-	// helper; geodata is the directory the app ships its databases in; tool
-	// is the helper binary the app ships, what an install copies in.
-	binary  string
+	cores     TunCores
+	// port is Hop's mixed port, the proxy the helper asks GitHub through.
+	port *MixedPortState
+	// bundled is the core that ships with the app, what an install of the
+	// helper copies in with the administrator's approval; geodata is the
+	// directory the app ships its databases in; tool is the helper binary
+	// the app ships, what an install copies in.
+	bundled string
 	geodata string
 	tool    string
 	// state is whether TUN is on, shared with the services that build and
@@ -116,10 +129,11 @@ type TunService struct {
 }
 
 // NewTunService returns a TUN service whose helper talks on the helper
-// client's socket, running binary as the core, seeding geodata from
-// geodataDir and installing the helper from toolSource when the user asks
-// for one. state is the flag the service sets and the rest of Hop reads.
-func NewTunService(helperClient HelperControl, installer HelperInstall, routes RouteTable, runner TunRunner, configs TunConfigs, validator TunValidator, binary string, geodataDir string, toolSource string, state *TunFlag, controller IdleCloser) *TunService {
+// client's socket, running the core cores reports, seeding geodata from
+// geodataDir and installing the helper from toolSource with bundledCore when
+// the user asks for one. state is the flag the service sets and the rest of
+// Hop reads.
+func NewTunService(helperClient HelperControl, installer HelperInstall, routes RouteTable, runner TunRunner, configs TunConfigs, validator TunValidator, cores TunCores, port *MixedPortState, bundledCore string, geodataDir string, toolSource string, state *TunFlag, controller IdleCloser) *TunService {
 	return &TunService{
 		helper:     helperClient,
 		install:    installer,
@@ -127,7 +141,9 @@ func NewTunService(helperClient HelperControl, installer HelperInstall, routes R
 		runner:     runner,
 		configs:    configs,
 		validator:  validator,
-		binary:     binary,
+		cores:      cores,
+		port:       port,
+		bundled:    bundledCore,
 		geodata:    geodataDir,
 		tool:       toolSource,
 		state:      state,
@@ -164,7 +180,8 @@ func (s *TunService) Status(ctx context.Context) (model.TunStatus, error) {
 
 // Enable turns TUN on from the user's click: it installs the helper when
 // there is none yet (asking for administrator approval once — a password on
-// macOS, a UAC prompt on Windows), refreshes the core and geodata in it,
+// macOS, a UAC prompt on Windows), puts the core Hop runs into it when the
+// helper has another release, refreshes the geodata in it,
 // validates the TUN config with the core itself, stops Hop's own core and
 // starts the helper's, keeping the outbound mode the running core is in.
 // When the helper's core does not come up, Hop's own is started again and
@@ -180,7 +197,40 @@ func (s *TunService) Enable(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := s.refreshCore(ctx); err != nil {
+		return err
+	}
 	return s.switchCore(ctx, config, plain)
+}
+
+// refreshCore has the helper run the release Hop's own core runs, after an
+// upgrade or a move back to the bundled core: when the helper has another
+// release, it gets this one's GitHub archive, which it verifies against
+// GitHub itself before installing, asking through Hop's own proxy. It runs
+// only while Hop's own core does, which answers the version and carries the
+// requests; a start with TUN on keeps the helper's core as it is.
+func (s *TunService) refreshCore(ctx context.Context) error {
+	info, err := s.cores.Info(ctx)
+	if err != nil {
+		return err
+	}
+	status, err := s.helper.Status(ctx)
+	if err != nil {
+		return fmt.Errorf("read the helper's core version: %w", err)
+	}
+	if status.CoreVersion == info.Version {
+		return nil
+	}
+	archive, err := s.cores.HelperArchive(ctx)
+	if err != nil {
+		return fmt.Errorf("get the release archive of core %s for the helper: %w", info.Version, err)
+	}
+	proxy := "http://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(s.port.Get()))
+	if err := s.helper.InstallCore(ctx, archive, proxy); err != nil {
+		return fmt.Errorf("install core %s into the helper (had %q): %w", archive.Tag, status.CoreVersion, err)
+	}
+	slog.Info("installed the running core into the helper", "tag", archive.Tag, "previous", status.CoreVersion)
+	return nil
 }
 
 // ensureHelper installs the helper when none answers, and replaces one that
@@ -195,7 +245,7 @@ func (s *TunService) ensureHelper(ctx context.Context) error {
 	if err == nil {
 		slog.Info("replacing the helper with this app's version", "installed", version, "want", helper.Version)
 	}
-	if err := s.install.Install(ctx, s.tool, s.binary, s.geodata, os.Getuid()); err != nil {
+	if err := s.install.Install(ctx, s.tool, s.bundled, s.geodata, os.Getuid()); err != nil {
 		return fmt.Errorf("install the helper: %w", err)
 	}
 	// launchd starts the daemon after the install script returns; the first
@@ -220,20 +270,15 @@ func (s *TunService) enableCold(ctx context.Context) error {
 	return s.switchCore(ctx, config, nil)
 }
 
-// switchCore hands the traffic to the helper's core: it refreshes the core
-// and geodata in the helper, stops Hop's own and starts the helper's on
-// config. rollbackConfig, when not nil, is what Hop's own core is started
+// switchCore hands the traffic to the helper's core: it refreshes the
+// geodata in the helper, stops Hop's own and starts the helper's on config. rollbackConfig, when not nil, is what Hop's own core is started
 // on again when the helper's does not come up.
 func (s *TunService) switchCore(ctx context.Context, config []byte, rollbackConfig []byte) error {
 	if err := s.validator.Validate(ctx, config); err != nil {
 		return fmt.Errorf("the core's config test rejected the TUN config: %w", err)
 	}
-	if err := s.helper.InstallCore(ctx, s.binary, s.geodata); err != nil {
-		return fmt.Errorf("refresh the core in the helper: %w", err)
-	}
-	// InstallCore seeds only the files the helper is missing; an app update
-	// may have replaced Hop's copy while TUN was off. Overwrite the helper's
-	// databases with the current ones before its core reads them.
+	// An app update may have replaced Hop's databases while TUN was off.
+	// Overwrite the helper's with the current ones before its core reads them.
 	if err := s.helper.InstallGeodata(ctx, s.geodata); err != nil {
 		return fmt.Errorf("refresh the geodata in the helper: %w", err)
 	}

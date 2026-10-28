@@ -16,9 +16,11 @@ import (
 // Version is the helper's own version, what GET /version reports. It moves
 // only when the socket protocol, the platform setup or what the helper accepts
 // changes; version 7 runs the same protocol as 6 on Windows too, as a service,
-// and version 8 accepts a config that serves the private networks (LAN access)
-// where 7 refused every config that serves a network.
-const Version = "8"
+// version 8 accepts a config that serves the private networks (LAN access)
+// where 7 refused every config that serves a network, and version 9 installs
+// a core only from a release archive it verified against GitHub itself, where
+// 8 took any binary that called itself mihomo.
+const Version = "9"
 
 // LANSources are the only source ranges a core run as root may be told to
 // answer when the config serves the network: this computer and the private
@@ -68,6 +70,9 @@ type Status struct {
 	// LastRestart is what the helper's supervision did after the core last
 	// left on its own, nil when it never did.
 	LastRestart *model.CoreRestart `json:"lastRestart"`
+	// CoreVersion is the release of the core the helper has installed, ""
+	// when it has none.
+	CoreVersion string `json:"coreVersion"`
 }
 
 // VersionResponse is GET /version's body.
@@ -75,12 +80,15 @@ type VersionResponse struct {
 	Version string `json:"version"`
 }
 
-// InstallRequest is POST /core/install's body: Path is the mihomo binary to
-// copy in, Geodata the directory the geodata databases are seeded from ("" to
-// skip seeding).
+// InstallRequest is POST /core/install's body: Archive is the GitHub
+// release archive of the core to install and Tag its release. Proxy is the
+// loopback HTTP proxy the helper asks GitHub for the release's digest
+// through, "" to go direct; it cannot change the answer, which comes over
+// TLS.
 type InstallRequest struct {
-	Path    string `json:"path"`
-	Geodata string `json:"geodata"`
+	Archive string `json:"archive"`
+	Tag     string `json:"tag"`
+	Proxy   string `json:"proxy"`
 }
 
 // GeodataInstallRequest is POST /geodata/install's body: Path is the

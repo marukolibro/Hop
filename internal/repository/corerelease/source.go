@@ -15,7 +15,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,18 +25,71 @@ import (
 )
 
 const (
-	// ReleaseAPI answers with the newest mihomo release.
-	ReleaseAPI = "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
+	// ReleasesAPI is where GitHub answers about mihomo's releases: the
+	// newest at /latest, one by its tag at /tags/<tag>.
+	ReleasesAPI = "https://api.github.com/repos/MetaCubeX/mihomo/releases"
 
 	attempts      = 3
 	retryDelay    = time.Second
 	maxAPIBody    = 4 << 20
 	maxBinarySize = 256 << 20
-	progressEvery = 100 * time.Millisecond
-	dirPerm       = 0o700
-	binaryPerm    = 0o755
-	digestPrefix  = "sha256:"
+	// MaxArchiveSize bounds a release archive: a real one is far smaller.
+	MaxArchiveSize = 256 << 20
+	progressEvery  = 100 * time.Millisecond
+	dirPerm        = 0o700
+	binaryPerm     = 0o755
+	digestPrefix   = "sha256:"
 )
+
+// tagPattern is what a release tag must look like: a plain version, which
+// keeps a tampered tag from reaching a URL or leaving a directory.
+var tagPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
+
+// ErrInvalidTag is returned for a tag that is not a plain release version.
+var ErrInvalidTag = errors.New("core release tag is not a plain version like v1.19.33")
+
+// CheckTag returns ErrInvalidTag for a tag that is not a plain release
+// version.
+func CheckTag(tag string) error {
+	if !tagPattern.MatchString(tag) {
+		return fmt.Errorf("%w (tag=%q)", ErrInvalidTag, tag)
+	}
+	return nil
+}
+
+// Older reports whether tag is an earlier release than floor. Both must be
+// plain versions.
+func Older(tag string, floor string) (bool, error) {
+	t, err := tagNumbers(tag)
+	if err != nil {
+		return false, err
+	}
+	f, err := tagNumbers(floor)
+	if err != nil {
+		return false, err
+	}
+	for i := range t {
+		if t[i] != f[i] {
+			return t[i] < f[i], nil
+		}
+	}
+	return false, nil
+}
+
+func tagNumbers(tag string) ([3]int, error) {
+	var out [3]int
+	if err := CheckTag(tag); err != nil {
+		return out, err
+	}
+	for i, part := range strings.Split(strings.TrimPrefix(tag, "v"), ".") {
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			return out, fmt.Errorf("%w (tag=%q): %w", ErrInvalidTag, tag, err)
+		}
+		out[i] = n
+	}
+	return out, nil
+}
 
 // Source is a connector to the place mihomo releases are published.
 type Source struct {
@@ -42,9 +97,10 @@ type Source struct {
 	apiURL string
 }
 
-// NewSource returns a source that asks apiURL for the newest release and
-// downloads through client, which should carry no overall timeout: the
-// download of a core takes as long as the connection needs.
+// NewSource returns a source that asks apiURL (ReleasesAPI, or a server
+// that answers the same paths) about releases and downloads through client,
+// which should carry no overall timeout: the download of a core takes as
+// long as the connection needs.
 func NewSource(client *http.Client, apiURL string) *Source {
 	return &Source{client: client, apiURL: apiURL}
 }
@@ -62,12 +118,14 @@ type assetResponse struct {
 }
 
 // assetName is the release asset that holds the core for this platform. The
-// Windows build is the one for CPUs without AVX2, as scripts/fetch-mihomo.sh
-// ships.
+// Intel Mac and Windows builds are the ones for CPUs without AVX2, as
+// scripts/fetch-mihomo.sh ships.
 func assetName(goos string, goarch string, tag string) (string, error) {
 	switch goos + "/" + goarch {
 	case "darwin/arm64":
 		return "mihomo-darwin-arm64-" + tag + ".gz", nil
+	case "darwin/amd64":
+		return "mihomo-darwin-amd64-compatible-" + tag + ".gz", nil
 	case "windows/amd64":
 		return "mihomo-windows-amd64-compatible-" + tag + ".zip", nil
 	}
@@ -81,34 +139,55 @@ func (s *Source) Latest(ctx context.Context) (model.CoreRelease, error) {
 	var release model.CoreRelease
 	err := withRetries(ctx, "ask for the newest mihomo release", func() error {
 		var err error
-		release, err = s.fetchLatest(ctx)
+		release, err = s.fetchRelease(ctx, s.apiURL+"/latest")
 		return err
 	})
 	return release, err
 }
 
-func (s *Source) fetchLatest(ctx context.Context) (model.CoreRelease, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.apiURL, http.NoBody)
+// Release returns the release of tag and the asset of this platform, with
+// the digest GitHub publishes for it.
+func (s *Source) Release(ctx context.Context, tag string) (model.CoreRelease, error) {
+	if err := CheckTag(tag); err != nil {
+		return model.CoreRelease{}, err
+	}
+	var release model.CoreRelease
+	err := withRetries(ctx, "ask for a mihomo release", func() error {
+		var err error
+		release, err = s.fetchRelease(ctx, s.apiURL+"/tags/"+tag)
+		return err
+	})
 	if err != nil {
-		return model.CoreRelease{}, fmt.Errorf("build release request (url=%q): %w", s.apiURL, err)
+		return model.CoreRelease{}, err
+	}
+	if release.Tag != tag {
+		return model.CoreRelease{}, fmt.Errorf("asked for release %s, GitHub answered with %s", tag, release.Tag)
+	}
+	return release, nil
+}
+
+func (s *Source) fetchRelease(ctx context.Context, apiURL string) (model.CoreRelease, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, http.NoBody)
+	if err != nil {
+		return model.CoreRelease{}, fmt.Errorf("build release request (url=%q): %w", apiURL, err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "Hop")
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return model.CoreRelease{}, fmt.Errorf("ask for the newest mihomo release (url=%q): %w", s.apiURL, err)
+		return model.CoreRelease{}, fmt.Errorf("ask for a mihomo release (url=%q): %w", apiURL, err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIBody))
 	if err != nil {
-		return model.CoreRelease{}, fmt.Errorf("read release response (url=%q status=%d): %w", s.apiURL, resp.StatusCode, err)
+		return model.CoreRelease{}, fmt.Errorf("read release response (url=%q status=%d): %w", apiURL, resp.StatusCode, err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return model.CoreRelease{}, fmt.Errorf("release request returned status %d (url=%q body=%q)", resp.StatusCode, s.apiURL, truncate(body))
+		return model.CoreRelease{}, fmt.Errorf("release request returned status %d (url=%q body=%q)", resp.StatusCode, apiURL, truncate(body))
 	}
 	var out releaseResponse
 	if err := json.Unmarshal(body, &out); err != nil {
-		return model.CoreRelease{}, fmt.Errorf("decode release response (url=%q body=%q): %w", s.apiURL, truncate(body), err)
+		return model.CoreRelease{}, fmt.Errorf("decode release response (url=%q body=%q): %w", apiURL, truncate(body), err)
 	}
 	name, err := assetName(runtime.GOOS, runtime.GOARCH, out.TagName)
 	if err != nil {
@@ -127,31 +206,61 @@ func (s *Source) fetchLatest(ctx context.Context) (model.CoreRelease, error) {
 	return model.CoreRelease{}, fmt.Errorf("release %s has no asset %s", out.TagName, name)
 }
 
-// Download fetches release's asset, checks it against the published digest
-// and unpacks the core to binaryPath. progress hears the bytes received, at
-// most every 100 ms. Nothing is left behind on failure.
-func (s *Source) Download(ctx context.Context, release model.CoreRelease, binaryPath string, progress func(done int64, total int64)) error {
+// Download fetches release's asset to archivePath, checks it against the
+// published digest and unpacks the core to binaryPath. The archive stays: it
+// is what the privileged helper verifies on its own before it runs this
+// core. progress hears the bytes received, at most every 100 ms. Nothing is
+// left behind on failure.
+func (s *Source) Download(ctx context.Context, release model.CoreRelease, archivePath string, binaryPath string, progress func(done int64, total int64)) (err error) {
+	if err := s.DownloadArchive(ctx, release, archivePath, progress); err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, removeQuietly(archivePath))
+		}
+	}()
+	return Unpack(archivePath, release.AssetName, binaryPath)
+}
+
+// DownloadArchive fetches release's asset to archivePath and checks it
+// against the published digest. Nothing is left behind on failure.
+func (s *Source) DownloadArchive(ctx context.Context, release model.CoreRelease, archivePath string, progress func(done int64, total int64)) error {
 	return withRetries(ctx, "download the mihomo core", func() error {
-		return s.downloadOnce(ctx, release, binaryPath, progress)
+		return s.downloadOnce(ctx, release, archivePath, progress)
 	})
 }
 
-func (s *Source) downloadOnce(ctx context.Context, release model.CoreRelease, binaryPath string, progress func(done int64, total int64)) (err error) {
-	if err := os.MkdirAll(filepath.Dir(binaryPath), dirPerm); err != nil {
-		return fmt.Errorf("create core dir (path=%q): %w", filepath.Dir(binaryPath), err)
+func (s *Source) downloadOnce(ctx context.Context, release model.CoreRelease, archivePath string, progress func(done int64, total int64)) (err error) {
+	if err := os.MkdirAll(filepath.Dir(archivePath), dirPerm); err != nil {
+		return fmt.Errorf("create core dir (path=%q): %w", filepath.Dir(archivePath), err)
 	}
-	archive := binaryPath + ".download"
+	partial := archivePath + ".partial"
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, removeQuietly(partial))
+		}
+	}()
+	if err := s.fetchTo(ctx, release, partial, progress); err != nil {
+		return err
+	}
+	if err := os.Rename(partial, archivePath); err != nil {
+		return fmt.Errorf("move the archive into place (from=%q to=%q): %w", partial, archivePath, err)
+	}
+	return nil
+}
+
+// Unpack extracts the core from the release archive of assetName to
+// binaryPath, executable, through a temporary name. Nothing is left behind
+// on failure.
+func Unpack(archive string, assetName string, binaryPath string) (err error) {
 	partial := binaryPath + ".partial"
 	defer func() {
 		if err != nil {
-			err = errors.Join(err, removeQuietly(archive), removeQuietly(partial))
+			err = errors.Join(err, removeQuietly(partial))
 		}
 	}()
-
-	if err := s.fetchTo(ctx, release, archive, progress); err != nil {
-		return err
-	}
-	if err := unpack(archive, release.AssetName, partial); err != nil {
+	if err := unpack(archive, assetName, partial); err != nil {
 		return err
 	}
 	if err := os.Chmod(partial, binaryPerm); err != nil {
@@ -160,7 +269,22 @@ func (s *Source) downloadOnce(ctx context.Context, release model.CoreRelease, bi
 	if err := os.Rename(partial, binaryPath); err != nil {
 		return fmt.Errorf("move the core into place (from=%q to=%q): %w", partial, binaryPath, err)
 	}
-	return removeQuietly(archive)
+	return nil
+}
+
+// SHA256 returns the hex SHA-256 of the file at path, as GitHub publishes a
+// release asset's digest.
+func SHA256(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("open file to hash (path=%q): %w", path, err)
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", fmt.Errorf("hash file (path=%q): %w", path, err)
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 // fetchTo saves the asset to path and verifies its digest.

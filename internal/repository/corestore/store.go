@@ -9,8 +9,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
+
+	"hop/internal/repository/corerelease"
 )
 
 const (
@@ -18,14 +19,8 @@ const (
 	filePerm    = 0o600
 	dirName     = "core"
 	pointerName = "current.json"
+	archiveName = "release-archive"
 )
-
-// tagPattern is what a release tag must look like to become a directory
-// name: it keeps a tampered pointer or API answer from leaving the store.
-var tagPattern = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
-
-// ErrInvalidTag is returned for a tag that is not a plain release version.
-var ErrInvalidTag = errors.New("core release tag is not a plain version like v1.19.33")
 
 // Store is the directory of downloaded cores under Hop's data directory.
 type Store struct {
@@ -45,14 +40,46 @@ type pointer struct {
 // BinaryPath is where the core of release tag lives, whether or not it has
 // been downloaded yet.
 func (s *Store) BinaryPath(tag string) (string, error) {
-	if !tagPattern.MatchString(tag) {
-		return "", fmt.Errorf("%w (tag=%q)", ErrInvalidTag, tag)
+	// Only a plain version becomes a directory name: it keeps a tampered
+	// pointer or API answer from leaving the store.
+	if err := corerelease.CheckTag(tag); err != nil {
+		return "", err
 	}
 	name := "mihomo"
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
 	return filepath.Join(s.dir, tag, name), nil
+}
+
+// ArchivePath is where the GitHub release archive of tag is kept, whether
+// or not it has been downloaded yet: the privileged helper verifies a core
+// from it. The bundled core's archive lives here too, without a binary.
+func (s *Store) ArchivePath(tag string) (string, error) {
+	if err := corerelease.CheckTag(tag); err != nil {
+		return "", err
+	}
+	return filepath.Join(s.dir, tag, archiveName), nil
+}
+
+// KeptArchive returns where the release archive of tag is kept and whether
+// it is there.
+func (s *Store) KeptArchive(tag string) (string, bool, error) {
+	path, err := s.ArchivePath(tag)
+	if err != nil {
+		return "", false, err
+	}
+	info, err := os.Stat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return path, false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("check for a kept release archive (path=%q): %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", false, fmt.Errorf("the kept release archive is not a file (path=%q mode=%s)", path, info.Mode())
+	}
+	return path, true, nil
 }
 
 // Current returns the downloaded core Hop should run, and false when the
@@ -127,7 +154,7 @@ func (s *Store) Prune(keepTag string) error {
 		return fmt.Errorf("list downloaded cores (path=%q): %w", s.dir, err)
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() || entry.Name() == keepTag || !tagPattern.MatchString(entry.Name()) {
+		if !entry.IsDir() || entry.Name() == keepTag || corerelease.CheckTag(entry.Name()) != nil {
 			continue
 		}
 		if err := s.Remove(entry.Name()); err != nil {
