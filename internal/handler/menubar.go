@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"image"
 	"log/slog"
+	"math"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -293,12 +293,29 @@ func (m *MenuBar) setIcon(shown string, icon []byte) {
 	m.shown = shown
 }
 
-// compactRate is a speed short enough for the menu bar, such as "2.4M".
-// Below idleRate it is "0K", so a trickle never shows as bare bytes.
+// compactRate is a speed short enough for the menu bar, four characters at
+// most: one decimal below 10, such as "2.4M", whole numbers from 10, such
+// as "36K", and the next unit once the number would round to 1000. Below
+// idleRate it is "0K", so a trickle never shows as bare bytes.
 func compactRate(bytesPerSecond int64) string {
 	if bytesPerSecond < idleRate {
 		return "0K"
 	}
-	r := formatBytes(bytesPerSecond)
-	return r.value + strings.TrimSuffix(r.unit, "B")
+	value := float64(bytesPerSecond) / 1024
+	units := []string{"K", "M", "G", "T"}
+	for _, unit := range units[:len(units)-1] {
+		if math.Round(value) < 1000 {
+			return compactNumber(value) + unit
+		}
+		value /= 1024
+	}
+	return compactNumber(value) + units[len(units)-1]
+}
+
+// compactNumber is value with one decimal below 10 and none from 10.
+func compactNumber(value float64) string {
+	if value < 9.95 {
+		return fmt.Sprintf("%.1f", value)
+	}
+	return fmt.Sprintf("%.0f", value)
 }

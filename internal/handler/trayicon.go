@@ -270,14 +270,13 @@ func parabola(t float64) float64 {
 	return 4 * t * (1 - t)
 }
 
-// The speed beside the mark in the menu bar: upload over download, each
-// left-aligned against the mark in a column wide enough for the longest
-// compact rate, so the item keeps its width as the numbers change and a
-// short rate such as "0K" does not drift away from the mark.
+// The speed beside the mark in the menu bar: upload over download, aligned
+// right in a column wide enough for the longest compact rate, so the item
+// keeps its width as the numbers change and their digits stay in place.
 const (
 	// traySpeedWidth is the speed column's width in points; it holds the
-	// widest compact rates, such as "↑ 1023K" and "↓ 9.99M".
-	traySpeedWidth = 40
+	// widest compact rates, such as "185M" at 23 points.
+	traySpeedWidth = 24
 	traySpeedGap   = 3
 	// traySpeedFont is the speed's size in points: two lines fill the 18
 	// points of the menu bar.
@@ -295,9 +294,9 @@ func traySpeedColumn(up string, down string) *image.RGBA {
 	return ui.Render(func(c *ui.Context) {
 		c.Root().Background(ui.Transparent)
 		ui.Column(c).Fill().Justify(ui.Center).Children(func() {
-			for _, line := range []string{"↑ " + up, "↓ " + down} {
-				ui.Text(c, line).FontSize(traySpeedFont).FontWeight(weightSemibold).FontFeatures("tnum").
-					LineHeight(1.08).TextColor(ui.RGBA(0, 0, 0, 1)).TextAlign(ui.Start).NoWrap()
+			for _, rate := range []string{up, down} {
+				ui.Text(c, rate).FontSize(traySpeedFont).FontWeight(weightSemibold).FontFeatures("tnum").
+					LineHeight(1.08).TextColor(ui.RGBA(0, 0, 0, 1)).TextAlign(ui.End).NoWrap()
 			}
 		})
 	}, traySpeedWidth, trayHeight, trayScale)
