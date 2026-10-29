@@ -883,6 +883,9 @@ func (d *Dashboard) editorForm(c *ui.Context, t *ui.Theme) {
 				})
 				captionText(c, t, hints[e.rulesIndex])
 			}
+			if e.busy {
+				captionText(c, t, locales.SubApplying())
+			}
 			if e.err != "" {
 				ui.Text(c, e.err).FontSize(fontSecondary).TextColor(t.Danger)
 			}

@@ -3208,6 +3208,16 @@ func (msgs Messages) SubFileRead(name string) string {
 	return Catalog.Format(msgs.locale, "subFileRead", map[string]any{"name": name})
 }
 
+// SubApplying says "Loading the subscription. The first load downloads its remote rule sets, which can take up to a minute."
+// in the language the app shows.
+func SubApplying() string { return In(i18n.Locale()).SubApplying() }
+
+// SubApplying says "Loading the subscription. The first load downloads its remote rule sets, which can take up to a minute."
+// in the language of msgs.
+func (msgs Messages) SubApplying() string {
+	return Catalog.Format(msgs.locale, "subApplying", nil)
+}
+
 // SubFileTypes says "Supports .yaml, .yml, .txt, .conf, or any file"
 // in the language the app shows.
 func SubFileTypes() string { return In(i18n.Locale()).SubFileTypes() }

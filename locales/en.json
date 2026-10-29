@@ -597,6 +597,7 @@
       }
     }
   },
+  "subApplying": "Loading the subscription. The first load downloads its remote rule sets, which can take up to a minute.",
   "subFileTypes": "Supports .yaml, .yml, .txt, .conf, or any file",
   "subLocalNameHint": "Choosing a file fills in its name. If you leave the name empty, it shows as “{fallback}”.",
   "@subLocalNameHint": {
