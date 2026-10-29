@@ -726,8 +726,6 @@
       }
     }
   },
-  "unlockNetflixPartial": "Netflix originals only",
-  "unlockNone": "None available",
   "unlockRegion": ", region: {region}",
   "@unlockRegion": {
     "placeholders": {
@@ -736,9 +734,7 @@
       }
     }
   },
-  "unlockStart": "Unlock",
   "unlockStop": "Stop",
-  "unlockUnsure": "Couldn't check",
   "update": "Update",
   "updateAndRestart": "Update and restart",
   "updateBlockedDev": "A dev build can't update itself",
@@ -781,17 +777,6 @@
   "serviceBlocked": "Blocked",
   "serviceUnknown": "Check failed",
   "serviceRegionTip": "The region the service placed you in",
-  "unlockWorking": "{working}/{total} work",
-  "@unlockWorking": {
-    "placeholders": {
-      "working": {
-        "type": "int"
-      },
-      "total": {
-        "type": "int"
-      }
-    }
-  },
   "actionWatchMemory": "Couldn't read the memory in use",
   "statsMemory": "Memory use",
   "statsMemoryCore": "Core",
@@ -802,5 +787,9 @@
   "lanStateOnPort": "Port {port}",
   "servicesAll": "All services",
   "servicesAllWork": "All work",
-  "servicesIdle": "Not checked"
+  "servicesIdle": "Not checked",
+  "lanPort": "Port",
+  "lanCopiedAll": "Copied the connection details",
+  "lanOpenSettings": "Open settings",
+  "lanHintAccount": "Devices connect with this account and password. You can turn them off, and see everything, in Settings under LAN."
 }

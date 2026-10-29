@@ -3732,26 +3732,6 @@ func (msgs Messages) TunUpdateDescription(prompt string) string {
 	return Catalog.Format(msgs.locale, "tunUpdateDescription", map[string]any{"prompt": prompt})
 }
 
-// UnlockNetflixPartial says "Netflix originals only"
-// in the language the app shows.
-func UnlockNetflixPartial() string { return In(i18n.Locale()).UnlockNetflixPartial() }
-
-// UnlockNetflixPartial says "Netflix originals only"
-// in the language of msgs.
-func (msgs Messages) UnlockNetflixPartial() string {
-	return Catalog.Format(msgs.locale, "unlockNetflixPartial", nil)
-}
-
-// UnlockNone says "None available"
-// in the language the app shows.
-func UnlockNone() string { return In(i18n.Locale()).UnlockNone() }
-
-// UnlockNone says "None available"
-// in the language of msgs.
-func (msgs Messages) UnlockNone() string {
-	return Catalog.Format(msgs.locale, "unlockNone", nil)
-}
-
 // UnlockRegion says ", region: {region}"
 // in the language the app shows.
 func UnlockRegion(region string) string { return In(i18n.Locale()).UnlockRegion(region) }
@@ -3762,16 +3742,6 @@ func (msgs Messages) UnlockRegion(region string) string {
 	return Catalog.Format(msgs.locale, "unlockRegion", map[string]any{"region": region})
 }
 
-// UnlockStart says "Unlock"
-// in the language the app shows.
-func UnlockStart() string { return In(i18n.Locale()).UnlockStart() }
-
-// UnlockStart says "Unlock"
-// in the language of msgs.
-func (msgs Messages) UnlockStart() string {
-	return Catalog.Format(msgs.locale, "unlockStart", nil)
-}
-
 // UnlockStop says "Stop"
 // in the language the app shows.
 func UnlockStop() string { return In(i18n.Locale()).UnlockStop() }
@@ -3780,16 +3750,6 @@ func UnlockStop() string { return In(i18n.Locale()).UnlockStop() }
 // in the language of msgs.
 func (msgs Messages) UnlockStop() string {
 	return Catalog.Format(msgs.locale, "unlockStop", nil)
-}
-
-// UnlockUnsure says "Couldn't check"
-// in the language the app shows.
-func UnlockUnsure() string { return In(i18n.Locale()).UnlockUnsure() }
-
-// UnlockUnsure says "Couldn't check"
-// in the language of msgs.
-func (msgs Messages) UnlockUnsure() string {
-	return Catalog.Format(msgs.locale, "unlockUnsure", nil)
 }
 
 // Update says "Update"
@@ -4016,18 +3976,6 @@ func (msgs Messages) ServiceRegionTip() string {
 	return Catalog.Format(msgs.locale, "serviceRegionTip", nil)
 }
 
-// UnlockWorking says "{working}/{total} work"
-// in the language the app shows.
-func UnlockWorking(working int, total int) string {
-	return In(i18n.Locale()).UnlockWorking(working, total)
-}
-
-// UnlockWorking says "{working}/{total} work"
-// in the language of msgs.
-func (msgs Messages) UnlockWorking(working int, total int) string {
-	return Catalog.Format(msgs.locale, "unlockWorking", map[string]any{"working": working, "total": total})
-}
-
 // ActionWatchMemory says "Couldn't read the memory in use"
 // in the language the app shows.
 func ActionWatchMemory() string { return In(i18n.Locale()).ActionWatchMemory() }
@@ -4136,4 +4084,44 @@ func ServicesIdle() string { return In(i18n.Locale()).ServicesIdle() }
 // in the language of msgs.
 func (msgs Messages) ServicesIdle() string {
 	return Catalog.Format(msgs.locale, "servicesIdle", nil)
+}
+
+// LanPort says "Port"
+// in the language the app shows.
+func LanPort() string { return In(i18n.Locale()).LanPort() }
+
+// LanPort says "Port"
+// in the language of msgs.
+func (msgs Messages) LanPort() string {
+	return Catalog.Format(msgs.locale, "lanPort", nil)
+}
+
+// LanCopiedAll says "Copied the connection details"
+// in the language the app shows.
+func LanCopiedAll() string { return In(i18n.Locale()).LanCopiedAll() }
+
+// LanCopiedAll says "Copied the connection details"
+// in the language of msgs.
+func (msgs Messages) LanCopiedAll() string {
+	return Catalog.Format(msgs.locale, "lanCopiedAll", nil)
+}
+
+// LanOpenSettings says "Open settings"
+// in the language the app shows.
+func LanOpenSettings() string { return In(i18n.Locale()).LanOpenSettings() }
+
+// LanOpenSettings says "Open settings"
+// in the language of msgs.
+func (msgs Messages) LanOpenSettings() string {
+	return Catalog.Format(msgs.locale, "lanOpenSettings", nil)
+}
+
+// LanHintAccount says "Devices connect with this account and password. You can turn them off, and see everything, in Settings under LAN."
+// in the language the app shows.
+func LanHintAccount() string { return In(i18n.Locale()).LanHintAccount() }
+
+// LanHintAccount says "Devices connect with this account and password. You can turn them off, and see everything, in Settings under LAN."
+// in the language of msgs.
+func (msgs Messages) LanHintAccount() string {
+	return Catalog.Format(msgs.locale, "lanHintAccount", nil)
 }

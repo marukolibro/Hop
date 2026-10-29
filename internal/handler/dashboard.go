@@ -83,10 +83,8 @@ type PortService interface {
 	Change(ctx context.Context, port int) error
 }
 
-// UnlockService finds which services work: through each group, and through
-// the rules.
+// UnlockService finds which services work through the rules.
 type UnlockService interface {
-	Detect(ctx context.Context, report func(service.UnlockReport)) error
 	CheckServices(ctx context.Context, report func(model.UnlockResult)) error
 }
 

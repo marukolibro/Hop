@@ -102,7 +102,11 @@ on this machine while developing Hop. Hop must never interfere with it.
   against a real helper. That rule is a privileged boundary: widening it needs
   the user's say, and it changes `helper.Version` (now 10), which makes an
   installed older helper be replaced on the user's authorization.
-- The unlock check (`service/unlock.go`, `repository/unlock`) needs a request
+- The unlock check has two forms. The one the UI shows is the services card
+  and its dialog (below). The other, per group, has no UI any more
+  (`UnlockService.Detect`, the probe lanes): its listeners and groups are
+  still in every config until they are taken out. It
+  (`service/unlock.go`, `repository/unlock`) needs a request
   through one chosen group, which the controller cannot make: its delay test
   is a HEAD that also overwrites the proxy's delay history. So every config
   carries more Hop-owned parts (`service/probe_config.go`): `model.ProbeLanes`
@@ -259,12 +263,13 @@ for font sizes, weights, gaps or radii in views.
   tag only while the profile runs Hop's rules, usage, expiry, refresh and
   manage), the groups, and the core's state at its foot. The content column
   scrolls as one: the hero card, the outbound mode as one bar across, the
-  three home cards (the LAN address with the LAN proxy's switch, the services,
+  three home cards (the LAN address with the LAN proxy's switch, which
+  widens to show the account and password once on, the services,
   the memory Hop and its core hold; `homecards.go`: they wrap as the window
   narrows and a card left alone on a row grows to fill it), one toolbar (the
-  region filters on the left; what works through the group, the order, the
-  unlock check and the speed test on the right, with no title: the sidebar
-  and the hero already say which group and where traffic leaves) and one grid
+  region filters on the left; the order and the speed test on the right, with
+  no title: the sidebar and the hero already say which group and where
+  traffic leaves) and one grid
   of node tiles. Node tiles and the lists, charts and tables on the other pages
   are translucent cards, as the design shows. Dialogs, picker popups, tooltips,
   toasts and the menu-bar flyout stay opaque cards.

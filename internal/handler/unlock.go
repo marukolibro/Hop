@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -14,19 +13,9 @@ import (
 	"hop/locales"
 )
 
-// unlockState is the unlock checks: what the check over the groups found for
-// each group, kept until Hop quits, and its run; and the check through the
-// rules, which the services dialog shows.
+// unlockState is the unlock check: the services through the rules, which the
+// services card and its dialog show.
 type unlockState struct {
-	results map[string]model.Unlock
-	// running says a run goes; done and total count the groups it checks.
-	running bool
-	done    int
-	total   int
-	// cancel ends the run; seq tells a run's replies from an older one's.
-	cancel context.CancelFunc
-	seq    int
-
 	services servicesCheck
 }
 
@@ -161,66 +150,6 @@ func routeText(route []string) string {
 	return strings.Join(names, " → ")
 }
 
-// groupUnlockTip lists the services that work through a group, with the
-// region each placed it in.
-func groupUnlockTip(u model.Unlock) string {
-	var lines []string
-	for _, r := range u.Results {
-		if !works(r) {
-			continue
-		}
-		line := serviceNames[r.Service]
-		if r.State == model.UnlockPartial {
-			line = locales.UnlockNetflixPartial()
-		}
-		if r.Region != "" {
-			line += locales.UnlockRegion(service.CountryName(r.Region))
-		}
-		lines = append(lines, line)
-	}
-	return strings.Join(lines, "\n")
-}
-
-// toggleUnlock starts the check of every group, or ends the one running. It
-// runs on the UI thread.
-func (d *Dashboard) toggleUnlock() {
-	if d.unlock.running {
-		d.unlock.cancel()
-		return
-	}
-	if d.services.Unlock == nil || d.opCtx == nil || d.opWin == nil || d.controlsLocked() || d.testing != "" {
-		return
-	}
-	if d.unlock.results == nil {
-		d.unlock.results = map[string]model.Unlock{}
-	}
-	ctx, cancel := context.WithCancel(d.opCtx)
-	d.unlock.seq++
-	d.unlock.running, d.unlock.done, d.unlock.total, d.unlock.cancel = true, 0, 0, cancel
-	seq, win := d.unlock.seq, d.opWin
-	go func() {
-		defer cancel()
-		err := d.services.Unlock.Detect(ctx, func(r service.UnlockReport) {
-			win.Update(func() {
-				if seq != d.unlock.seq {
-					return
-				}
-				d.unlock.results[r.Group] = r.Result
-				d.unlock.done, d.unlock.total = r.Done, r.Total
-			})
-		})
-		win.Update(func() {
-			if seq != d.unlock.seq {
-				return
-			}
-			d.unlock.running, d.unlock.cancel = false, nil
-			if err != nil && !errors.Is(err, context.Canceled) {
-				d.fail(actionCheckUnlock, err)
-			}
-		})
-	}()
-}
-
 // toggleServices starts the check of every service through the rules, or
 // ends the one running. It runs on the UI thread.
 func (d *Dashboard) toggleServices() {
@@ -259,61 +188,6 @@ func (d *Dashboard) toggleServices() {
 			}
 		})
 	}()
-}
-
-// unlockControls is the check's progress and its button, beside the latency
-// test's.
-func (d *Dashboard) unlockControls(c *ui.Context, t *ui.Theme) {
-	running := d.unlock.running
-	if running && d.unlock.total > 0 {
-		captionText(c, t, fmt.Sprintf("%d/%d", d.unlock.done, d.unlock.total)).FontFeatures("tnum").
-			ContentTransition(ui.ContentTransition{Numeric: true})
-	}
-	spec := buttonSpec{label: locales.UnlockStart(), icon: iconUnlock, style: mainSoftButton(t),
-		disabled: d.services.Unlock == nil || d.controlsLocked() || d.testing != ""}
-	if running {
-		spec.label, spec.icon, spec.disabled = locales.UnlockStop(), iconClose, false
-	}
-	button(c, spec, d.toggleUnlock)
-}
-
-// unlockRow is what the check found for an option that is a group, under its
-// latency line. An option the check did not reach, such as a node, shows
-// nothing.
-func (d *Dashboard) unlockRow(c *ui.Context, t *ui.Theme, option model.NodeView) {
-	result, checked := d.unlock.results[option.Name]
-	if !checked || option.Via == "" {
-		return
-	}
-	ui.Row(c).Key("unlock").Gap(gapTight).Height(chipHeight).Clip().AlignItems(ui.Center).Children(func() {
-		unlockChips(c, t, result)
-	})
-}
-
-// unlockChips is how many services work through a group, on a chip whose
-// tooltip names them; or what stands in its place when none does.
-func unlockChips(c *ui.Context, t *ui.Theme, result model.Unlock) {
-	working := workingCount(result.Results)
-	if working == 0 {
-		captionText(c, t, unlockSummary(result)).MaxLines(1)
-		return
-	}
-	fill, ink := t.Accent.Alpha(tileChipFill), textOn(t, accentInk(t))
-	ui.Box(c).Key("unlockCount").Padding(1, 6).Radius(radiusChip).Background(fill).Tooltip(groupUnlockTip(result)).Children(func() {
-		ui.Text(c, locales.UnlockWorking(working, len(result.Results))).FontSize(fontCaption).FontWeight(weightMedium).
-			TextColor(ink).FontFeatures("tnum").NoWrap()
-	})
-}
-
-// unlockSummary says what a group with no working service shows: that every
-// check was refused, or that some could not be made.
-func unlockSummary(u model.Unlock) string {
-	for _, r := range u.Results {
-		if r.State == model.UnlockUnknown {
-			return locales.UnlockUnsure()
-		}
-	}
-	return locales.UnlockNone()
 }
 
 // setForeground says whether the window is in front: shown and focused. The

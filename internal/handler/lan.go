@@ -185,3 +185,10 @@ func (d *Dashboard) lanCopyValue(c *ui.Context, t *ui.Theme, what string, value 
 		})
 	})
 }
+
+// openLANSettings goes to the settings page, scrolled to the LAN group, where
+// the account, the password and every address are kept.
+func (d *Dashboard) openLANSettings() {
+	d.settings.revealLAN = true
+	d.page = pageSettings
+}

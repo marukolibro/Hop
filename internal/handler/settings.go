@@ -52,6 +52,9 @@ type settingsState struct {
 	updateIndex     int
 	// clarity is the slider's value; settings.WindowClarity is the saved int.
 	clarity float64
+	// revealLAN scrolls the LAN group into view the next time the page is
+	// built, as the home card's prompt sends the user there.
+	revealLAN bool
 }
 
 // newSettingsState is the state showing settings. A zero value from a caller
@@ -229,7 +232,11 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 					d.appVersionRow(c, t),
 				)
 				settingsGroup(c, t, locales.SettingsGeneral(), general...)
-				settingsGroup(c, t, locales.SettingsLan(), d.lanRows(c, t)...)
+				lan := settingsGroup(c, t, locales.SettingsLan(), d.lanRows(c, t)...)
+				if s.revealLAN {
+					lan.ScrollIntoView()
+					s.revealLAN = false
+				}
 				settingsGroup(c, t, locales.Subscriptions(),
 					func() {
 						settingRow(c, t, locales.SettingsAutoUpdate(), locales.SettingsAutoUpdateNote(), func() {
@@ -253,8 +260,8 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 }
 
 // settingsGroup is a titled card of rows, as the design's setting-list.
-func settingsGroup(c *ui.Context, t *ui.Theme, title string, rows ...func()) {
-	ui.Column(c).Key(title).Gap(10).Children(func() {
+func settingsGroup(c *ui.Context, t *ui.Theme, title string, rows ...func()) ui.Element {
+	return ui.Column(c).Key(title).Gap(10).Children(func() {
 		mutedText(c, t, title).FontWeight(weightMedium).Padding(0, 14)
 		panelCard(c, t).Padding(0, 16).Children(func() {
 			for i, row := range rows {

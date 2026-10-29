@@ -103,8 +103,7 @@ func (d *Dashboard) nodesPage(c *ui.Context, t *ui.Theme) {
 }
 
 // nodesToolbar is the one row over the grid: the region filters on the left,
-// and on the right what works through the group, how the options are ordered,
-// the unlock check and the speed test. The group itself is not named again:
+// and on the right how the options are ordered and the speed test. The group itself is not named again:
 // the sidebar already shows which one is chosen, and the hero where traffic
 // leaves. The controls wrap below the filters where a longer translation
 // leaves the row too little room.
@@ -116,11 +115,7 @@ func (d *Dashboard) nodesToolbar(c *ui.Context, t *ui.Theme) {
 	ui.Row(c).Key("nodesToolbar").Gap(gapMedium).GapY(gapSmall).Wrap().AlignItems(ui.Center).Children(func() {
 		d.regionFilter(c, t, group)
 		ui.Row(c).Key("nodeControls").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-			if result, checked := d.unlock.results[group.Name]; checked {
-				unlockChips(c, t, result)
-			}
 			slidingSwitch(c, locales.NodesOrder(), &d.nodeOrder, nodeOrderLabels(), pageSwitchStyle(t, nodeOrderSegmentWidth), func(int) {})
-			d.unlockControls(c, t)
 			d.testButton(c, t, group.Name)
 		})
 	})
@@ -423,7 +418,6 @@ func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, 
 			ui.Text(c, latency).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(latencyInk).
 				FontFeatures("tnum").NoWrap().ContentTransition(ui.ContentTransition{Numeric: true})
 		})
-		d.unlockRow(c, ink, node)
 	})
 }
 

@@ -368,12 +368,8 @@
   "tunTaken": "TUN 已被 {owner} 占用",
   "tunUpdateAndOn": "更新并开启",
   "tunUpdateDescription": "TUN 会接管全部流量,需要更新 Hop 的增强组件。{prompt},之后可随时在设置里卸载。",
-  "unlockNetflixPartial": "Netflix 只能看自制剧",
-  "unlockNone": "均不可用",
   "unlockRegion": ",地区:{region}",
-  "unlockStart": "解锁检测",
   "unlockStop": "停止检测",
-  "unlockUnsure": "未能检测",
   "update": "更新",
   "updateAndRestart": "更新并重启",
   "updateBlockedDev": "开发版不能自动更新",
@@ -396,7 +392,6 @@
   "serviceBlocked": "不可用",
   "serviceUnknown": "检测失败",
   "serviceRegionTip": "服务认为你所在的地区",
-  "unlockWorking": "{working}/{total} 可用",
   "actionWatchMemory": "无法读取内存占用",
   "statsMemory": "内存占用",
   "statsMemoryCore": "内核",
@@ -407,5 +402,9 @@
   "lanStateOnPort": "端口 {port}",
   "servicesAll": "全部服务",
   "servicesAllWork": "全部可用",
-  "servicesIdle": "未检测"
+  "servicesIdle": "未检测",
+  "lanPort": "端口",
+  "lanCopiedAll": "已复制连接信息",
+  "lanOpenSettings": "前往设置",
+  "lanHintAccount": "设备连接时要填这个账号和密码。可以在设置的「局域网」里关闭，也能看到完整信息。"
 }

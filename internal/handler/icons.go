@@ -48,7 +48,6 @@ var (
 	iconMemory       = parseIcon(`<rect x="7" y="7" width="10" height="10" rx="2"/><path d="M9.5 4v3M14.5 4v3M9.5 17v3M14.5 17v3M4 9.5h3M4 14.5h3M17 9.5h3M17 14.5h3"/>`)
 	iconDirect       = parseIcon(`<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.4"/>`)
 	iconWifi         = parseIcon(`<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/>`)
-	iconUnlock       = parseIcon(`<rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8.5 11V8a3.5 3.5 0 0 1 6.8-1.2"/>`)
 	iconFile         = parseIcon(`<path d="M13.5 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13.5 3.5V9H19"/>`)
 )
 
