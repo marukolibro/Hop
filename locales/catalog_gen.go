@@ -3792,26 +3792,6 @@ func (msgs Messages) TunUpdateDescription(prompt string) string {
 	return Catalog.Format(msgs.locale, "tunUpdateDescription", map[string]any{"prompt": prompt})
 }
 
-// UnlockChatGPT says "ChatGPT available"
-// in the language the app shows.
-func UnlockChatGPT() string { return In(i18n.Locale()).UnlockChatGPT() }
-
-// UnlockChatGPT says "ChatGPT available"
-// in the language of msgs.
-func (msgs Messages) UnlockChatGPT() string {
-	return Catalog.Format(msgs.locale, "unlockChatGPT", nil)
-}
-
-// UnlockNetflix says "Netflix available"
-// in the language the app shows.
-func UnlockNetflix() string { return In(i18n.Locale()).UnlockNetflix() }
-
-// UnlockNetflix says "Netflix available"
-// in the language of msgs.
-func (msgs Messages) UnlockNetflix() string {
-	return Catalog.Format(msgs.locale, "unlockNetflix", nil)
-}
-
 // UnlockNetflixPartial says "Netflix originals only"
 // in the language the app shows.
 func UnlockNetflixPartial() string { return In(i18n.Locale()).UnlockNetflixPartial() }
@@ -3870,16 +3850,6 @@ func UnlockUnsure() string { return In(i18n.Locale()).UnlockUnsure() }
 // in the language of msgs.
 func (msgs Messages) UnlockUnsure() string {
 	return Catalog.Format(msgs.locale, "unlockUnsure", nil)
-}
-
-// UnlockYouTube says "YouTube Premium available"
-// in the language the app shows.
-func UnlockYouTube() string { return In(i18n.Locale()).UnlockYouTube() }
-
-// UnlockYouTube says "YouTube Premium available"
-// in the language of msgs.
-func (msgs Messages) UnlockYouTube() string {
-	return Catalog.Format(msgs.locale, "unlockYouTube", nil)
 }
 
 // Update says "Update"
@@ -3980,4 +3950,140 @@ func Working() string { return In(i18n.Locale()).Working() }
 // in the language of msgs.
 func (msgs Messages) Working() string {
 	return Catalog.Format(msgs.locale, "working", nil)
+}
+
+// ServicesTitle says "Service status"
+// in the language the app shows.
+func ServicesTitle() string { return In(i18n.Locale()).ServicesTitle() }
+
+// ServicesTitle says "Service status"
+// in the language of msgs.
+func (msgs Messages) ServicesTitle() string {
+	return Catalog.Format(msgs.locale, "servicesTitle", nil)
+}
+
+// ServicesHint says "Opens each service the way your rules send it: the route it takes, whether it works and how fast it answers."
+// in the language the app shows.
+func ServicesHint() string { return In(i18n.Locale()).ServicesHint() }
+
+// ServicesHint says "Opens each service the way your rules send it: the route it takes, whether it works and how fast it answers."
+// in the language of msgs.
+func (msgs Messages) ServicesHint() string {
+	return Catalog.Format(msgs.locale, "servicesHint", nil)
+}
+
+// ServicesCheck says "Check"
+// in the language the app shows.
+func ServicesCheck() string { return In(i18n.Locale()).ServicesCheck() }
+
+// ServicesCheck says "Check"
+// in the language of msgs.
+func (msgs Messages) ServicesCheck() string {
+	return Catalog.Format(msgs.locale, "servicesCheck", nil)
+}
+
+// ServicesChecking says "Checking {done} of {total}"
+// in the language the app shows.
+func ServicesChecking(done int, total int) string {
+	return In(i18n.Locale()).ServicesChecking(done, total)
+}
+
+// ServicesChecking says "Checking {done} of {total}"
+// in the language of msgs.
+func (msgs Messages) ServicesChecking(done int, total int) string {
+	return Catalog.Format(msgs.locale, "servicesChecking", map[string]any{"done": done, "total": total})
+}
+
+// ServicesSummary says "{working} of {total} services work"
+// in the language the app shows.
+func ServicesSummary(working int, total int) string {
+	return In(i18n.Locale()).ServicesSummary(working, total)
+}
+
+// ServicesSummary says "{working} of {total} services work"
+// in the language of msgs.
+func (msgs Messages) ServicesSummary(working int, total int) string {
+	return Catalog.Format(msgs.locale, "servicesSummary", map[string]any{"working": working, "total": total})
+}
+
+// ServicesWaiting says "Checking…"
+// in the language the app shows.
+func ServicesWaiting() string { return In(i18n.Locale()).ServicesWaiting() }
+
+// ServicesWaiting says "Checking…"
+// in the language of msgs.
+func (msgs Messages) ServicesWaiting() string {
+	return Catalog.Format(msgs.locale, "servicesWaiting", nil)
+}
+
+// ServicesNotChecked says "Not checked yet"
+// in the language the app shows.
+func ServicesNotChecked() string { return In(i18n.Locale()).ServicesNotChecked() }
+
+// ServicesNotChecked says "Not checked yet"
+// in the language of msgs.
+func (msgs Messages) ServicesNotChecked() string {
+	return Catalog.Format(msgs.locale, "servicesNotChecked", nil)
+}
+
+// ServiceAvailable says "Works"
+// in the language the app shows.
+func ServiceAvailable() string { return In(i18n.Locale()).ServiceAvailable() }
+
+// ServiceAvailable says "Works"
+// in the language of msgs.
+func (msgs Messages) ServiceAvailable() string {
+	return Catalog.Format(msgs.locale, "serviceAvailable", nil)
+}
+
+// ServicePartial says "Originals only"
+// in the language the app shows.
+func ServicePartial() string { return In(i18n.Locale()).ServicePartial() }
+
+// ServicePartial says "Originals only"
+// in the language of msgs.
+func (msgs Messages) ServicePartial() string {
+	return Catalog.Format(msgs.locale, "servicePartial", nil)
+}
+
+// ServiceBlocked says "Blocked"
+// in the language the app shows.
+func ServiceBlocked() string { return In(i18n.Locale()).ServiceBlocked() }
+
+// ServiceBlocked says "Blocked"
+// in the language of msgs.
+func (msgs Messages) ServiceBlocked() string {
+	return Catalog.Format(msgs.locale, "serviceBlocked", nil)
+}
+
+// ServiceUnknown says "Check failed"
+// in the language the app shows.
+func ServiceUnknown() string { return In(i18n.Locale()).ServiceUnknown() }
+
+// ServiceUnknown says "Check failed"
+// in the language of msgs.
+func (msgs Messages) ServiceUnknown() string {
+	return Catalog.Format(msgs.locale, "serviceUnknown", nil)
+}
+
+// ServiceRegionTip says "The region the service placed you in"
+// in the language the app shows.
+func ServiceRegionTip() string { return In(i18n.Locale()).ServiceRegionTip() }
+
+// ServiceRegionTip says "The region the service placed you in"
+// in the language of msgs.
+func (msgs Messages) ServiceRegionTip() string {
+	return Catalog.Format(msgs.locale, "serviceRegionTip", nil)
+}
+
+// UnlockWorking says "{working}/{total} work"
+// in the language the app shows.
+func UnlockWorking(working int, total int) string {
+	return In(i18n.Locale()).UnlockWorking(working, total)
+}
+
+// UnlockWorking says "{working}/{total} work"
+// in the language of msgs.
+func (msgs Messages) UnlockWorking(working int, total int) string {
+	return Catalog.Format(msgs.locale, "unlockWorking", map[string]any{"working": working, "total": total})
 }

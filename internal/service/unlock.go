@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 
 	"hop/internal/model"
@@ -18,10 +19,11 @@ type UnlockController interface {
 	SelectedProxy(ctx context.Context, group string) (string, error)
 }
 
-// UnlockChecker asks the services whether they work through one probe lane's
-// listener.
+// UnlockChecker asks the services whether they work through one proxy: a
+// probe lane's listener or the mixed port. It hands each service's result to
+// report as it comes, one at a time.
 type UnlockChecker interface {
-	Check(ctx context.Context) (model.Unlock, error)
+	Check(ctx context.Context, report func(model.UnlockResult)) error
 }
 
 // UnlockReport is one group's result and how far the run is.
@@ -38,19 +40,44 @@ type UnlockReport struct {
 // going: the lanes hold one group each.
 var ErrUnlockRunning = errors.New("an unlock check is already running")
 
-// UnlockService finds which services work through which groups: each group's
-// current node, as traffic sent to the group would take. It checks as many
-// groups at once as it has lanes, one checker each.
+// UnlockService finds which services work: through the rules, as the user's
+// own traffic goes, and through each group's current node, as traffic sent to
+// the group would take. It checks as many groups at once as it has lanes, one
+// checker each.
 type UnlockService struct {
 	controller UnlockController
 	lanes      []UnlockChecker
+	routed     UnlockChecker
 	running    sync.Mutex
+	// routedRunning is the run through the rules, which needs no lane and
+	// so goes beside a run over the groups.
+	routedRunning sync.Mutex
 }
 
 // NewUnlockService returns a service that picks groups through controller and
-// checks through lanes; lane i is the one model.ProbeGroup(i) belongs to.
-func NewUnlockService(controller UnlockController, lanes []UnlockChecker) *UnlockService {
-	return &UnlockService{controller: controller, lanes: lanes}
+// checks through lanes, where lane i is the one model.ProbeGroup(i) belongs
+// to, and through the rules with routed.
+func NewUnlockService(controller UnlockController, lanes []UnlockChecker, routed UnlockChecker) *UnlockService {
+	return &UnlockService{controller: controller, lanes: lanes, routed: routed}
+}
+
+// CheckServices checks every service through the mixed port, where the rules
+// send each one the way they send the user's own traffic, and hands each
+// result to report as it comes. A service that could not be checked is
+// reported unknown, and the reason is logged.
+func (s *UnlockService) CheckServices(ctx context.Context, report func(model.UnlockResult)) error {
+	if !s.routedRunning.TryLock() {
+		return ErrUnlockRunning
+	}
+	defer s.routedRunning.Unlock()
+	err := s.routed.Check(ctx, report)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err != nil {
+		slog.Warn("service check incomplete", "error", err)
+	}
+	return nil
 }
 
 // Detect checks every group of the profile, lanes at a time, and hands each
@@ -119,7 +146,11 @@ func (s *UnlockService) checkOn(ctx context.Context, lane int, checker UnlockChe
 	if err := s.controller.SelectProxy(ctx, laneGroup, group); err != nil {
 		return model.Unlock{}, fmt.Errorf("pick group %q in probe lane %d: %w", group, lane, err)
 	}
-	result, checkErr := checker.Check(ctx)
+	var result model.Unlock
+	checkErr := checker.Check(ctx, func(r model.UnlockResult) {
+		result.Results = append(result.Results, r)
+	})
+	result.Results = inServiceOrder(result.Results)
 	if ctx.Err() != nil {
 		return model.Unlock{}, ctx.Err()
 	}
@@ -134,4 +165,14 @@ func (s *UnlockService) checkOn(ctx context.Context, lane int, checker UnlockChe
 		slog.Warn("unlock check incomplete", "group", group, "error", checkErr)
 	}
 	return result, nil
+}
+
+// inServiceOrder puts results, which come as their checks finish, in the
+// order the services show.
+func inServiceOrder(results []model.UnlockResult) []model.UnlockResult {
+	out := slices.Clone(results)
+	slices.SortStableFunc(out, func(a, b model.UnlockResult) int {
+		return slices.Index(model.UnlockServices, a.Service) - slices.Index(model.UnlockServices, b.Service)
+	})
+	return out
 }

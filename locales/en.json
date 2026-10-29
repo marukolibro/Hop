@@ -732,8 +732,6 @@
       }
     }
   },
-  "unlockChatGPT": "ChatGPT available",
-  "unlockNetflix": "Netflix available",
   "unlockNetflixPartial": "Netflix originals only",
   "unlockNone": "None available",
   "unlockRegion": ", region: {region}",
@@ -747,7 +745,6 @@
   "unlockStart": "Unlock",
   "unlockStop": "Stop",
   "unlockUnsure": "Couldn't check",
-  "unlockYouTube": "YouTube Premium available",
   "update": "Update",
   "updateAndRestart": "Update and restart",
   "updateBlockedDev": "A dev build can't update itself",
@@ -757,5 +754,48 @@
   "use": "Use",
   "viewDirect": "Not through the proxy",
   "viewReject": "Connection rejected",
-  "working": "Working"
+  "working": "Working",
+  "servicesTitle": "Service status",
+  "servicesHint": "Opens each service the way your rules send it: the route it takes, whether it works and how fast it answers.",
+  "servicesCheck": "Check",
+  "servicesChecking": "Checking {done} of {total}",
+  "@servicesChecking": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "servicesSummary": "{working} of {total} services work",
+  "@servicesSummary": {
+    "placeholders": {
+      "working": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "servicesWaiting": "Checking…",
+  "servicesNotChecked": "Not checked yet",
+  "serviceAvailable": "Works",
+  "servicePartial": "Originals only",
+  "serviceBlocked": "Blocked",
+  "serviceUnknown": "Check failed",
+  "serviceRegionTip": "The region the service placed you in",
+  "unlockWorking": "{working}/{total} work",
+  "@unlockWorking": {
+    "placeholders": {
+      "working": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  }
 }

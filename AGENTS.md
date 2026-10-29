@@ -115,7 +115,14 @@ on this machine while developing Hop. Hop must never interfere with it.
   profile with no group, leaves them out. Never route anything but the check
   through them, and never put them in a rule. The check reads a lane's choice
   back after each group and stops when it is not that group: a reload in
-  between would put the result under the wrong group.
+  between would put the result under the wrong group. The services dialog
+  (hero → 服务状态) checks the same services through the mixed port instead,
+  where the rules pick each one's route as they do for the user's traffic;
+  `repository/unlock` reads that route from `/connections` by the request's
+  own local port while its connection is open (keep-alives off, one
+  connection per request). The services and their order are
+  `model.UnlockServices`; each check's endpoints were tried by hand from a
+  region the service serves.
 - Subscriptions are filtered by a whitelist (`service/runtime_config.go`):
   only `proxies`, `proxy-groups`, `proxy-providers`, `rules`, `rule-providers`,
   `sub-rules` pass through. Hop owns every other key. Never widen this list

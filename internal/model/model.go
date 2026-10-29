@@ -254,19 +254,51 @@ const (
 	UnlockAvailable
 )
 
-// UnlockResult is one service's check through a node. Region is the ISO 3166
-// alpha-2 code the service placed the node in, "" when it gave none.
-type UnlockResult struct {
-	State  UnlockState
-	Region string
+// UnlockService is a service the unlock check looks at.
+type UnlockService string
+
+// The services the unlock check looks at.
+const (
+	UnlockGoogle  UnlockService = "google"
+	UnlockGitHub  UnlockService = "github"
+	UnlockYouTube UnlockService = "youtube"
+	UnlockChatGPT UnlockService = "chatgpt"
+	UnlockClaude  UnlockService = "claude"
+	UnlockGemini  UnlockService = "gemini"
+	UnlockNetflix UnlockService = "netflix"
+	UnlockDisney  UnlockService = "disney"
+	UnlockPrime   UnlockService = "prime"
+	UnlockSpotify UnlockService = "spotify"
+	UnlockTikTok  UnlockService = "tiktok"
+	UnlockDiscord UnlockService = "discord"
+)
+
+// UnlockServices are the services the unlock check looks at, in the order
+// they show.
+var UnlockServices = []UnlockService{
+	UnlockGoogle, UnlockGitHub, UnlockYouTube, UnlockChatGPT, UnlockClaude, UnlockGemini,
+	UnlockNetflix, UnlockDisney, UnlockPrime, UnlockSpotify, UnlockTikTok, UnlockDiscord,
 }
 
-// Unlock is what the checks found about the services Hop looks at, through
-// one node.
+// UnlockResult is one service's check through a route.
+type UnlockResult struct {
+	Service UnlockService
+	State   UnlockState
+	// Region is the ISO 3166 alpha-2 code the service placed the route in,
+	// "" when it gave none.
+	Region string
+	// Latency is how long the service took to answer the check's first
+	// request, the proxy and TLS handshakes included; 0 when it did not.
+	Latency time.Duration
+	// Route is the path the first request took, from the outermost group to
+	// the proxy it left by; empty when the core no longer had it.
+	Route []string
+}
+
+// Unlock is what the checks found about every service, through one route, in
+// the order the check lists the services.
 type Unlock struct {
-	ChatGPT UnlockResult
-	Netflix UnlockResult
-	YouTube UnlockResult
+	Results []UnlockResult
 }
 
 // NodeView is a proxy as the node grid shows it, its name taken apart.
@@ -369,6 +401,9 @@ type Connection struct {
 	// Process is the name of the local program that opened it, "" when the
 	// core could not tell.
 	Process string
+	// SourcePort is the local port the connection came from, which tells
+	// Hop's own requests to the mixed port apart.
+	SourcePort string
 	// Rule is the rule that matched, with its payload, such as
 	// "DomainSuffix(google.com)".
 	Rule string

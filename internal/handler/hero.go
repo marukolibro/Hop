@@ -58,7 +58,7 @@ func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 }
 
 // heroExit names the exit, the groups it passes, its public address and its
-// facts.
+// facts, over the line that opens the services dialog.
 func (d *Dashboard) heroExit(c *ui.Context, t *ui.Theme, route []model.RouteHop) {
 	exit := ui.Column(c).Key("exit").Gap(gapTight).Width(exitWidth)
 	exit.Children(func() {
@@ -80,6 +80,7 @@ func (d *Dashboard) heroExit(c *ui.Context, t *ui.Theme, route []model.RouteHop)
 		}
 		d.exitIPLine(c, t)
 		heroChips(c, t, hop)
+		d.servicesEntry(c, t)
 	})
 }
 

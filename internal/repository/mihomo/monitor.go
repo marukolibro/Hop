@@ -42,6 +42,7 @@ type connectionMetadata struct {
 	SniffHost       string `json:"sniffHost"`
 	DestinationIP   string `json:"destinationIP"`
 	DestinationPort string `json:"destinationPort"`
+	SourcePort      string `json:"sourcePort"`
 	Process         string `json:"process"`
 }
 
@@ -104,16 +105,17 @@ func toConnections(msg connectionsMessage) model.Connections {
 	active := make([]model.Connection, len(msg.Connections))
 	for i, m := range msg.Connections {
 		active[i] = model.Connection{
-			ID:       m.ID,
-			Host:     connectionHost(m.Metadata),
-			Port:     m.Metadata.DestinationPort,
-			Network:  m.Metadata.Network,
-			Process:  m.Metadata.Process,
-			Rule:     ruleText(m.Rule, m.RulePayload),
-			Chain:    reversed(m.Chains),
-			Upload:   m.Upload,
-			Download: m.Download,
-			Start:    m.Start,
+			ID:         m.ID,
+			Host:       connectionHost(m.Metadata),
+			Port:       m.Metadata.DestinationPort,
+			Network:    m.Metadata.Network,
+			Process:    m.Metadata.Process,
+			SourcePort: m.Metadata.SourcePort,
+			Rule:       ruleText(m.Rule, m.RulePayload),
+			Chain:      reversed(m.Chains),
+			Upload:     m.Upload,
+			Download:   m.Download,
+			Start:      m.Start,
 		}
 	}
 	return model.Connections{Active: active, UploadTotal: msg.UploadTotal, DownloadTotal: msg.DownloadTotal}

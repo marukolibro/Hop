@@ -324,7 +324,7 @@ func run() (err error) {
 		Folders:       mygo.Shell,
 		LogDir:        cfg.LogDir,
 		ExitIP:        service.NewExitIPService(exitip.NewClient(exitip.TraceURL, hopProxyClient(portState))),
-		Unlock:        service.NewUnlockService(client, unlockLanes(cfg.ProbePort)),
+		Unlock:        service.NewUnlockService(client, unlockLanes(cfg.ProbePort, client), unlockRouted(portState, client)),
 		LAN:           lanService,
 		Port:          portService,
 	}, bindAddress, userSettings, appVersion)
@@ -472,13 +472,21 @@ func hopProxyClient(port *service.MixedPortState) *http.Client {
 // which sends everything to the group the unlock check picked in that lane,
 // whatever the rules say. Keep-alives are off: a connection kept from one
 // group's check must not carry the next group's.
-func unlockLanes(probePort int) []service.UnlockChecker {
+func unlockLanes(probePort int, connections unlock.ConnectionLister) []service.UnlockChecker {
 	lanes := make([]service.UnlockChecker, 0, model.ProbeLanes)
 	for lane := range model.ProbeLanes {
-		client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true, Proxy: http.ProxyURL(hopProxyURL(probePort + lane))}}
-		lanes = append(lanes, unlock.NewClient(client))
+		lanes = append(lanes, unlock.NewClient(http.ProxyURL(hopProxyURL(probePort+lane)), connections))
 	}
 	return lanes
+}
+
+// unlockRouted is the checker through Hop's own mixed port, where the rules
+// pick each service's route. The port is read for each request: the user can
+// move it while Hop runs.
+func unlockRouted(port *service.MixedPortState, connections unlock.ConnectionLister) service.UnlockChecker {
+	return unlock.NewClient(func(*http.Request) (*url.URL, error) {
+		return hopProxyURL(port.Get()), nil
+	}, connections)
 }
 
 // hopProxyURL is Hop's own mixed port, where its core accepts HTTP proxies.

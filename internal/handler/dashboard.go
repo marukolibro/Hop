@@ -83,9 +83,11 @@ type PortService interface {
 	Change(ctx context.Context, port int) error
 }
 
-// UnlockService finds which services work through which nodes.
+// UnlockService finds which services work: through each group, and through
+// the rules.
 type UnlockService interface {
 	Detect(ctx context.Context, report func(service.UnlockReport)) error
+	CheckServices(ctx context.Context, report func(model.UnlockResult)) error
 }
 
 // SubscriptionService is what the dashboard needs to manage saved profiles:
@@ -926,6 +928,7 @@ func (d *Dashboard) View(c *ui.Context) {
 	d.deleteDialog(c, t)
 	d.tunDialog(c, t)
 	d.customRuleDialog(c, t)
+	d.servicesDialog(c, t)
 }
 
 // header holds what applies to every page: the page switch, and how traffic

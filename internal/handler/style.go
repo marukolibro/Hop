@@ -70,11 +70,18 @@ const (
 	// a pasted config to a fixed, scrollable box; sourceSegmentWidth fits the
 	// two source labels; pickerPadX pads the trigger and its options;
 	// pickerItemHeight is one option's height.
-	dialogWidth        float32 = 440
-	localEditorHeight  float32 = 168
-	sourceSegmentWidth float32 = 88
-	pickerPadX         float32 = 10
-	pickerItemHeight   float32 = 32
+	dialogWidth float32 = 440
+	// servicesDialogWidth fits a service's name, route, region, latency and
+	// state on one row; servicesListHeight scrolls the list past about ten
+	// rows; serviceMarkTile holds a service's mark at serviceMarkGlyph.
+	servicesDialogWidth float32 = 560
+	servicesListHeight  float32 = 560
+	serviceMarkTile     float32 = 30
+	serviceMarkGlyph    float32 = 16
+	localEditorHeight   float32 = 168
+	sourceSegmentWidth  float32 = 88
+	pickerPadX          float32 = 10
+	pickerItemHeight    float32 = 32
 	// pickerPopupInset evenly insets the menu options.
 	pickerPopupInset float32 = 4
 
