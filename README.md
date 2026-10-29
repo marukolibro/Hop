@@ -85,18 +85,18 @@ running in a webview, and the same code runs on macOS and Windows.
 - **The exit's address.** Click to copy the public IP and country traffic
   leaves by. Hop looks it up once through its own proxy when the exit changes
   and keeps it in memory only.
-- **Unlock check.** **Unlock** tries ChatGPT, Netflix and YouTube Premium
-  through every group at once, by the node each group uses now, and marks the
-  ones that work on the group's tile, with the region the service saw. It goes
-  through listeners of its own on the loopback, so your rules and your current
-  route stay as they are. The results are kept until Hop quits.
+- **Service status.** A card on the home page checks twelve services (Google,
+  GitHub, YouTube, ChatGPT, Claude, Gemini, Netflix, Disney+, Prime Video,
+  Spotify, TikTok, Discord) through the mixed port, so the rules decide the
+  route as they do for your own traffic. It shows each one's response time,
+  the region the service saw and the route used. It checks when the window
+  opens and every 10 minutes while the window is in front.
 - **LAN access.** **Settings → LAN** lets phones and other computers on the
   same network use Hop's proxy: they enter this computer's address (shown with
   a copy button) as an HTTP or SOCKS5 proxy. Off by default. While on, devices
   must give an account (a random password Hop makes, which you can reset) unless
   you turn that off, and only sources on private networks are answered, never
-  the internet. Hop's own controller and unlock-check ports stay on this
-  computer.
+  the internet. Hop's own controller port stays on this computer.
 - **Three modes.** Rule, Global and Direct, with a note on what each does.
 
 ### System integration
@@ -273,8 +273,8 @@ The ports sit away from the ones other Clash clients use.
   on, and are put back when Hop quits.
 - Hop listens on this computer alone until you turn on LAN access. Then only the
   proxy port opens to the network, only to private-network sources, and with an
-  account unless you turn that off; the controller, the core's DNS and the
-  unlock check's ports always stay on the loopback.
+  account unless you turn that off; the controller and the core's DNS
+  always stay on the loopback.
 - The exit's address is looked up with one request to Cloudflare
   (`1.1.1.1/cdn-cgi/trace`) through Hop's own proxy, kept in memory, and never
   written to disk or a log.

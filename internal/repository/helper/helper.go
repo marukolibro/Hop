@@ -21,8 +21,10 @@ import (
 // a core only from a release archive it verified against GitHub itself, where
 // 8 took any binary that called itself mihomo, and version 10 waits for a
 // reload as long as the core takes to download the config's providers, where
-// 9 gave up after 5 s and reported a config the core went on to run.
-const Version = "10"
+// 9 gave up after 5 s and reported a config the core went on to run, and
+// version 11 refuses a config with listeners of its own, which 10 accepted on
+// the loopback for the unlock check's probe lanes the app no longer runs.
+const Version = "11"
 
 // LANSources are the only source ranges a core run as root may be told to
 // answer when the config serves the network: this computer and the private

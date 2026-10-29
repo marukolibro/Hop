@@ -833,18 +833,16 @@ func prepareSocket(path string) error {
 
 // controllerKeys pulls the external controller address and its secret out of
 // a runtime config, and refuses what a core run as root must never do: bind
-// the controller off loopback, open a listener off loopback, or serve a network
-// wider than the private ones (see checkLANSources).
+// the controller off loopback, open listeners of its own (the app's proxy is
+// the mixed port; it never asks for more), or serve a network wider than the
+// private ones (see checkLANSources).
 func controllerKeys(configYAML string) (string, string, error) {
 	var doc struct {
-		ExternalController string   `yaml:"external-controller"`
-		Secret             string   `yaml:"secret"`
-		AllowLAN           bool     `yaml:"allow-lan"`
-		LanAllowedIPs      []string `yaml:"lan-allowed-ips"`
-		Listeners          []struct {
-			Name   string `yaml:"name"`
-			Listen string `yaml:"listen"`
-		} `yaml:"listeners"`
+		ExternalController string      `yaml:"external-controller"`
+		Secret             string      `yaml:"secret"`
+		AllowLAN           bool        `yaml:"allow-lan"`
+		LanAllowedIPs      []string    `yaml:"lan-allowed-ips"`
+		Listeners          []yaml.Node `yaml:"listeners"`
 	}
 	if err := yaml.Unmarshal([]byte(configYAML), &doc); err != nil {
 		return "", "", fmt.Errorf("the config is not YAML: %w", err)
@@ -859,10 +857,8 @@ func controllerKeys(configYAML string) (string, string, error) {
 	if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
 		return "", "", fmt.Errorf("the config's external-controller %q is not on loopback", doc.ExternalController)
 	}
-	for _, listener := range doc.Listeners {
-		if ip := net.ParseIP(listener.Listen); listener.Listen != "localhost" && (ip == nil || !ip.IsLoopback()) {
-			return "", "", fmt.Errorf("the config's listener %q listens on %q, not on loopback", listener.Name, listener.Listen)
-		}
+	if len(doc.Listeners) > 0 {
+		return "", "", fmt.Errorf("the config opens %d listeners of its own, which the app never writes", len(doc.Listeners))
 	}
 	if doc.AllowLAN {
 		if err := checkLANSources(doc.LanAllowedIPs); err != nil {

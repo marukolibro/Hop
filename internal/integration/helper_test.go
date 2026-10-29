@@ -286,8 +286,8 @@ func TestHelperServesItsCore(t *testing.T) {
 	}
 
 	// LAN access is accepted only inside the private networks: the config the
-	// app writes for it is applied, anything wider or any listener off the
-	// loopback is a 400, and the core keeps what it had.
+	// app writes for it is applied, anything wider or any listener at all is a
+	// 400, and the core keeps what it had.
 	withLAN := next
 	withLAN.LAN = service.LANSettings{Enabled: true, Account: model.LANCredential{Username: "hop", Password: "s3cretpw"}}
 	lanConfig, err := service.BootstrapConfig(withLAN)
@@ -296,11 +296,11 @@ func TestHelperServesItsCore(t *testing.T) {
 	}
 	everyAddress := bytes.Replace(lanConfig, []byte("127.0.0.0/8"), []byte("0.0.0.0/0"), 1)
 	noSources := bytes.Replace(lanConfig, []byte("lan-allowed-ips"), []byte("lan-allowed-ips-unused"), 1)
-	offLoopbackListener := append(append([]byte{}, lanConfig...), []byte("listeners:\n  - {name: wide, type: http, listen: 0.0.0.0, port: 17999, proxy: DIRECT}\n")...)
+	ownListener := append(append([]byte{}, lanConfig...), []byte("listeners:\n  - {name: wide, type: http, listen: 0.0.0.0, port: 17999, proxy: DIRECT}\n")...)
 	for name, refused := range map[string][]byte{
 		"a source range reaching the internet": everyAddress,
 		"no source range at all":               noSources,
-		"a listener off the loopback":          offLoopbackListener,
+		"a listener of its own":                ownListener,
 	} {
 		if bytes.Equal(refused, lanConfig) {
 			t.Fatalf("the test config for %s did not change", name)

@@ -97,9 +97,9 @@ on this machine while developing Hop. Hop must never interfere with it.
   requests from the whole internet, so the helper (`controllerKeys`,
   `checkLANSources`) accepts `allow-lan` only with a `lan-allowed-ips` list
   inside `helper.LANSources` (the one list the app writes too), and refuses a
-  listener that is not on the loopback; `TestHelperServesItsCore` checks that
+  config with listeners of its own (the app writes none); `TestHelperServesItsCore` checks that
   against a real helper. That rule is a privileged boundary: widening it needs
-  the user's say, and it changes `helper.Version` (now 10), which makes an
+  the user's say, and it changes `helper.Version` (now 11), which makes an
   installed older helper be replaced on the user's authorization.
 - The unlock check is the services card and its dialog (`service/unlock.go`,
   `repository/unlock`). Its requests go through the mixed port, where the
