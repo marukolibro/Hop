@@ -46,7 +46,7 @@ func TestProfileWithAnchors(t *testing.T) {
 	validator := mihomo.NewConfigValidator(binary, validateDir, 30*time.Second)
 	settings := service.RuntimeSettings{
 		MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
-		BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop", Mode: model.ModeRule, ProbePort: testProbePort,
+		BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop", Mode: model.ModeRule,
 	}
 	for _, rules := range []model.RuleSource{model.RulesProvider, model.RulesHop} {
 		config, err := service.RuntimeConfig([]byte(profileWithAnchors), rules, nil, settings)

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"hop/config"
-	"hop/internal/model"
 )
 
 // The wait covers the platform's TIME_WAIT (portFreeAttempts, per platform):
@@ -29,11 +28,6 @@ func waitPortsFree(ctx context.Context, cfg config.Config) error {
 	}
 	if cfg.MixedPort > 0 {
 		addrs = append(addrs, net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.MixedPort)))
-	}
-	if cfg.ProbePort > 0 {
-		for lane := range model.ProbeLanes {
-			addrs = append(addrs, net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.ProbePort+lane)))
-		}
 	}
 	var last error
 	for attempt := 1; attempt <= portFreeAttempts; attempt++ {

@@ -2,7 +2,6 @@
 package model
 
 import (
-	"fmt"
 	"net/netip"
 	"time"
 )
@@ -224,21 +223,6 @@ type Delay struct {
 	Measured bool
 }
 
-// ProbeLanes is how many probe listeners every config carries, so that many
-// groups are checked at once. Lane i listens on the instance's probe port plus
-// i and sends everything to the group ProbeGroup(i), a select group over every
-// group of the profile, in which the check picks the group under test. They
-// are Hop's own, so they never show as groups.
-const ProbeLanes = 8
-
-// ProbeGroupPrefix starts the name of every probe lane's group.
-const ProbeGroupPrefix = "hop-probe-"
-
-// ProbeGroup is the name of probe lane's group.
-func ProbeGroup(lane int) string {
-	return fmt.Sprintf("%s%d", ProbeGroupPrefix, lane)
-}
-
 // UnlockState is what a check found about a service through a node.
 type UnlockState uint8
 
@@ -293,12 +277,6 @@ type UnlockResult struct {
 	// Route is the path the first request took, from the outermost group to
 	// the proxy it left by; empty when the core no longer had it.
 	Route []string
-}
-
-// Unlock is what the checks found about every service, through one route, in
-// the order the check lists the services.
-type Unlock struct {
-	Results []UnlockResult
 }
 
 // NodeView is a proxy as the node grid shows it, its name taken apart.

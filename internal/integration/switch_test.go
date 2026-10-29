@@ -72,12 +72,11 @@ rules:
 	appDir := t.TempDir()
 	cfg := config.Config{
 		MihomoBinary: binary, AppDir: appDir, HomeDir: filepath.Join(appDir, "mihomo"),
-		MixedPort: testMixedPort, ControllerAddr: testController, Secret: testSecret, ProbePort: testProbePort,
+		MixedPort: testMixedPort, ControllerAddr: testController, Secret: testSecret,
 	}
 	settings := service.RuntimeSettings{
 		MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
 		BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop", Mode: model.ModeRule,
-		ProbePort: testProbePort,
 	}
 	runtime, err := service.RuntimeConfig([]byte(profile), model.RulesProvider, nil, settings)
 	if err != nil {

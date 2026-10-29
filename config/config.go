@@ -48,10 +48,6 @@ type Instance struct {
 	// NodeDNSAddr is the core's own DNS listener, used only to look up
 	// nodes' servers when a subscription sends them through its hosts.
 	NodeDNSAddr string
-	// ProbePort is the first of model.ProbeLanes loopback ports the unlock
-	// checks go through; each sends everything to the group Hop picked in its
-	// lane, never by the rules.
-	ProbePort int
 	// UsesHelper says this instance may drive the machine's privileged
 	// helper. There is one helper per machine, so only the installed Hop
 	// does: another instance would stop or replace the core under it.
@@ -60,8 +56,8 @@ type Instance struct {
 
 // Release is the installed Hop. Development is the build run by mygo dev.
 var (
-	Release     = Instance{AppDirName: "hop", MixedPort: 17890, ControllerAddr: "127.0.0.1:19090", NodeDNSAddr: "127.0.0.1:17853", ProbePort: 17900, UsesHelper: true}
-	Development = Instance{AppDirName: "hop-dev", MixedPort: 17892, ControllerAddr: "127.0.0.1:19092", NodeDNSAddr: "127.0.0.1:17855", ProbePort: 17910, UsesHelper: false}
+	Release     = Instance{AppDirName: "hop", MixedPort: 17890, ControllerAddr: "127.0.0.1:19090", NodeDNSAddr: "127.0.0.1:17853", UsesHelper: true}
+	Development = Instance{AppDirName: "hop-dev", MixedPort: 17892, ControllerAddr: "127.0.0.1:19092", NodeDNSAddr: "127.0.0.1:17855", UsesHelper: false}
 )
 
 // Config is everything the sidecar core and its controller client need.
@@ -83,8 +79,6 @@ type Config struct {
 	ControllerAddr string
 	// NodeDNSAddr is host:port of the core's DNS listener for node servers.
 	NodeDNSAddr string
-	// ProbePort is the first loopback port of the unlock checks' listeners.
-	ProbePort int
 	// LogDir is where Hop keeps its log files.
 	LogDir string
 	// CoreOutput is where the core's own output goes.
@@ -122,7 +116,6 @@ func Load(instance Instance, userConfigDir string, resourcesDir string) (Config,
 		MixedPort:      instance.MixedPort,
 		ControllerAddr: instance.ControllerAddr,
 		NodeDNSAddr:    instance.NodeDNSAddr,
-		ProbePort:      instance.ProbePort,
 		LogDir:         filepath.Join(appDir, "logs"),
 		CoreOutput:     os.Stderr,
 		Secret:         secret,
@@ -233,11 +226,6 @@ func (c Config) OwnPorts() ([]int, error) {
 			return nil, fmt.Errorf("listen address has no numeric port (addr=%q): %w", addr, err)
 		}
 		ports = append(ports, port)
-	}
-	if c.ProbePort > 0 {
-		for lane := range model.ProbeLanes {
-			ports = append(ports, c.ProbePort+lane)
-		}
 	}
 	return ports, nil
 }

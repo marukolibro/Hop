@@ -30,9 +30,6 @@ type RuntimeSettings struct {
 	// NodeDNSListen is host:port of the core's own DNS listener, opened only
 	// when a subscription points its nodes' servers at other names.
 	NodeDNSListen string
-	// ProbePort is the loopback port of the listener the unlock checks go
-	// through; 0 leaves the probe listener and its group out of the config.
-	ProbePort int
 	// LAN is whether other devices on the network may use the proxy port.
 	// Every config the subscription service builds takes the live value; a
 	// config built from settings directly has it as given.
@@ -87,9 +84,6 @@ type runtimeConfig struct {
 	Authentication   []string `yaml:"authentication,omitempty"`
 	SkipAuthPrefixes []string `yaml:"skip-auth-prefixes,omitempty"`
 	LanAllowedIPs    []string `yaml:"lan-allowed-ips,omitempty"`
-	// Listeners is the probe listener, see addProbe; a subscription's own
-	// listeners are never taken.
-	Listeners []probeListener `yaml:"listeners,omitempty"`
 
 	Proxies        yaml.Node `yaml:"proxies,omitempty"`
 	ProxyGroups    yaml.Node `yaml:"proxy-groups,omitempty"`
@@ -341,18 +335,12 @@ func RuntimeConfig(subscription []byte, rules model.RuleSource, custom []model.C
 		if err != nil {
 			return nil, err
 		}
-		if err := addProbe(&cfg, s.BindAddress, s.ProbePort); err != nil {
-			return nil, err
-		}
 		return marshalConfig(cfg)
 	}
 	if rules != model.RulesHop {
 		return nil, fmt.Errorf("unknown rule source %q", rules)
 	}
 	if err := applyHopTemplate(&cfg, p, custom); err != nil {
-		return nil, err
-	}
-	if err := addProbe(&cfg, s.BindAddress, s.ProbePort); err != nil {
 		return nil, err
 	}
 	return marshalConfig(cfg)

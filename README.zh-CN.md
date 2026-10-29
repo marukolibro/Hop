@@ -166,7 +166,6 @@ irm https://github.com/marukolibro/Hop/releases/latest/download/install.ps1 | ie
 | 混合(HTTP 和 SOCKS5)代理 | `127.0.0.1:17890` |
 | 内核控制接口 | `127.0.0.1:19090` |
 | 内核 DNS,仅用于让节点域名走订阅指定解析的订阅 | `127.0.0.1:17853` |
-| 解锁检测专用的监听端口,每个只走正在检测的那个分组 | `127.0.0.1:17900`–`17907` |
 | 数据(权限 0600) | macOS:`~/Library/Application Support/hop/`;Windows:`%AppData%\hop` |
 
 这些端口都避开了其他 Clash 客户端常用的端口。
@@ -186,7 +185,7 @@ irm https://github.com/marukolibro/Hop/releases/latest/download/install.ps1 | ie
 - **macOS 提示应用已损坏或来自未知开发者**:用安装脚本安装,而不是打开下载的 `.dmg`。
 - **Windows SmartScreen 拦截安装包**:安装包还没有代码签名,点「更多信息 → 仍要运行」。
 - **TUN 打不开**:另一个 VPN 或 Clash 客户端占着默认路由,先关掉它的 TUN。Hop 不会抢路由。
-- **端口和别的客户端冲突**:Hop 自己用 `17890`、`19090`、`17853` 和 `17900`–`17907`,和其他客户端不重叠,可以同时运行。
+- **端口和别的客户端冲突**:Hop 自己用 `17890`、`19090` 和 `17853`,和其他客户端不重叠,可以同时运行。
 - **延迟偏高**:订阅指定了近端入口时 Hop 会采用;换订阅或节点后重新测速。
 
 ## 开发

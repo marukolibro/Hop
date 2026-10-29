@@ -256,7 +256,6 @@ ready-made terminal command.
 | Mixed (HTTP and SOCKS5) proxy | `127.0.0.1:17890` |
 | Core controller | `127.0.0.1:19090` |
 | Core DNS, only for subscriptions that route node names through it | `127.0.0.1:17853` |
-| The unlock check's own listeners, each sent through the group under test | `127.0.0.1:17900`–`17907` |
 | Data, mode 0600 | `~/Library/Application Support/hop/` on macOS, `%AppData%\hop` on Windows |
 
 The ports sit away from the ones other Clash clients use.
@@ -290,7 +289,7 @@ The ports sit away from the ones other Clash clients use.
 - **TUN will not turn on.** Another VPN or Clash client holds the
   default routes; turn its TUN off first. Hop never takes routes over.
 - **Another client uses the same ports.** Hop's own are `17890`, `19090`,
-  `17853` and `17900`–`17907`, apart from other clients', so both can run at once.
+  `17853`, apart from other clients', so both can run at once.
 - **Latency looks high.** Hop uses the provider's nearest entry when the
   subscription names one; re-test after switching subscription or node.
 

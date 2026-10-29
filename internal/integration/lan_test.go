@@ -22,8 +22,8 @@ import (
 // TestLANAccess checks, against a real core, what other devices on the network
 // can and cannot reach: with LAN access off nothing listens beyond this
 // computer; on, the proxy port answers the computer's network address and asks
-// for the account, except from this computer itself; the controller and the
-// probe listeners stay on the loopback either way.
+// for the account, except from this computer itself; the controller stays on
+// the loopback either way.
 func TestLANAccess(t *testing.T) {
 	binary := os.Getenv("HOP_MIHOMO_BINARY")
 	if binary == "" {
@@ -43,14 +43,14 @@ func TestLANAccess(t *testing.T) {
 	appDir := t.TempDir()
 	cfg := config.Config{
 		MihomoBinary: binary, AppDir: appDir, HomeDir: filepath.Join(appDir, "mihomo"),
-		MixedPort: testMixedPort, ControllerAddr: testController, Secret: testSecret, ProbePort: testProbePort,
+		MixedPort: testMixedPort, ControllerAddr: testController, Secret: testSecret,
 	}
 	build := func(lanSettings service.LANSettings) []byte {
 		t.Helper()
 		settings := service.RuntimeSettings{
 			MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
 			BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop", Mode: model.ModeRule,
-			ProbePort: testProbePort, LAN: lanSettings,
+			LAN: lanSettings,
 		}
 		config, err := service.RuntimeConfig([]byte(profileWithoutGroups), model.RulesProvider, nil, settings)
 		if err != nil {
@@ -117,13 +117,8 @@ func TestLANAccess(t *testing.T) {
 	if status, err := get("127.0.0.1", nil); err != nil || status != http.StatusOK {
 		t.Errorf("on this computer, which needs no account: status %d, err %v", status, err)
 	}
-	for name, addr := range map[string]string{
-		"controller":     net.JoinHostPort(lanIP, fmt.Sprint(19091)),
-		"probe listener": net.JoinHostPort(lanIP, fmt.Sprint(testProbePort)),
-	} {
-		if reachable(addr) {
-			t.Errorf("with LAN access on, the %s answers the network address %s", name, lanIP)
-		}
+	if addr := net.JoinHostPort(lanIP, fmt.Sprint(19091)); reachable(addr) {
+		t.Errorf("with LAN access on, the controller answers the network address %s", lanIP)
 	}
 
 	apply(service.LANSettings{Enabled: true})

@@ -21,7 +21,6 @@ import (
 
 	"hop/config"
 	"hop/internal/handler"
-	"hop/internal/model"
 	"hop/internal/repository/corerelease"
 	"hop/internal/repository/corestore"
 	"hop/internal/repository/exitip"
@@ -165,7 +164,6 @@ func run() (err error) {
 		BootstrapGroupName: bootstrapGroup,
 		Mode:               mode,
 		NodeDNSListen:      cfg.NodeDNSAddr,
-		ProbePort:          cfg.ProbePort,
 	}
 	client := mihomo.NewClient(cfg.ControllerAddr, cfg.Secret, mihomo.ConfigPath(cfg.HomeDir), &http.Client{}, controllerTimeout)
 	helperClient, geodataHelper, helperInstaller := helperAccess(instance)
@@ -325,7 +323,7 @@ func run() (err error) {
 		Folders:       mygo.Shell,
 		LogDir:        cfg.LogDir,
 		ExitIP:        service.NewExitIPService(exitip.NewClient(exitip.TraceURL, hopProxyClient(portState))),
-		Unlock:        service.NewUnlockService(client, unlockLanes(cfg.ProbePort, client), unlockRouted(portState, client)),
+		Unlock:        service.NewUnlockService(unlockRouted(portState, client)),
 		LAN:           lanService,
 		Port:          portService,
 	}, bindAddress, userSettings, appVersion)
@@ -467,18 +465,6 @@ func hopProxyClient(port *service.MixedPortState) *http.Client {
 		// The port is read for each request: the user can move it while Hop runs.
 		return hopProxyURL(port.Get()), nil
 	}}}
-}
-
-// unlockLanes is one checker per probe lane, each through its own listener,
-// which sends everything to the group the unlock check picked in that lane,
-// whatever the rules say. Keep-alives are off: a connection kept from one
-// group's check must not carry the next group's.
-func unlockLanes(probePort int, connections unlock.ConnectionLister) []service.UnlockChecker {
-	lanes := make([]service.UnlockChecker, 0, model.ProbeLanes)
-	for lane := range model.ProbeLanes {
-		lanes = append(lanes, unlock.NewClient(http.ProxyURL(hopProxyURL(probePort+lane)), connections))
-	}
-	return lanes
 }
 
 // unlockRouted is the checker through Hop's own mixed port, where the rules

@@ -168,7 +168,7 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	groups := make([]model.ProxyGroup, 0, len(global.All))
 	for _, name := range global.All {
 		entry := out.Proxies[name]
-		if !slices.Contains(groupTypes, entry.Type) || strings.HasPrefix(name, model.ProbeGroupPrefix) {
+		if !slices.Contains(groupTypes, entry.Type) {
 			continue
 		}
 		groups = append(groups, model.ProxyGroup{Name: name, Type: entry.Type, Selected: entry.Now, Options: entry.All})
@@ -183,8 +183,7 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 			facts[name] = model.ProxyFacts{Protocol: entry.Type, UDP: entry.UDP}
 		}
 	}
-	globalOptions := slices.DeleteFunc(slices.Clone(global.All), func(name string) bool { return strings.HasPrefix(name, model.ProbeGroupPrefix) })
-	globalGroupView := model.ProxyGroup{Name: globalGroup, Type: global.Type, Selected: global.Now, Options: globalOptions}
+	globalGroupView := model.ProxyGroup{Name: globalGroup, Type: global.Type, Selected: global.Now, Options: slices.Clone(global.All)}
 	return model.Snapshot{Groups: groups, Global: globalGroupView, Delays: delays, Facts: facts}, nil
 }
 

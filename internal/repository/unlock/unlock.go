@@ -1,6 +1,5 @@
 // Package unlock asks a dozen services whether they work through the route
-// the proxy it was given takes: Hop's mixed port, where the rules pick it, or
-// a probe listener, which holds one group.
+// the proxy it was given takes: Hop's mixed port, where the rules pick it.
 package unlock
 
 import (
