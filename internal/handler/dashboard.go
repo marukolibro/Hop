@@ -950,6 +950,7 @@ func (d *Dashboard) View(c *ui.Context) {
 	d.tunDialog(c, t)
 	d.customRuleDialog(c, t)
 	d.servicesDialog(c, t)
+	d.lanDialog(c, t)
 }
 
 // header holds what applies to every page: the page switch, and how traffic

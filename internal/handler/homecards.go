@@ -33,9 +33,6 @@ const (
 	serviceTilesShown = 4
 	// serviceMarkRatio is a mark's glyph as a share of the tile it sits on.
 	serviceMarkRatio float32 = 0.54
-	// lanHalfWidth is what each half of the LAN card asks for, so they sit side
-	// by side once the card is wide enough for both.
-	lanHalfWidth float32 = 190
 	// lanSwitchPad pads the row that holds the LAN proxy's switch, and
 	// lanOnFill is how much of the accent that row takes while it is on.
 	lanSwitchPad float32 = 9
@@ -66,13 +63,7 @@ func (d *Dashboard) homeCards(c *ui.Context, t *ui.Theme) {
 // homeCard is one card of the row: the panel glass, as round and as lifted as
 // the hero, with room around it.
 func homeCard(c *ui.Context, t *ui.Theme, key string) ui.Element {
-	return homeCardSized(c, t, key, 1, homeCardMinWidth)
-}
-
-// homeCardSized is homeCard asking for basis of the row's width and growing
-// by grow against the others, for a card that has more to show.
-func homeCardSized(c *ui.Context, t *ui.Theme, key string, grow float32, basis float32) ui.Element {
-	return panelCard(c, t).Key(key).Grow(grow).Basis(basis).MinWidth(0).
+	return panelCard(c, t).Key(key).Grow(1).Basis(homeCardMinWidth).MinWidth(0).
 		Padding(homeCardPadY, homeCardPadX).Gap(gapMedium).Radius(heroRadius).Shadow(0, 3, 12, 0, glassCardShadow(t))
 }
 
@@ -179,19 +170,13 @@ func lanShareText(status model.LANStatus, host string, port string) string {
 }
 
 // lanCard shows this computer's address on the network and the LAN proxy's
-// switch. Once the proxy is on the card widens and shows its account and
-// password beside them, says they can be turned off, and leads to the
-// settings, which keep the whole of it; the copy button takes everything a
-// device needs.
+// switch. Turning the proxy on opens a window with the account and password
+// (see lanDialog); the copy button takes everything a device needs.
 func (d *Dashboard) lanCard(c *ui.Context, t *ui.Theme) {
 	l := &d.lan
 	host, port := lanAddress(l.status, l.loaded)
 	locked := !l.loaded || l.busy || d.controlsLocked()
-	grow, basis := float32(1), homeCardMinWidth
-	if l.status.Enabled {
-		grow, basis = 2, 2*lanHalfWidth+gapLarge+2*homeCardPadX
-	}
-	homeCardSized(c, t, "lanCard", grow, basis).Children(func() {
+	homeCard(c, t, "lanCard").Children(func() {
 		cardHeader(c, t, "lanTitle", iconLaptop, locales.LanIP(), func() {
 			if host != "" {
 				iconButton(c, locales.Copy(), iconCopy, mainSoftButton(t), func() {
@@ -204,73 +189,38 @@ func (d *Dashboard) lanCard(c *ui.Context, t *ui.Theme) {
 				})
 			}
 		})
-		// The two halves sit side by side, and one under the other where the
-		// card is narrow.
-		ui.Row(c).Key("lanBody").Grow(1).Wrap().Gap(gapLarge).GapY(gapMedium).AlignItems(ui.Stretch).Children(func() {
-			ui.Column(c).Key("lanMain").Grow(1).Basis(lanHalfWidth).MinWidth(0).Gap(gapMedium).Children(func() {
-				if host == "" {
-					mutedText(c, t, lanMissing(l.loaded))
-				} else {
-					ui.Text(c, host).FontSize(fontExit).FontWeight(weightSemibold).FontFeatures("tnum").LetterSpacing(-0.4).NoWrap()
-				}
-				ui.Box(c).Grow(1)
-				// While the proxy is on, its row and its icon take the accent.
-				rowFill, badgeFill, badgeInk := t.Text.Alpha(neutralFillAlpha/2), t.Text.Alpha(neutralFillAlpha), t.TextMuted
-				if l.status.Enabled {
-					rowFill, badgeFill, badgeInk = t.Accent.Alpha(lanOnFill), t.Accent, t.AccentText
-				}
-				ui.Row(c).Key("lanSwitch").Gap(gapMedium).Padding(lanSwitchPad).Radius(radiusTile).AlignItems(ui.Center).
-					Background(rowFill).Children(func() {
-					ui.Box(c).Key("lanIcon").Width(serviceMarkTile).Height(serviceMarkTile).Radius(serviceMarkTile / 2).Center().
-						Background(badgeFill).Children(func() {
-						ui.Icon(c, iconWifi).Width(serviceMarkGlyph).Height(serviceMarkGlyph).TextColor(badgeInk)
-					})
-					ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(1).Children(func() {
-						ui.Text(c, locales.LanProxy()).FontSize(fontBody).FontWeight(weightSemibold).MaxLines(1)
-						captionText(c, t, lanState(l.status.Enabled, port)).MaxLines(1)
-					})
-					on := l.status.Enabled
-					ui.Box(c).Disabled(locked).Children(func() {
-						ui.Switch(c.Key("lan-home"), &on).Label(locales.LanProxy()).OnChange(func() {
-							d.beginLAN(!l.status.Enabled, !d.settings.settings.LANNoPassword)
-						})
-					})
+		if host == "" {
+			mutedText(c, t, lanMissing(l.loaded))
+		} else {
+			ui.Text(c, host).FontSize(fontExit).FontWeight(weightSemibold).FontFeatures("tnum").LetterSpacing(-0.4).NoWrap()
+		}
+		ui.Box(c).Grow(1)
+		// While the proxy is on, its row and its icon take the accent.
+		rowFill, badgeFill, badgeInk := t.Text.Alpha(neutralFillAlpha/2), t.Text.Alpha(neutralFillAlpha), t.TextMuted
+		if l.status.Enabled {
+			rowFill, badgeFill, badgeInk = t.Accent.Alpha(lanOnFill), t.Accent, t.AccentText
+		}
+		ui.Row(c).Key("lanSwitch").Gap(gapMedium).Padding(lanSwitchPad).Radius(radiusTile).AlignItems(ui.Center).
+			Background(rowFill).Children(func() {
+			ui.Box(c).Key("lanIcon").Width(serviceMarkTile).Height(serviceMarkTile).Radius(serviceMarkTile / 2).Center().
+				Background(badgeFill).Children(func() {
+				ui.Icon(c, iconWifi).Width(serviceMarkGlyph).Height(serviceMarkGlyph).TextColor(badgeInk)
+			})
+			ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(1).Children(func() {
+				ui.Text(c, locales.LanProxy()).FontSize(fontBody).FontWeight(weightSemibold).MaxLines(1)
+				captionText(c, t, lanState(l.status.Enabled, port)).MaxLines(1)
+			})
+			on := l.status.Enabled
+			ui.Box(c).Disabled(locked).Children(func() {
+				ui.Switch(c.Key("lan-home"), &on).Label(locales.LanProxy()).OnChange(func() {
+					if l.status.Enabled {
+						d.beginLAN(false, !d.settings.settings.LANNoPassword)
+						return
+					}
+					d.beginLANShowing(!d.settings.settings.LANNoPassword)
 				})
 			})
-			if l.status.Enabled {
-				d.lanAccount(c, t)
-			}
 		})
-	})
-}
-
-// lanAccount is what the card adds while the proxy is on: the account and its
-// password when devices must give them, a line saying they can be turned off
-// (or, with none asked for, that anyone on the network can connect), and the
-// way to the settings.
-func (d *Dashboard) lanAccount(c *ui.Context, t *ui.Theme) {
-	account := d.lan.status.Account
-	asks := account != (model.LANCredential{})
-	ui.Column(c).Key("lanAccount").Grow(1).Basis(lanHalfWidth).MinWidth(0).Gap(gapSmall).Children(func() {
-		if asks {
-			lanValueRow(c, t, locales.LanUsername(), account.Username)
-			lanValueRow(c, t, locales.LanPassword(), account.Password)
-		}
-		hint := locales.LanHintAccount()
-		if !asks {
-			hint = locales.LanOpenWarning()
-		}
-		captionText(c, t, hint)
-		textButton(c, t, locales.LanOpenSettings(), iconChevronRight, false, false, d.openLANSettings).AlignSelf(ui.Start)
-	})
-}
-
-// lanValueRow is a name and its value, the value in the monospace face.
-func lanValueRow(c *ui.Context, t *ui.Theme, name string, value string) {
-	ui.Row(c).Key(name).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-		mutedText(c, t, name).NoWrap()
-		ui.Box(c).Grow(1)
-		ui.Text(c, value).Font("monospace").FontSize(fontSecondary).FontWeight(weightMedium).MaxLines(1)
 	})
 }
 

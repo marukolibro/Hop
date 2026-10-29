@@ -49,15 +49,14 @@ on this machine while developing Hop. Hop must never interfere with it.
 - Hop listens only on `127.0.0.1:17890` (mixed, or the port the user chose in
   settings, see below) and `127.0.0.1:19090`
   (controller), plus `127.0.0.1:17853` (the core's DNS, opened only for a
-  subscription that points its node servers at other names, see below) and
-  `127.0.0.1:17900`-`17907` (the probe listeners, see below). The
+  subscription that points its node servers at other names, see below). The
   dev build (`mygo dev`) is its own instance (`config.Development`): ports
-  `17892`/`19092`/`17855`/`17910`-`17917` and its own data dir `hop-dev`, so it runs beside
+  `17892`/`19092`/`17855` and its own data dir `hop-dev`, so it runs beside
   an installed Hop and never reaps its core; it starts with no subscription.
   It also never talks to the privileged helper (`helper.Absent`, `Instance.UsesHelper`):
   the helper is one per machine, so a dev start or quit would stop the core
   the installed Hop's TUN runs under it.
-  The integration tests use `17891`/`19091`/`17854`/`17920`-`17927`. Check a port is free before
+  The integration tests use `17891`/`19091`/`17854`. Check a port is free before
   adding one.
 - The mixed port is the one port the user can change (`service/mixed_port.go`,
   settings 代理端口). `MixedPortState` is the live value, shared like `TunFlag`:
@@ -91,7 +90,7 @@ on this machine while developing Hop. Hop must never interfere with it.
   with a random password kept in `lan-credential` (0600) and
   `skip-auth-prefixes` for `127.0.0.1` and `::1`, so the system proxy and Hop's
   own requests need no account. Everything else (the controller, the core's
-  DNS, the probe listeners) names `127.0.0.1` itself and never follows
+  DNS) names `127.0.0.1` itself and never follows
   `bind-address`; `TestLANAccess` checks that against a real core. Never widen
   `lanAllowedSources`, and never open any other port to the network. Under TUN
   the core is the helper's and runs as root, and a root process must not parse
@@ -102,34 +101,17 @@ on this machine while developing Hop. Hop must never interfere with it.
   against a real helper. That rule is a privileged boundary: widening it needs
   the user's say, and it changes `helper.Version` (now 10), which makes an
   installed older helper be replaced on the user's authorization.
-- The unlock check has two forms. The one the UI shows is the services card
-  and its dialog (below). The other, per group, has no UI any more
-  (`UnlockService.Detect`, the probe lanes): its listeners and groups are
-  still in every config until they are taken out. It
-  (`service/unlock.go`, `repository/unlock`) needs a request
-  through one chosen group, which the controller cannot make: its delay test
-  is a HEAD that also overwrites the proxy's delay history. So every config
-  carries more Hop-owned parts (`service/probe_config.go`): `model.ProbeLanes`
-  loopback `http` listeners on consecutive ports from `Instance.ProbePort`,
-  each with `proxy` set to its own `model.ProbeGroup(i)`, a `select` group over
-  every group of the profile. The check picks a group in a lane and sends its
-  requests through that lane's listener, with keep-alives off; the lanes run
-  at once. The lane groups are never shown: `Client.Snapshot` drops them from
-  the groups and from GLOBAL's options. `RuntimeSettings.ProbePort` 0, or a
-  profile with no group, leaves them out. Never route anything but the check
-  through them, and never put them in a rule. The check reads a lane's choice
-  back after each group and stops when it is not that group: a reload in
-  between would put the result under the wrong group. The services dialog
-  (the home card's ›) checks the same services through the mixed port instead,
-  where the rules pick each one's route as they do for the user's traffic;
-  `repository/unlock` reads that route from `/connections` by the request's
-  own local port while its connection is open (keep-alives off, one
-  connection per request). It runs when the window is shown and, while the
-  window is shown and focused, again every ten minutes (`refreshServices`,
-  checked once a minute); a new check keeps the old results on screen until
-  each service answers. The services and their order are
-  `model.UnlockServices`; each check's endpoints were tried by hand from a
-  region the service serves.
+- The unlock check is the services card and its dialog (`service/unlock.go`,
+  `repository/unlock`). Its requests go through the mixed port, where the
+  rules pick each service's route as they do for the user's traffic. A request
+  cannot say which route the rules gave it, so `repository/unlock` reads that
+  from `/connections` by the request's own local port while its connection is
+  open (keep-alives off, one connection per request). It runs when the window
+  is shown and, while the window is shown and focused, again every ten
+  minutes (`refreshServices`, checked once a minute); a new check keeps the
+  old results on screen until each service answers. The services and their
+  order are `model.UnlockServices`; each check's endpoints were tried by hand
+  from a region the service serves.
 - Subscriptions are filtered by a whitelist (`service/runtime_config.go`):
   only `proxies`, `proxy-groups`, `proxy-providers`, `rules`, `rule-providers`,
   `sub-rules` pass through. Hop owns every other key. Never widen this list

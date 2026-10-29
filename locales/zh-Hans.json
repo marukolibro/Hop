@@ -406,5 +406,7 @@
   "lanPort": "端口",
   "lanCopiedAll": "已复制连接信息",
   "lanOpenSettings": "前往设置",
-  "lanHintAccount": "设备连接时要填这个账号和密码。可以在设置的「局域网」里关闭，也能看到完整信息。"
+  "lanHintAccount": "设备连接时要填这个账号和密码。可以在设置的「局域网」里关闭，也能看到完整信息。",
+  "lanOnTitle": "局域网代理已开启",
+  "lanGotIt": "知道了"
 }

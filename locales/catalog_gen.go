@@ -4125,3 +4125,23 @@ func LanHintAccount() string { return In(i18n.Locale()).LanHintAccount() }
 func (msgs Messages) LanHintAccount() string {
 	return Catalog.Format(msgs.locale, "lanHintAccount", nil)
 }
+
+// LanOnTitle says "LAN proxy is on"
+// in the language the app shows.
+func LanOnTitle() string { return In(i18n.Locale()).LanOnTitle() }
+
+// LanOnTitle says "LAN proxy is on"
+// in the language of msgs.
+func (msgs Messages) LanOnTitle() string {
+	return Catalog.Format(msgs.locale, "lanOnTitle", nil)
+}
+
+// LanGotIt says "Got it"
+// in the language the app shows.
+func LanGotIt() string { return In(i18n.Locale()).LanGotIt() }
+
+// LanGotIt says "Got it"
+// in the language of msgs.
+func (msgs Messages) LanGotIt() string {
+	return Catalog.Format(msgs.locale, "lanGotIt", nil)
+}

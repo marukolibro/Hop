@@ -16,6 +16,10 @@ type lanUIState struct {
 	status model.LANStatus
 	loaded bool
 	busy   bool
+	// showAfter asks for the window of lanDialog once the running change took,
+	// and infoOpen shows it.
+	showAfter bool
+	infoOpen  bool
 }
 
 // applyLANStatus shows status, or logs why it could not be read: the next
@@ -53,16 +57,30 @@ func (d *Dashboard) beginLAN(enabled bool, requireAccount bool) {
 		win.Update(func() {
 			l.busy = false
 			d.applyLANStatus(status, statusErr)
+			showInfo := l.showAfter
+			l.showAfter = false
 			if err != nil {
 				d.fail(actionLAN, err)
 				return
 			}
+			l.infoOpen = showInfo && enabled
 			next := d.settings.settings
 			next.AllowLAN, next.LANNoPassword = enabled, !requireAccount
 			d.saveSettings(next)
 			d.reloadViewAfterCore(ctx, win)
 		})
 	}()
+}
+
+// beginLANShowing turns the access on as the home card asks, and opens the
+// window with the account and the address once it took.
+func (d *Dashboard) beginLANShowing(requireAccount bool) {
+	l := &d.lan
+	if l.busy || d.controlsLocked() || d.services.LAN == nil {
+		return
+	}
+	l.showAfter = true
+	d.beginLAN(true, requireAccount)
 }
 
 // beginLANReset gives the account a new password, in the background.
@@ -191,4 +209,54 @@ func (d *Dashboard) lanCopyValue(c *ui.Context, t *ui.Theme, what string, value 
 func (d *Dashboard) openLANSettings() {
 	d.settings.revealLAN = true
 	d.page = pageSettings
+}
+
+// lanDialog is shown once the home card has turned the LAN proxy on: the
+// address and, when devices must give one, the account and its password,
+// each with its copy button; that the account can be turned off; and the way
+// to the settings, which keep the whole of it.
+func (d *Dashboard) lanDialog(c *ui.Context, t *ui.Theme) {
+	l := &d.lan
+	asks := l.status.Account != (model.LANCredential{})
+	animatedDialog(c, "lan-info", &l.infoOpen, func(backdrop, panel ui.Element) {
+		backdrop.Background(dialogScrim)
+		panel.Width(dialogWidth).Padding(pagePadding).Gap(gapLarge).Radius(radiusPanel).
+			Background(overlaySurface(t)).Border(1, t.Border).Shadow(0, 10, 30, 0, dialogShadow)
+		panel.Children(func() {
+			ui.Column(c).Gap(gapSection).Children(func() {
+				ui.Column(c).Gap(gapMedium).Children(func() {
+					ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+						ui.Icon(c, iconWifi).Width(iconTitle).Height(iconTitle).TextColor(t.Accent)
+						ui.Text(c, locales.LanOnTitle()).FontSize(fontHeadline).FontWeight(weightSemibold).Grow(1)
+						iconButton(c, locales.Close(), iconClose, softButton(t), func() { l.infoOpen = false })
+					})
+					lanInfoRow(c, t, locales.LanAddress(), func() { d.lanAddressList(c, t) })
+					if asks {
+						account := l.status.Account
+						lanInfoRow(c, t, locales.LanUsername(), func() { d.lanCopyValue(c, t, locales.LanUsername(), account.Username) })
+						lanInfoRow(c, t, locales.LanPassword(), func() { d.lanCopyValue(c, t, locales.LanPassword(), account.Password) })
+						mutedText(c, t, locales.LanHintAccount())
+					} else {
+						ui.Text(c, locales.LanOpenWarning()).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(textOn(t, t.Warning))
+					}
+				})
+				ui.Row(c).Gap(gapSmall).Justify(ui.End).Children(func() {
+					button(c, buttonSpec{label: locales.LanGotIt(), style: softButton(t)}, func() { l.infoOpen = false })
+					button(c, buttonSpec{label: locales.LanOpenSettings(), style: primaryButton(t)}, func() {
+						l.infoOpen = false
+						d.openLANSettings()
+					})
+				})
+			})
+		})
+	})
+}
+
+// lanInfoRow is a name with its value on the right.
+func lanInfoRow(c *ui.Context, t *ui.Theme, name string, value func()) {
+	ui.Row(c).Key(name).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+		mutedText(c, t, name).NoWrap()
+		ui.Box(c).Grow(1)
+		value()
+	})
 }

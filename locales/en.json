@@ -791,5 +791,7 @@
   "lanPort": "Port",
   "lanCopiedAll": "Copied the connection details",
   "lanOpenSettings": "Open settings",
-  "lanHintAccount": "Devices connect with this account and password. You can turn them off, and see everything, in Settings under LAN."
+  "lanHintAccount": "Devices connect with this account and password. You can turn them off, and see everything, in Settings under LAN.",
+  "lanOnTitle": "LAN proxy is on",
+  "lanGotIt": "Got it"
 }
