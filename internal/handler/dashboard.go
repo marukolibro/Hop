@@ -404,7 +404,10 @@ type Dashboard struct {
 	// one came since the core started.
 	memory      model.Memory
 	memoryKnown bool
-	logs        logsState
+	// foreground says the window is shown and focused; the services are
+	// checked again on a timer only while it is.
+	foreground bool
+	logs       logsState
 	// stats is what the statistics page shows, refreshed with every
 	// connection sample.
 	stats model.TrafficView
@@ -609,6 +612,7 @@ func (d *Dashboard) Start(ctx context.Context, win Updater) {
 	go d.startTun(ctx, win)
 	go d.readLAN(win)
 	go d.watchNetState(ctx, win)
+	go d.watchServicesRefresh(ctx, win)
 	d.openAtLogin = d.services.LoginItem.OpenAtLogin()
 	d.startWatchers(ctx, win)
 	go d.watchCoreRestarts(ctx, win)
@@ -657,6 +661,7 @@ func (d *Dashboard) loadView(ctx context.Context, win Updater, gen int) {
 		d.activeGroup = keepActiveGroup(view, d.activeGroup)
 		d.noticeExit()
 		d.considerExitIP()
+		d.refreshServices(false)
 	})
 }
 

@@ -33,12 +33,22 @@ type unlockState struct {
 // servicesCheck is the check of every service through the rules and its
 // dialog.
 type servicesCheck struct {
-	open    bool
+	open bool
+	// results are the last result of each service; a new check replaces them
+	// one by one, so the card never goes blank while it runs. done counts
+	// the services the running check has reported.
 	results map[model.UnlockService]model.UnlockResult
 	running bool
+	done    int
+	// lastRun is when the last check began, zero before the first.
+	lastRun time.Time
 	cancel  context.CancelFunc
 	seq     int
 }
+
+// servicesRefreshInterval is how often the services are checked again while
+// the window is in front; opening the window checks them at once.
+const servicesRefreshInterval = 10 * time.Minute
 
 // serviceNames are the services as the check shows them: their own names,
 // which stay as they are in every language.
@@ -224,7 +234,10 @@ func (d *Dashboard) toggleServices() {
 	}
 	ctx, cancel := context.WithCancel(d.opCtx)
 	s.seq++
-	s.running, s.cancel, s.results = true, cancel, map[model.UnlockService]model.UnlockResult{}
+	s.running, s.cancel, s.done, s.lastRun = true, cancel, 0, time.Now()
+	if s.results == nil {
+		s.results = map[model.UnlockService]model.UnlockResult{}
+	}
 	seq, win := s.seq, d.opWin
 	go func() {
 		defer cancel()
@@ -232,6 +245,7 @@ func (d *Dashboard) toggleServices() {
 			win.Update(func() {
 				if seq == s.seq {
 					s.results[r.Service] = r
+					s.done++
 				}
 			})
 		})
@@ -302,6 +316,47 @@ func unlockSummary(u model.Unlock) string {
 	return locales.UnlockNone()
 }
 
+// setForeground says whether the window is in front: shown and focused. The
+// services are checked when it comes to the front for the first time since
+// it was hidden, and again every servicesRefreshInterval while it stays. It
+// runs on the UI thread.
+func (d *Dashboard) setForeground(foreground bool, opened bool) {
+	d.foreground = foreground
+	if foreground {
+		d.refreshServices(opened)
+	}
+}
+
+// refreshServices starts a check of the services when the window is in front,
+// the core answers and nothing else is changing it, and the last check is
+// older than servicesRefreshInterval or force asks for one. It runs on the
+// UI thread.
+func (d *Dashboard) refreshServices(force bool) {
+	s := &d.unlock.services
+	if !d.foreground || s.running || d.services.Unlock == nil || d.status != statusConnected || d.modeLocked() || d.controlsLocked() {
+		return
+	}
+	if !force && !s.lastRun.IsZero() && time.Since(s.lastRun) < servicesRefreshInterval {
+		return
+	}
+	d.toggleServices()
+}
+
+// watchServicesRefresh looks once a minute whether the services are due a
+// check. Goroutine ownership: started by Start, it ends with ctx.
+func (d *Dashboard) watchServicesRefresh(ctx context.Context, win Updater) {
+	tick := time.NewTicker(time.Minute)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			win.Update(func() { d.refreshServices(false) })
+		}
+	}
+}
+
 // servicesSummaryText is how far the check through the rules got: how many
 // services work, how many it has checked while it runs, or that it has not
 // run.
@@ -309,7 +364,7 @@ func (d *Dashboard) servicesSummaryText() string {
 	s := &d.unlock.services
 	switch {
 	case s.running:
-		return locales.ServicesChecking(len(s.results), len(model.UnlockServices))
+		return locales.ServicesChecking(s.done, len(model.UnlockServices))
 	case len(s.results) > 0:
 		results := make([]model.UnlockResult, 0, len(s.results))
 		for _, r := range s.results {
@@ -365,7 +420,8 @@ func (d *Dashboard) servicesDialog(c *ui.Context, t *ui.Theme) {
 				iconButton(c, locales.Close(), iconClose, softButton(t), func() { s.open = false })
 			})
 			ui.Scroll(c).MaxHeight(servicesListHeight).Children(func() {
-				ui.Column(c).Gap(gapTight).Children(func() {
+				// Room at the right keeps the scrollbar off the states.
+				ui.Column(c).Gap(gapTight).Padding(0, gapLarge, 0, 0).Children(func() {
 					for _, svc := range model.UnlockServices {
 						r, checked := s.results[svc]
 						serviceRow(c, t, svc, r, checked, s.running)

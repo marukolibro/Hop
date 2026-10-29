@@ -89,6 +89,11 @@ func NewMenuBar(win *mygo.Window, d *Dashboard) (*MenuBar, error) {
 			m.hideWindow()
 		}
 	})
+	// The services are checked as the window opens and while it is in front.
+	win.OnShow(func() { m.Update(func() { d.setForeground(true, true) }) })
+	win.OnFocus(func() { m.Update(func() { d.setForeground(true, false) }) })
+	win.OnBlur(func() { m.Update(func() { d.setForeground(false, false) }) })
+	win.OnHide(func() { m.Update(func() { d.setForeground(false, false) }) })
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { m.quitting = true })
 	mygo.App.OnActivate(func(hasVisibleWindows bool) {
 		if !hasVisibleWindows {

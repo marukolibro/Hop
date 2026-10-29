@@ -25,6 +25,9 @@ const (
 	moderateDelay         = 350
 	// nodeOrderSegmentWidth fits a two-character order name.
 	nodeOrderSegmentWidth float32 = 52
+	// nodeControlsWidth is the room the toolbar keeps for the controls at its
+	// right: the order switch, the unlock check and the speed test.
+	nodeControlsWidth float32 = 400
 	// nodeCheckIcon is the check on the chosen tile.
 	nodeCheckIcon float32 = 12
 	// tileChipFill washes a tile label in its own colour.
@@ -56,24 +59,6 @@ const (
 	nodeFilterOthers  = "others"
 	nodeFilterRegion  = "region:"
 )
-
-// groupMode says in plain words how a group of type kind picks its node.
-func groupMode(kind string) string {
-	switch kind {
-	case model.GroupSelector:
-		return locales.GroupModeSelector()
-	case model.GroupURLTest:
-		return locales.GroupModeURLTest()
-	case model.GroupFallback:
-		return locales.GroupModeFallback()
-	case model.GroupLoadBalance:
-		return locales.GroupModeLoadBalance()
-	case model.GroupRelay:
-		return locales.GroupModeRelay()
-	default:
-		return ""
-	}
-}
 
 func (d *Dashboard) activeGroupView() (model.GroupView, bool) {
 	for _, g := range d.view.Groups {
@@ -108,8 +93,7 @@ func (d *Dashboard) nodesPage(c *ui.Context, t *ui.Theme) {
 					d.routeBar(c, t)
 					d.homeCards(c, t)
 					ui.Column(c).Key("options").Gap(gapMedium).Disabled(d.controlsLocked()).Children(func() {
-						d.groupHeader(c, t)
-						d.regionFilter(c, t)
+						d.nodesToolbar(c, t)
 						d.nodeGrid(c, t)
 					})
 				})
@@ -118,34 +102,23 @@ func (d *Dashboard) nodesPage(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// groupHeader names the group shown, how it picks its node and where its
-// traffic leaves now and what works through it, with a way to test its nodes.
-func (d *Dashboard) groupHeader(c *ui.Context, t *ui.Theme) {
+// nodesToolbar is the one row over the grid: the region filters on the left,
+// and on the right what works through the group, how the options are ordered,
+// the unlock check and the speed test. The group itself is not named again:
+// the sidebar already shows which one is chosen, and the hero where traffic
+// leaves. The controls wrap below the filters where a longer translation
+// leaves the row too little room.
+func (d *Dashboard) nodesToolbar(c *ui.Context, t *ui.Theme) {
 	group, ok := d.activeGroupView()
 	if !ok {
 		return
 	}
-	// The controls wrap below the group's name where a longer translation
-	// leaves the row too little room.
-	ui.Row(c).Gap(gapMedium).GapY(gapSmall).Wrap().AlignItems(ui.Center).Children(func() {
-		ui.Row(c).Grow(1).MinWidth(260).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-			groupIcon(c, t, group, 32)
-			ui.Column(c).Grow(1).Gap(3).Children(func() {
-				ui.Text(c, groupTitle(group)).FontSize(fontHeadline).FontWeight(weightSemibold).MaxLines(1)
-				ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-					mutedText(c, t, groupMode(group.Type)).MaxLines(1)
-					if group.Exit.Name != "" {
-						mutedText(c, t, locales.NodesExit()).NoWrap()
-						ui.Text(c, nodeDisplay(group.Exit)).FontSize(fontSecondary).FontWeight(weightMedium).MaxLines(1)
-						delayLabel(c, t, group.Exit.Delay, fontSecondary)
-					}
-					if result, checked := d.unlock.results[group.Name]; checked {
-						unlockChips(c, t, result)
-					}
-				})
-			})
-		})
-		ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Key("nodesToolbar").Gap(gapMedium).GapY(gapSmall).Wrap().AlignItems(ui.Center).Children(func() {
+		d.regionFilter(c, t, group)
+		ui.Row(c).Key("nodeControls").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+			if result, checked := d.unlock.results[group.Name]; checked {
+				unlockChips(c, t, result)
+			}
 			slidingSwitch(c, locales.NodesOrder(), &d.nodeOrder, nodeOrderLabels(), pageSwitchStyle(t, nodeOrderSegmentWidth), func(int) {})
 			d.unlockControls(c, t)
 			d.testButton(c, t, group.Name)
@@ -278,23 +251,20 @@ func splitRegionChips(chips []regionChip, current string, slots int) (shown []re
 	return shown, more
 }
 
-// regionFilter chooses which region's options the grid shows, in one row; the
-// regions that do not fit are in a menu.
-func (d *Dashboard) regionFilter(c *ui.Context, t *ui.Theme) {
-	group, ok := d.activeGroupView()
-	if !ok {
-		return
-	}
+// regionFilter chooses which region's options the grid shows, in one row that
+// takes what the toolbar's controls leave; the regions that do not fit are in
+// a menu. A group with no regions to choose between leaves the room empty.
+func (d *Dashboard) regionFilter(c *ui.Context, t *ui.Theme, group model.GroupView) {
 	chips := regionChips(group)
+	row := ui.Row(c).Key("regionFilter").Gap(gapTight).Grow(1).Basis(0).MinWidth(0)
 	if len(chips) <= 2 {
+		row.Children(func() {})
 		return
 	}
-	width, _ := c.Size()
-	paneWidth := width - sidebarWidthFor(width) - hairlineWidth - 2*pagePadding
-	slots := max(1, int(paneWidth/regionChipSlot)-3)
+	slots := max(1, int((nodesPaneWidth(c)-nodeControlsWidth)/regionChipSlot))
 	current := activeFilter(group, d.nodeRegion)
 	shown, more := splitRegionChips(chips, current, slots)
-	ui.Row(c).Key("regionFilter").Gap(gapTight).Children(func() {
+	row.Children(func() {
 		for _, chip := range shown {
 			key := chip.key
 			d.regionChipButton(c, t, chip, key == current).OnClick(func() { d.nodeRegion = key })

@@ -79,7 +79,7 @@ const (
 	serviceMarkTile     float32 = 30
 	serviceMarkGlyph    float32 = 16
 	// The home cards: a card asks for at least homeCardMinWidth, so three fit
-	// a wide window and the row falls to two, then one; a service's tile on
+	// a wide window and the row wraps as it narrows; a service's tile on
 	// the services card holds its mark at serviceTileMark with a serviceDot
 	// for its state; the memory bar is statMemoryBar tall.
 	homeCardMinWidth   float32 = 250

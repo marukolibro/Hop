@@ -120,7 +120,10 @@ on this machine while developing Hop. Hop must never interfere with it.
   where the rules pick each one's route as they do for the user's traffic;
   `repository/unlock` reads that route from `/connections` by the request's
   own local port while its connection is open (keep-alives off, one
-  connection per request). The services and their order are
+  connection per request). It runs when the window is shown and, while the
+  window is shown and focused, again every ten minutes (`refreshServices`,
+  checked once a minute); a new check keeps the old results on screen until
+  each service answers. The services and their order are
   `model.UnlockServices`; each check's endpoints were tried by hand from a
   region the service serves.
 - Subscriptions are filtered by a whitelist (`service/runtime_config.go`):
@@ -255,11 +258,14 @@ for font sizes, weights, gaps or radii in views.
   height: the subscription in use on a card at its top (picker, the `Hop 智能规则`
   tag only while the profile runs Hop's rules, usage, expiry, refresh and
   manage), the groups, and the core's state at its foot. The content column
-  scrolls as one: the hero card, the outbound mode as one bar across, a row of
+  scrolls as one: the hero card, the outbound mode as one bar across, the
   three home cards (the LAN address with the LAN proxy's switch, the services,
-  the memory Hop and its core hold; `homecards.go`, three across from
-  `homeCardMinWidth` each, then two, then one), the group's header, the region filters and one grid of
-  node tiles. Node tiles and the lists, charts and tables on the other pages
+  the memory Hop and its core hold; `homecards.go`: they wrap as the window
+  narrows and a card left alone on a row grows to fill it), one toolbar (the
+  region filters on the left; what works through the group, the order, the
+  unlock check and the speed test on the right, with no title: the sidebar
+  and the hero already say which group and where traffic leaves) and one grid
+  of node tiles. Node tiles and the lists, charts and tables on the other pages
   are translucent cards, as the design shows. Dialogs, picker popups, tooltips,
   toasts and the menu-bar flyout stay opaque cards.
 - The hero is one card: the panel glass with the theme's own accent mixed in

@@ -38,18 +38,6 @@ const (
 	lanOnFill    float32 = 0.14
 )
 
-// homeCardColumns is how many of the three cards the row holds in width:
-// three in a wide window, then two, then one.
-func homeCardColumns(width float32) int {
-	switch {
-	case width >= 3*homeCardMinWidth+2*gapMedium:
-		return 3
-	case width >= 2*homeCardMinWidth+gapMedium:
-		return 2
-	}
-	return 1
-}
-
 // nodesPaneWidth is the width of the content column beside the sidebar, less
 // its gutters.
 func nodesPaneWidth(c *ui.Context) float32 {
@@ -58,12 +46,13 @@ func nodesPaneWidth(c *ui.Context) float32 {
 }
 
 // homeCards is what sits between the hero and the nodes: the outbound mode as
-// one bar across, then a row of cards for the address other devices use with
-// the LAN proxy's switch, the services, and the memory Hop and its core hold.
+// one bar across, then the cards for the address other devices use with the
+// LAN proxy's switch, the services, and the memory Hop and its core hold. The
+// cards wrap as the window narrows, and a card left alone on a row grows to
+// fill it.
 func (d *Dashboard) homeCards(c *ui.Context, t *ui.Theme) {
 	d.modeBar(c, t)
-	columns := homeCardColumns(nodesPaneWidth(c))
-	ui.Grid(c).Key("homeCards").Columns(columns).Gap(gapMedium).Children(func() {
+	ui.Row(c).Key("homeCards").Wrap().Gap(gapMedium).GapY(gapMedium).AlignItems(ui.Stretch).Children(func() {
 		d.lanCard(c, t)
 		d.servicesCard(c, t)
 		d.memoryCard(c, t)
@@ -73,8 +62,8 @@ func (d *Dashboard) homeCards(c *ui.Context, t *ui.Theme) {
 // homeCard is one card of the row: the panel glass, as round and as lifted as
 // the hero, with room around it.
 func homeCard(c *ui.Context, t *ui.Theme, key string) ui.Element {
-	return panelCard(c, t).Key(key).Padding(homeCardPadY, homeCardPadX).Gap(gapMedium).Radius(heroRadius).
-		Shadow(0, 3, 12, 0, glassCardShadow(t))
+	return panelCard(c, t).Key(key).Grow(1).Basis(homeCardMinWidth).MinWidth(0).
+		Padding(homeCardPadY, homeCardPadX).Gap(gapMedium).Radius(heroRadius).Shadow(0, 3, 12, 0, glassCardShadow(t))
 }
 
 // cardHeader is a card's title row: its icon, its name, and what trails it.
@@ -265,7 +254,7 @@ func (d *Dashboard) servicesPill(c *ui.Context, t *ui.Theme) {
 	text, fill, ink := locales.ServicesIdle(), t.Text.Alpha(neutralFillAlpha), t.TextMuted
 	switch {
 	case s.running:
-		text = fmt.Sprintf("%d/%d", len(results), total)
+		text = fmt.Sprintf("%d/%d", s.done, total)
 	case len(results) == 0:
 	case working == total:
 		text, fill, ink = locales.ServicesAllWork(), t.Accent.Alpha(heroDelayFill), textOn(t, accentInk(t))

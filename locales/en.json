@@ -218,11 +218,6 @@
       }
     }
   },
-  "groupModeFallback": "Fails over when down",
-  "groupModeLoadBalance": "Balances connections",
-  "groupModeRelay": "Chains every node",
-  "groupModeSelector": "Manual",
-  "groupModeURLTest": "Auto, lowest latency",
   "helperInstalled": "Installed. With TUN on, it runs the core with system privileges.",
   "helperNeedsUpdate": "Needs an update. Turning on TUN next time asks to update it.",
   "helperNotInstalled": "Not installed. Turning on TUN asks to install it.",
@@ -277,7 +272,6 @@
   "modeHintRule": "Rules decide what goes through the proxy and what goes direct",
   "modeRule": "Rule",
   "nodesByLatency": "By latency",
-  "nodesExit": "Exit",
   "nodesMore": "More",
   "nodesOrder": "Node order",
   "nodesOrderDefault": "Default",
@@ -799,7 +793,7 @@
     }
   },
   "actionWatchMemory": "Couldn't read the memory in use",
-  "statsMemory": "Memory",
+  "statsMemory": "Memory use",
   "statsMemoryCore": "Core",
   "lanIP": "LAN address",
   "lanProxy": "LAN proxy",

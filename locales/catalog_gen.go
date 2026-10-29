@@ -1154,56 +1154,6 @@ func (msgs Messages) GeodataUpdatedAt(date string) string {
 	return Catalog.Format(msgs.locale, "geodataUpdatedAt", map[string]any{"date": date})
 }
 
-// GroupModeFallback says "Fails over when down"
-// in the language the app shows.
-func GroupModeFallback() string { return In(i18n.Locale()).GroupModeFallback() }
-
-// GroupModeFallback says "Fails over when down"
-// in the language of msgs.
-func (msgs Messages) GroupModeFallback() string {
-	return Catalog.Format(msgs.locale, "groupModeFallback", nil)
-}
-
-// GroupModeLoadBalance says "Balances connections"
-// in the language the app shows.
-func GroupModeLoadBalance() string { return In(i18n.Locale()).GroupModeLoadBalance() }
-
-// GroupModeLoadBalance says "Balances connections"
-// in the language of msgs.
-func (msgs Messages) GroupModeLoadBalance() string {
-	return Catalog.Format(msgs.locale, "groupModeLoadBalance", nil)
-}
-
-// GroupModeRelay says "Chains every node"
-// in the language the app shows.
-func GroupModeRelay() string { return In(i18n.Locale()).GroupModeRelay() }
-
-// GroupModeRelay says "Chains every node"
-// in the language of msgs.
-func (msgs Messages) GroupModeRelay() string {
-	return Catalog.Format(msgs.locale, "groupModeRelay", nil)
-}
-
-// GroupModeSelector says "Manual"
-// in the language the app shows.
-func GroupModeSelector() string { return In(i18n.Locale()).GroupModeSelector() }
-
-// GroupModeSelector says "Manual"
-// in the language of msgs.
-func (msgs Messages) GroupModeSelector() string {
-	return Catalog.Format(msgs.locale, "groupModeSelector", nil)
-}
-
-// GroupModeURLTest says "Auto, lowest latency"
-// in the language the app shows.
-func GroupModeURLTest() string { return In(i18n.Locale()).GroupModeURLTest() }
-
-// GroupModeURLTest says "Auto, lowest latency"
-// in the language of msgs.
-func (msgs Messages) GroupModeURLTest() string {
-	return Catalog.Format(msgs.locale, "groupModeURLTest", nil)
-}
-
 // HelperInstalled says "Installed. With TUN on, it runs the core with system privileges."
 // in the language the app shows.
 func HelperInstalled() string { return In(i18n.Locale()).HelperInstalled() }
@@ -1602,16 +1552,6 @@ func NodesByLatency() string { return In(i18n.Locale()).NodesByLatency() }
 // in the language of msgs.
 func (msgs Messages) NodesByLatency() string {
 	return Catalog.Format(msgs.locale, "nodesByLatency", nil)
-}
-
-// NodesExit says "Exit"
-// in the language the app shows.
-func NodesExit() string { return In(i18n.Locale()).NodesExit() }
-
-// NodesExit says "Exit"
-// in the language of msgs.
-func (msgs Messages) NodesExit() string {
-	return Catalog.Format(msgs.locale, "nodesExit", nil)
 }
 
 // NodesMore says "More"
@@ -4098,11 +4038,11 @@ func (msgs Messages) ActionWatchMemory() string {
 	return Catalog.Format(msgs.locale, "actionWatchMemory", nil)
 }
 
-// StatsMemory says "Memory"
+// StatsMemory says "Memory use"
 // in the language the app shows.
 func StatsMemory() string { return In(i18n.Locale()).StatsMemory() }
 
-// StatsMemory says "Memory"
+// StatsMemory says "Memory use"
 // in the language of msgs.
 func (msgs Messages) StatsMemory() string {
 	return Catalog.Format(msgs.locale, "statsMemory", nil)
