@@ -402,5 +402,8 @@
   "serviceBlocked": "不可用",
   "serviceUnknown": "检测失败",
   "serviceRegionTip": "服务认为你所在的地区",
-  "unlockWorking": "{working}/{total} 可用"
+  "unlockWorking": "{working}/{total} 可用",
+  "actionWatchMemory": "无法读取内存占用",
+  "statsMemory": "内存",
+  "statsMemoryCore": "内核"
 }

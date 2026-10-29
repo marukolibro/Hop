@@ -211,7 +211,7 @@ func stageText(p model.CoreProgress) string {
 	}
 }
 
-// startWatchers begins the three streams from the core on a context of
+// startWatchers begins the four streams from the core on a context of
 // their own, which stopWatchers can end.
 func (d *Dashboard) startWatchers(ctx context.Context, win Updater) {
 	watchCtx, cancel := context.WithCancel(ctx)
@@ -219,6 +219,7 @@ func (d *Dashboard) startWatchers(ctx context.Context, win Updater) {
 	go d.watchTraffic(watchCtx, win)
 	go d.watchConnections(watchCtx, win)
 	go d.watchLogs(watchCtx, win)
+	go d.watchMemory(watchCtx, win)
 }
 
 // stopWatchers ends the streams quietly: a stream that ends because it was

@@ -797,5 +797,8 @@
         "type": "int"
       }
     }
-  }
+  },
+  "actionWatchMemory": "Couldn't read the memory in use",
+  "statsMemory": "Memory",
+  "statsMemoryCore": "Core"
 }

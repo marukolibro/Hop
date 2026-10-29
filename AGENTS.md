@@ -234,7 +234,7 @@ handler → service → repository, interfaces defined where they are used.
   finish, so the releases must not move back below it.
 
 WebSocket is `github.com/coder/websocket`, chosen over faster server-oriented
-libraries such as gws: Hop only reads three loopback streams at about one
+libraries such as gws: Hop only reads four loopback streams at about one
 message a second, and `Read(ctx)` gives the clean shutdown on cancel. Do not
 swap it for throughput.
 

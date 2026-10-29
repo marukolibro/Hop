@@ -117,6 +117,7 @@ type MonitorService interface {
 	CloseConnection(ctx context.Context, id string) error
 	CloseAllConnections(ctx context.Context) error
 	WatchLogs(ctx context.Context, level string, handle func(model.LogEntry)) error
+	WatchMemory(ctx context.Context, handle func(model.Memory)) error
 }
 
 // TrafficService records how much traffic Hop carries and reports it.
@@ -399,6 +400,10 @@ type Dashboard struct {
 	last        model.Traffic
 	history     model.TrafficHistory
 	connections connectionsState
+	// memory is the last memory sample of Hop and its core; memoryKnown says
+	// one came since the core started.
+	memory      model.Memory
+	memoryKnown bool
 	logs        logsState
 	// stats is what the statistics page shows, refreshed with every
 	// connection sample.
@@ -773,6 +778,18 @@ func (d *Dashboard) watchTraffic(ctx context.Context, win Updater) {
 	win.Update(func() { d.failConnection(actionWatchTraffic, err) })
 }
 
+func (d *Dashboard) watchMemory(ctx context.Context, win Updater) {
+	err := d.services.Monitor.WatchMemory(ctx, func(m model.Memory) {
+		win.Update(func() {
+			d.memory, d.memoryKnown = m, true
+		})
+	})
+	if ctx.Err() != nil {
+		return
+	}
+	win.Update(func() { d.fail(actionWatchMemory, err) })
+}
+
 func (d *Dashboard) watchConnections(ctx context.Context, win Updater) {
 	err := d.services.Monitor.WatchConnections(ctx, func(conns model.Connections) {
 		win.Update(func() {
@@ -843,6 +860,7 @@ var (
 	actionWatchTraffic        = action{"watch-traffic", locales.ActionWatchTraffic}
 	actionWatchConnections    = action{"watch-connections", locales.ActionWatchConnections}
 	actionWatchLogs           = action{"watch-logs", locales.ActionWatchLogs}
+	actionWatchMemory         = action{"watch-memory", locales.ActionWatchMemory}
 	actionOpenLogFolder       = action{"open-log-folder", locales.ActionOpenLogFolder}
 	actionSwitchNode          = action{"switch-node", locales.ActionSwitchNode}
 	actionSwitchMode          = action{"switch-mode", locales.ActionSwitchMode}

@@ -415,6 +415,13 @@ type Connection struct {
 	Start    time.Time
 }
 
+// Memory is the physical memory Hop's process and its core's process hold,
+// in bytes.
+type Memory struct {
+	App  uint64
+	Core uint64
+}
+
 // Connections is the core's connection table at one moment.
 type Connections struct {
 	Active        []Connection

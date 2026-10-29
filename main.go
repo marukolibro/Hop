@@ -30,6 +30,7 @@ import (
 	"hop/internal/repository/lan"
 	"hop/internal/repository/logfile"
 	"hop/internal/repository/mihomo"
+	"hop/internal/repository/procmem"
 	"hop/internal/repository/profile"
 	"hop/internal/repository/routetable"
 	"hop/internal/repository/subscription"
@@ -311,7 +312,7 @@ func run() (err error) {
 		Proxies:       service.NewProxyService(client),
 		Subscriptions: profiles,
 		Modes:         service.NewModeService(client, store),
-		Monitor:       service.NewMonitorService(client),
+		Monitor:       service.NewMonitorService(client, procmem.Reader{}),
 		Traffic:       traffic,
 		Core:          coreService,
 		Settings:      settingsService,

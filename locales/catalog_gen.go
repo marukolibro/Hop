@@ -4087,3 +4087,33 @@ func UnlockWorking(working int, total int) string {
 func (msgs Messages) UnlockWorking(working int, total int) string {
 	return Catalog.Format(msgs.locale, "unlockWorking", map[string]any{"working": working, "total": total})
 }
+
+// ActionWatchMemory says "Couldn't read the memory in use"
+// in the language the app shows.
+func ActionWatchMemory() string { return In(i18n.Locale()).ActionWatchMemory() }
+
+// ActionWatchMemory says "Couldn't read the memory in use"
+// in the language of msgs.
+func (msgs Messages) ActionWatchMemory() string {
+	return Catalog.Format(msgs.locale, "actionWatchMemory", nil)
+}
+
+// StatsMemory says "Memory"
+// in the language the app shows.
+func StatsMemory() string { return In(i18n.Locale()).StatsMemory() }
+
+// StatsMemory says "Memory"
+// in the language of msgs.
+func (msgs Messages) StatsMemory() string {
+	return Catalog.Format(msgs.locale, "statsMemory", nil)
+}
+
+// StatsMemoryCore says "Core"
+// in the language the app shows.
+func StatsMemoryCore() string { return In(i18n.Locale()).StatsMemoryCore() }
+
+// StatsMemoryCore says "Core"
+// in the language of msgs.
+func (msgs Messages) StatsMemoryCore() string {
+	return Catalog.Format(msgs.locale, "statsMemoryCore", nil)
+}

@@ -31,6 +31,9 @@ func (d *Dashboard) statsPage(c *ui.Context, t *ui.Theme) {
 				captionText(c, t, locales.StatsAsOfToday())
 			})
 			statsTotals(c, t, view)
+			if d.memoryKnown {
+				statsMemoryCard(c, t, d.memory)
+			}
 			horizontalHairline(c, t)
 			statsChartCard(c, t, view.Days)
 			if len(view.Sources) > 0 {
@@ -319,4 +322,46 @@ func amountText(bytes int64) string {
 
 func clampStatX(value, low, high float32) float32 {
 	return min(max(value, low), high)
+}
+
+// statsMemoryCard is the physical memory Hop and its core hold now: the sum,
+// and a bar split between the two with each one's amount.
+func statsMemoryCard(c *ui.Context, t *ui.Theme, m model.Memory) {
+	total := m.App + m.Core
+	panelCard(c, t).Key("memory").Padding(18, 24).Gap(12).Children(func() {
+		ui.Row(c).Justify(ui.SpaceBetween).AlignItems(ui.End).Children(func() {
+			ui.Column(c).Gap(gapTight).Children(func() {
+				ui.Text(c, locales.StatsMemory()).FontSize(fontEmphasis).FontWeight(weightMedium)
+				statsAmount(c, t, int64(total), fontHeadline)
+			})
+			ui.Row(c).Gap(gapLarge).Children(func() {
+				statsSplit(c, t, "Hop", int64(m.App), t.Accent)
+				statsSplit(c, t, locales.StatsMemoryCore(), int64(m.Core), t.TextMuted.Alpha(statsDirectAlpha))
+			})
+		})
+		share := float32(0)
+		if total > 0 {
+			share = float32(m.App) / float32(total)
+		}
+		ui.Box(c).Key("memoryBar").Height(statMemoryBar).Label(locales.StatsMemory()).Draw(func(p *ui.Painter, r ui.Rect) {
+			drawMemoryBar(p, r, share, t)
+		})
+	})
+}
+
+// drawMemoryBar fills the bar with Hop's share in the accent and the core's
+// after it, with a small gap between the two.
+func drawMemoryBar(p *ui.Painter, r ui.Rect, share float32, t *ui.Theme) {
+	radius := r.H / 2
+	split := r.W * share
+	core := t.TextMuted.Alpha(statsDirectAlpha)
+	switch {
+	case split <= statMemoryGap:
+		p.Fill(r, core, radius)
+	case split >= r.W-statMemoryGap:
+		p.Fill(r, t.Accent, radius)
+	default:
+		p.Fill(ui.Rect{X: r.X, Y: r.Y, W: split - statMemoryGap/2, H: r.H}, t.Accent, radius)
+		p.Fill(ui.Rect{X: r.X + split + statMemoryGap/2, Y: r.Y, W: r.W - split - statMemoryGap/2, H: r.H}, core, radius)
+	}
 }

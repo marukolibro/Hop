@@ -108,6 +108,8 @@ const (
 	statTooltipPadY  float32 = 6
 	statTooltipLine  float32 = 15
 	statDot          float32 = 6
+	statMemoryBar    float32 = 8
+	statMemoryGap    float32 = 3
 	statBarWidthPart float32 = 0.62
 )
 

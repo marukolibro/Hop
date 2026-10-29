@@ -13,16 +13,24 @@ type MonitorCore interface {
 	CloseConnection(ctx context.Context, id string) error
 	CloseAllConnections(ctx context.Context) error
 	StreamLogs(ctx context.Context, level string, handle func(model.LogEntry)) error
+	StreamMemory(ctx context.Context, handle func(uint64)) error
 }
 
-// MonitorService shows the core's connections and log.
+// ProcessMemory reads the memory Hop's own process holds.
+type ProcessMemory interface {
+	Resident() (uint64, error)
+}
+
+// MonitorService shows the core's connections, log and memory, and Hop's.
 type MonitorService struct {
 	core MonitorCore
+	self ProcessMemory
 }
 
-// NewMonitorService returns a service backed by core.
-func NewMonitorService(core MonitorCore) *MonitorService {
-	return &MonitorService{core: core}
+// NewMonitorService returns a service backed by core, reading Hop's own
+// memory through self.
+func NewMonitorService(core MonitorCore, self ProcessMemory) *MonitorService {
+	return &MonitorService{core: core, self: self}
 }
 
 // WatchConnections calls handle with the connection table, newest first,
@@ -66,4 +74,27 @@ func AppendLog(entries []model.LogEntry, entry model.LogEntry, limit int) []mode
 	out := make([]model.LogEntry, 0, len(entries)+1-start)
 	out = append(out, entries[start:]...)
 	return append(out, entry)
+}
+
+// WatchMemory calls handle with the memory of Hop and of its core whenever
+// the core reports its own, about once a second, until ctx is done or the
+// stream fails. Hop's is read at the same moment, so the two belong
+// together.
+func (s *MonitorService) WatchMemory(ctx context.Context, handle func(model.Memory)) error {
+	var readErr error
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	err := s.core.StreamMemory(ctx, func(core uint64) {
+		app, err := s.self.Resident()
+		if err != nil {
+			readErr = err
+			cancel()
+			return
+		}
+		handle(model.Memory{App: app, Core: core})
+	})
+	if readErr != nil {
+		return readErr
+	}
+	return err
 }

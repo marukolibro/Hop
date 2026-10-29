@@ -280,6 +280,30 @@ func (c *Client) StreamTraffic(ctx context.Context, handle func(model.Traffic)) 
 	})
 }
 
+type memoryMessage struct {
+	Inuse uint64 `json:"inuse"`
+}
+
+// StreamMemory calls handle with the resident memory of the core's process,
+// in bytes, about once a second until ctx is done or the connection fails.
+// The core's first message always says 0, so it is skipped. It always
+// returns a non-nil error.
+func (c *Client) StreamMemory(ctx context.Context, handle func(uint64)) error {
+	first := true
+	return c.stream(ctx, "/memory", func(raw []byte) error {
+		var msg memoryMessage
+		if err := json.Unmarshal(raw, &msg); err != nil {
+			return fmt.Errorf("decode mihomo memory message (body=%q): %w", raw, err)
+		}
+		if first {
+			first = false
+			return nil
+		}
+		handle(msg.Inuse)
+		return nil
+	})
+}
+
 // stream reads the WebSocket at path and passes every message to handle,
 // until ctx is done, the connection fails or handle returns an error. It
 // always returns a non-nil error.
