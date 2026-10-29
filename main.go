@@ -169,6 +169,10 @@ func run() (err error) {
 	helperClient, geodataHelper, helperInstaller := helperAccess(instance)
 	tunFlag := service.NewTunFlag()
 	lanState := service.NewLANState()
+	fakeIPState := service.NewFakeIPExceptionsState()
+	if err := service.StartupFakeIPExceptions(store, fakeIPState); err != nil {
+		return err
+	}
 	profiles := service.NewSubscriptionService(
 		subscription.NewFetcher(&http.Client{Timeout: downloadTimeout}),
 		store,
@@ -184,6 +188,7 @@ func run() (err error) {
 		tunFlag,
 		lanState,
 		portState,
+		fakeIPState,
 	)
 
 	settingsService := service.NewSettingsService(store)
@@ -235,6 +240,7 @@ func run() (err error) {
 
 	appUpdateService := service.NewAppUpdateService()
 	customRulesService := service.NewCustomRulesService(store, profiles)
+	fakeIPService := service.NewFakeIPExceptionsService(fakeIPState, store, profiles, tunFlag)
 	geodataService := service.NewGeodataService(
 		geodata.NewSource(geodataDownloadClient(portState), geodata.DefaultBaseURL),
 		mihomo.NewConfigValidator(cfg.MihomoBinary, validateDir, validationTimeout),
@@ -316,6 +322,7 @@ func run() (err error) {
 		Settings:      settingsService,
 		Geodata:       geodataService,
 		Rules:         customRulesService,
+		FakeIP:        fakeIPService,
 		AppUpdate:     appUpdateService,
 		SystemProxy:   systemProxy,
 		Tun:           tun,

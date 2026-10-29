@@ -45,7 +45,7 @@ const (
 // geodata update, an app update, or the automatic check runs.
 func (d *Dashboard) controlsLocked() bool {
 	return d.modeBusy || d.subscription.mutations > 0 || d.core.busy || d.tun.busy ||
-		d.geodata.busy || d.rules.busy || d.lan.busy || d.port.busy || d.appUpdate.updating || d.autoBusy
+		d.geodata.busy || d.rules.busy || d.fakeIP.busy || d.lan.busy || d.port.busy || d.appUpdate.updating || d.autoBusy
 }
 
 // busy reports whether an operation runs on the subscription id.

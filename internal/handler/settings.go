@@ -250,6 +250,7 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 				)
 				settingsGroup(c, t, locales.SettingsRules(), d.geodataRow(c, t))
 				settingsGroup(c, t, locales.SettingsCustomRules(), d.customRulesRows(c, t)...)
+				settingsGroup(c, t, locales.SettingsTun(), d.fakeIPRows(c, t)...)
 				if d.core.loaded {
 					settingsGroup(c, t, locales.SettingsCore(), append(d.coreRows(c, t), d.helperRows(c, t)...)...)
 				}

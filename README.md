@@ -288,6 +288,11 @@ The ports sit away from the ones other Clash clients use.
   **More info → Run anyway**.
 - **TUN will not turn on.** Another VPN or Clash client holds the
   default routes; turn its TUN off first. Hop never takes routes over.
+- **An app can't connect under TUN (for example Tailscale registering).** TUN
+  answers lookups with fake addresses (198.18.x.x) so rules can match by name,
+  and a few apps need the real one. Add the name in **Settings → TUN → Fake-IP
+  exceptions** (`example.com`, `*.example.com` or `+.example.com`); it changes
+  the DNS answer only, not the route.
 - **Another client uses the same ports.** Hop's own are `17890`, `19090`,
   `17853`, apart from other clients', so both can run at once.
 - **Latency looks high.** Hop uses the provider's nearest entry when the

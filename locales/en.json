@@ -167,6 +167,20 @@
   "exitIpNone": "Exit IP not found",
   "exitIpRetry": "Click to retry",
   "exitIpTip": "The exit IP of the default route. Sites on dedicated routes, such as AI, may differ. Click to copy.",
+  "fakeIPCount": "{count, plural, one {# name} other {# names}}",
+  "@fakeIPCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fakeIPDialogNote": "One name per line. example.com matches that name only, *.example.com its subdomains, +.example.com both. They are added to the built-in list, and apply at once while TUN is on.",
+  "fakeIPEdit": "Edit",
+  "fakeIPNone": "None",
+  "fakeIPNote": "Names that get their real address under TUN instead of a fake one (198.18.x.x). Add one when an app can't connect under TUN. This changes the DNS answer only, not the route.",
+  "fakeIPPlaceholder": "example.com\n*.example.com\n+.example.com",
+  "fakeIPTitle": "Fake-IP exceptions",
   "fileCloseFailed": "Couldn't close “{name}”: ",
   "@fileCloseFailed": {
     "placeholders": {
@@ -438,6 +452,7 @@
   "settingsThemeNote": "Glass background colors. Takes effect immediately.",
   "settingsTimeout": "Speed test timeout",
   "settingsTimeoutNote": "Shorter is faster, but slow routes may be counted as timed out",
+  "settingsTun": "TUN",
   "sidebarAuto": "Auto",
   "sidebarMain": "Main",
   "sidebarOther": "Other",

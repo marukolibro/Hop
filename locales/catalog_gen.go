@@ -1024,6 +1024,76 @@ func (msgs Messages) ExitIpTip() string {
 	return Catalog.Format(msgs.locale, "exitIpTip", nil)
 }
 
+// FakeIPCount says "{count, plural, one {# name} other {# names}}"
+// in the language the app shows.
+func FakeIPCount(count int) string { return In(i18n.Locale()).FakeIPCount(count) }
+
+// FakeIPCount says "{count, plural, one {# name} other {# names}}"
+// in the language of msgs.
+func (msgs Messages) FakeIPCount(count int) string {
+	return Catalog.Format(msgs.locale, "fakeIPCount", map[string]any{"count": count})
+}
+
+// FakeIPDialogNote says "One name per line. example.com matches that name only, *.example.com its subdomains, +.example.com both. They are add…"
+// in the language the app shows.
+func FakeIPDialogNote() string { return In(i18n.Locale()).FakeIPDialogNote() }
+
+// FakeIPDialogNote says "One name per line. example.com matches that name only, *.example.com its subdomains, +.example.com both. They are add…"
+// in the language of msgs.
+func (msgs Messages) FakeIPDialogNote() string {
+	return Catalog.Format(msgs.locale, "fakeIPDialogNote", nil)
+}
+
+// FakeIPEdit says "Edit"
+// in the language the app shows.
+func FakeIPEdit() string { return In(i18n.Locale()).FakeIPEdit() }
+
+// FakeIPEdit says "Edit"
+// in the language of msgs.
+func (msgs Messages) FakeIPEdit() string {
+	return Catalog.Format(msgs.locale, "fakeIPEdit", nil)
+}
+
+// FakeIPNone says "None"
+// in the language the app shows.
+func FakeIPNone() string { return In(i18n.Locale()).FakeIPNone() }
+
+// FakeIPNone says "None"
+// in the language of msgs.
+func (msgs Messages) FakeIPNone() string {
+	return Catalog.Format(msgs.locale, "fakeIPNone", nil)
+}
+
+// FakeIPNote says "Names that get their real address under TUN instead of a fake one (198.18.x.x). Add one when an app can't connect und…"
+// in the language the app shows.
+func FakeIPNote() string { return In(i18n.Locale()).FakeIPNote() }
+
+// FakeIPNote says "Names that get their real address under TUN instead of a fake one (198.18.x.x). Add one when an app can't connect und…"
+// in the language of msgs.
+func (msgs Messages) FakeIPNote() string {
+	return Catalog.Format(msgs.locale, "fakeIPNote", nil)
+}
+
+// FakeIPPlaceholder says "example.com\n*.example.com\n+.example.com"
+// in the language the app shows.
+func FakeIPPlaceholder() string { return In(i18n.Locale()).FakeIPPlaceholder() }
+
+// FakeIPPlaceholder says "example.com\n*.example.com\n+.example.com"
+// in the language of msgs.
+func (msgs Messages) FakeIPPlaceholder() string {
+	return Catalog.Format(msgs.locale, "fakeIPPlaceholder", nil)
+}
+
+// FakeIPTitle says "Fake-IP exceptions"
+// in the language the app shows.
+func FakeIPTitle() string { return In(i18n.Locale()).FakeIPTitle() }
+
+// FakeIPTitle says "Fake-IP exceptions"
+// in the language of msgs.
+func (msgs Messages) FakeIPTitle() string {
+	return Catalog.Format(msgs.locale, "fakeIPTitle", nil)
+}
+
 // FileCloseFailed says "Couldn't close “{name}”: "
 // in the language the app shows.
 func FileCloseFailed(name string) string { return In(i18n.Locale()).FileCloseFailed(name) }
@@ -2454,6 +2524,16 @@ func SettingsTimeoutNote() string { return In(i18n.Locale()).SettingsTimeoutNote
 // in the language of msgs.
 func (msgs Messages) SettingsTimeoutNote() string {
 	return Catalog.Format(msgs.locale, "settingsTimeoutNote", nil)
+}
+
+// SettingsTun says "TUN"
+// in the language the app shows.
+func SettingsTun() string { return In(i18n.Locale()).SettingsTun() }
+
+// SettingsTun says "TUN"
+// in the language of msgs.
+func (msgs Messages) SettingsTun() string {
+	return Catalog.Format(msgs.locale, "settingsTun", nil)
 }
 
 // SidebarAuto says "Auto"

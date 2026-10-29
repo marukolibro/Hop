@@ -214,6 +214,7 @@ func newHarness(t *testing.T, appDir string) *harness {
 			service.NewTunFlag(),
 			lanState,
 			portState,
+			service.NewFakeIPExceptionsState(),
 		),
 	}
 }

@@ -156,6 +156,13 @@ type CustomRulesService interface {
 	Save(ctx context.Context, rules []model.CustomRule) error
 }
 
+// FakeIPService keeps the names the user asks the TUN resolver to answer with
+// their real addresses.
+type FakeIPService interface {
+	List() []string
+	Save(ctx context.Context, names []string) error
+}
+
 // AppUpdateService checks for and installs a newer Hop through mygo's signed
 // updater.
 type AppUpdateService interface {
@@ -206,6 +213,7 @@ type Services struct {
 	Settings      SettingsService
 	Geodata       GeodataService
 	Rules         CustomRulesService
+	FakeIP        FakeIPService
 	AppUpdate     AppUpdateService
 	SystemProxy   SystemProxyService
 	Tun           TunService
@@ -339,6 +347,7 @@ type Dashboard struct {
 	settings     settingsState
 	geodata      geodataState
 	rules        customRulesState
+	fakeIP       fakeIPState
 	appUpdate    appUpdateState
 	sysProxy     sysProxyState
 	tun          tunState
@@ -450,6 +459,7 @@ func NewDashboard(services Services, proxyHost string, settings model.Settings, 
 	}
 	d.subscription.busyIDs = map[string]struct{}{}
 	d.port.input = strconv.Itoa(services.Port.Current())
+	d.fakeIP.names = services.FakeIP.List()
 	if services.AppUpdate != nil {
 		d.appUpdate.enabled = services.AppUpdate.Enabled()
 		d.appUpdate.disabledReason = services.AppUpdate.DisabledReason()
@@ -949,6 +959,7 @@ func (d *Dashboard) View(c *ui.Context) {
 	d.deleteDialog(c, t)
 	d.tunDialog(c, t)
 	d.customRuleDialog(c, t)
+	d.fakeIPDialog(c, t)
 	d.servicesDialog(c, t)
 	d.lanDialog(c, t)
 }
