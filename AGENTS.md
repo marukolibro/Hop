@@ -116,7 +116,7 @@ on this machine while developing Hop. Hop must never interfere with it.
   through them, and never put them in a rule. The check reads a lane's choice
   back after each group and stops when it is not that group: a reload in
   between would put the result under the wrong group. The services dialog
-  (hero → 服务状态) checks the same services through the mixed port instead,
+  (the home card's ›) checks the same services through the mixed port instead,
   where the rules pick each one's route as they do for the user's traffic;
   `repository/unlock` reads that route from `/connections` by the request's
   own local port while its connection is open (keep-alives off, one
@@ -255,7 +255,10 @@ for font sizes, weights, gaps or radii in views.
   height: the subscription in use on a card at its top (picker, the `Hop 智能规则`
   tag only while the profile runs Hop's rules, usage, expiry, refresh and
   manage), the groups, and the core's state at its foot. The content column
-  is the hero card, the group's header, the region filters and one grid of
+  scrolls as one: the hero card, a row of four home cards (outbound mode, the
+  LAN address with the LAN proxy's switch, the services, the memory Hop and
+  its core hold; `homecards.go`, four across from `homeCardMinWidth` each,
+  then two, then one), the group's header, the region filters and one grid of
   node tiles. Node tiles and the lists, charts and tables on the other pages
   are translucent cards, as the design shows. Dialogs, picker popups, tooltips,
   toasts and the menu-bar flyout stay opaque cards.
@@ -264,7 +267,7 @@ for font sizes, weights, gaps or radii in views.
   colour), in the window's ink: the ring gauge with the exit's flag (outer arc
   download, inner upload, both easing to the traffic and then resting), the
   exit's name with its latency pill, the `经 …` line, its exit IP and its
-  facts as chips; on the right the speeds with the outbound mode switch, over
+  facts as chips; on the right the speeds over
   the sparkline with its `最近 2 分钟` caption and idle state. The right part
   wraps under the exit in a narrow window and drops the plot below
   `heroPlotMinPane`. It has no current-line caption. The flyout has the same
@@ -309,7 +312,7 @@ for font sizes, weights, gaps or radii in views.
   choices are `slidingSwitch`, on/off settings `ui.Switch`. In the window, the
   system proxy and TUN are the header's `statusToggle` buttons (a green dot
   while on; every page shows them) and the outbound mode is a `slidingSwitch`
-  at the foot of the hero; the flyout keeps all three as `togglePill`
+  on its own home card; the flyout keeps all three as `togglePill`
   (`pill.go`). Text actions are `textButton`.
 - Icons: 24-unit SVG strokes in `icons.go`, tinted by text colour.
 - CJK text in small controls sits ~1px low: apply `Translate(0, -opticalLift)`.

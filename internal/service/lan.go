@@ -168,13 +168,12 @@ func (s *LANService) ResetAccount(ctx context.Context) error {
 	return nil
 }
 
-// Status is the LAN access now and the addresses devices reach it at.
+// Status is the LAN access now and the addresses devices would reach it at,
+// listed while the access is off too: the home page shows this computer's
+// address either way.
 func (s *LANService) Status() (model.LANStatus, error) {
 	current := s.state.Get()
 	status := model.LANStatus{Enabled: current.Enabled, Account: current.Account}
-	if !current.Enabled {
-		return status, nil
-	}
 	addrs, err := s.addresses.Addresses()
 	if err != nil {
 		return model.LANStatus{}, err

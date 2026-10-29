@@ -800,5 +800,13 @@
   },
   "actionWatchMemory": "Couldn't read the memory in use",
   "statsMemory": "Memory",
-  "statsMemoryCore": "Core"
+  "statsMemoryCore": "Core",
+  "lanIP": "LAN address",
+  "lanProxy": "LAN proxy",
+  "lanStateOff": "Off",
+  "lanStateOn": "On",
+  "lanStateOnPort": "On · port {port}",
+  "servicesAll": "All services",
+  "servicesAllWork": "All work",
+  "servicesIdle": "Not checked"
 }

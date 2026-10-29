@@ -4117,3 +4117,83 @@ func StatsMemoryCore() string { return In(i18n.Locale()).StatsMemoryCore() }
 func (msgs Messages) StatsMemoryCore() string {
 	return Catalog.Format(msgs.locale, "statsMemoryCore", nil)
 }
+
+// LanIP says "LAN address"
+// in the language the app shows.
+func LanIP() string { return In(i18n.Locale()).LanIP() }
+
+// LanIP says "LAN address"
+// in the language of msgs.
+func (msgs Messages) LanIP() string {
+	return Catalog.Format(msgs.locale, "lanIP", nil)
+}
+
+// LanProxy says "LAN proxy"
+// in the language the app shows.
+func LanProxy() string { return In(i18n.Locale()).LanProxy() }
+
+// LanProxy says "LAN proxy"
+// in the language of msgs.
+func (msgs Messages) LanProxy() string {
+	return Catalog.Format(msgs.locale, "lanProxy", nil)
+}
+
+// LanStateOff says "Off"
+// in the language the app shows.
+func LanStateOff() string { return In(i18n.Locale()).LanStateOff() }
+
+// LanStateOff says "Off"
+// in the language of msgs.
+func (msgs Messages) LanStateOff() string {
+	return Catalog.Format(msgs.locale, "lanStateOff", nil)
+}
+
+// LanStateOn says "On"
+// in the language the app shows.
+func LanStateOn() string { return In(i18n.Locale()).LanStateOn() }
+
+// LanStateOn says "On"
+// in the language of msgs.
+func (msgs Messages) LanStateOn() string {
+	return Catalog.Format(msgs.locale, "lanStateOn", nil)
+}
+
+// LanStateOnPort says "On · port {port}"
+// in the language the app shows.
+func LanStateOnPort(port string) string { return In(i18n.Locale()).LanStateOnPort(port) }
+
+// LanStateOnPort says "On · port {port}"
+// in the language of msgs.
+func (msgs Messages) LanStateOnPort(port string) string {
+	return Catalog.Format(msgs.locale, "lanStateOnPort", map[string]any{"port": port})
+}
+
+// ServicesAll says "All services"
+// in the language the app shows.
+func ServicesAll() string { return In(i18n.Locale()).ServicesAll() }
+
+// ServicesAll says "All services"
+// in the language of msgs.
+func (msgs Messages) ServicesAll() string {
+	return Catalog.Format(msgs.locale, "servicesAll", nil)
+}
+
+// ServicesAllWork says "All work"
+// in the language the app shows.
+func ServicesAllWork() string { return In(i18n.Locale()).ServicesAllWork() }
+
+// ServicesAllWork says "All work"
+// in the language of msgs.
+func (msgs Messages) ServicesAllWork() string {
+	return Catalog.Format(msgs.locale, "servicesAllWork", nil)
+}
+
+// ServicesIdle says "Not checked"
+// in the language the app shows.
+func ServicesIdle() string { return In(i18n.Locale()).ServicesIdle() }
+
+// ServicesIdle says "Not checked"
+// in the language of msgs.
+func (msgs Messages) ServicesIdle() string {
+	return Catalog.Format(msgs.locale, "servicesIdle", nil)
+}

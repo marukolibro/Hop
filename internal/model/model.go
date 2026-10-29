@@ -627,7 +627,8 @@ type LANStatus struct {
 	// Account is what a device gives, zero when no account is asked for.
 	Account LANCredential
 	// Addresses are host:port a device on the network can reach the proxy
-	// at, none while this computer is on no network.
+	// at, once the access is on; none while this computer is on no network.
+	// They are listed while the access is off too.
 	Addresses []string
 }
 

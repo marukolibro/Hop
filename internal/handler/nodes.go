@@ -85,8 +85,8 @@ func (d *Dashboard) activeGroupView() (model.GroupView, bool) {
 }
 
 // nodesPage is the groups in a sidebar that runs the window's height, topped
-// by the subscription in use, beside the content: the route's hero card, then
-// the options of the group chosen. The subscription management page is a
+// by the subscription in use, beside the content: the route's hero card, the
+// row of home cards, then the options of the group chosen. The subscription management page is a
 // subpage of it, reached from the sidebar's subscription.
 func (d *Dashboard) nodesPage(c *ui.Context, t *ui.Theme) {
 	if d.subscription.managing {
@@ -94,20 +94,25 @@ func (d *Dashboard) nodesPage(c *ui.Context, t *ui.Theme) {
 		return
 	}
 	// The body is one surface: a fixed sidebar, a hairline, and the content.
-	// Each pane may shrink below its content, so it scrolls inside the window
-	// rather than pushing past it.
+	// The content may shrink below its height, so it scrolls inside the
+	// window rather than pushing past it.
 	ui.Row(c).Grow(1).Basis(0).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 		d.groupSidebar(c, t)
 		verticalHairline(c, t)
-		pane := ui.Column(c).Grow(1).Basis(0).MinHeight(0).Gap(gapLarge).Padding(paneTopPadding, pagePadding, 0, pagePadding).
-			Background(nodeAreaFill(t))
+		pane := ui.Column(c).Grow(1).Basis(0).MinHeight(0).Background(nodeAreaFill(t))
 		pane.Children(func() {
-			d.routeBar(c, t)
-			ui.Column(c).Key("options").Grow(1).Basis(0).MinHeight(0).Gap(gapMedium).
-				Disabled(d.controlsLocked()).Children(func() {
-				d.groupHeader(c, t)
-				d.regionFilter(c, t)
-				d.nodeGrid(c, t)
+			// The whole column scrolls as one: the hero, the cards, then the
+			// options, so a group with many nodes runs past the window's foot.
+			ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
+				ui.Column(c).Gap(gapLarge).Padding(paneTopPadding, pagePadding, 30, pagePadding).Children(func() {
+					d.routeBar(c, t)
+					d.homeCards(c, t)
+					ui.Column(c).Key("options").Gap(gapMedium).Disabled(d.controlsLocked()).Children(func() {
+						d.groupHeader(c, t)
+						d.regionFilter(c, t)
+						d.nodeGrid(c, t)
+					})
+				})
 			})
 		})
 	})
@@ -346,12 +351,10 @@ func (d *Dashboard) nodeGrid(c *ui.Context, t *ui.Theme) {
 	paneWidth := width - sidebarWidthFor(width) - hairlineWidth - 2*pagePadding
 	columns := tileColumns(paneWidth)
 	sections := visibleSections(group, activeFilter(group, d.nodeRegion), d.nodeOrder == nodeOrderDelay, d.orderDelay)
-	ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
-		ui.Column(c).Gap(gapSection).Width(paneWidth).Padding(0, 0, 30, 0).Children(func() {
-			for _, section := range sections {
-				d.nodeSection(c, t, group, section, columns)
-			}
-		})
+	ui.Column(c).Key("nodeGrid").Gap(gapSection).Children(func() {
+		for _, section := range sections {
+			d.nodeSection(c, t, group, section, columns)
+		}
 	})
 }
 

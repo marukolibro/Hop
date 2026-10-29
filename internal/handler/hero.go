@@ -23,7 +23,6 @@ const (
 	heroLiveBasis   float32 = 300
 	heroPlotMinPane float32 = 700
 	heroPlotHeight  float32 = 64
-	heroModeSegment float32 = 46
 	heroDelayHeight float32 = 20
 	// heroDelayFill washes the latency pill in the accent.
 	heroDelayFill float32 = 0.14
@@ -32,8 +31,7 @@ const (
 // routeBar is the nodes page's hero: one card tinted with the theme's
 // accent, with the ring gauge and the exit on the left (its name and latency,
 // the groups it passes, its public address and its facts) and on the right
-// the two speeds with the outbound mode, over the last two minutes of
-// traffic. The gauge's arcs ease to the traffic and then rest. The right part
+// the two speeds over the last two minutes of traffic. The gauge's arcs ease to the traffic and then rest. The right part
 // wraps under the exit in a narrow window.
 func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 	route := d.view.Route
@@ -58,7 +56,7 @@ func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 }
 
 // heroExit names the exit, the groups it passes, its public address and its
-// facts, over the line that opens the services dialog.
+// facts.
 func (d *Dashboard) heroExit(c *ui.Context, t *ui.Theme, route []model.RouteHop) {
 	exit := ui.Column(c).Key("exit").Gap(gapTight).Width(exitWidth)
 	exit.Children(func() {
@@ -80,7 +78,6 @@ func (d *Dashboard) heroExit(c *ui.Context, t *ui.Theme, route []model.RouteHop)
 		}
 		d.exitIPLine(c, t)
 		heroChips(c, t, hop)
-		d.servicesEntry(c, t)
 	})
 }
 
@@ -145,16 +142,11 @@ func heroChips(c *ui.Context, t *ui.Theme, hop model.RouteHop) {
 	})
 }
 
-// heroReadout is the download and upload speeds with the outbound mode
-// beside them.
+// heroReadout is the download and upload speeds.
 func (d *Dashboard) heroReadout(c *ui.Context, t *ui.Theme) {
-	ui.Row(c).Key("readout").Wrap().Gap(gapLarge).GapY(gapSmall).AlignItems(ui.Center).Children(func() {
-		ui.Row(c).Key("speeds").Gap(gapLarge).AlignItems(ui.Center).Children(func() {
-			heroSpeedLine(c, t, "↓", formatRate(d.last.Down), accentInk(t))
-			heroSpeedLine(c, t, "↑", formatRate(d.last.Up), uploadColor(t))
-		})
-		ui.Box(c).Grow(1)
-		d.modeSwitch(c, pageSwitchStyle(t, heroModeSegment))
+	ui.Row(c).Key("speeds").Gap(gapLarge).AlignItems(ui.Center).Children(func() {
+		heroSpeedLine(c, t, "↓", formatRate(d.last.Down), accentInk(t))
+		heroSpeedLine(c, t, "↑", formatRate(d.last.Up), uploadColor(t))
 	})
 }
 

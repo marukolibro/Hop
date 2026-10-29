@@ -302,23 +302,39 @@ func unlockSummary(u model.Unlock) string {
 	return locales.UnlockNone()
 }
 
-// servicesEntry is the hero's line that opens the services dialog: how many
-// services worked at the last check, or that none was made yet.
-func (d *Dashboard) servicesEntry(c *ui.Context, t *ui.Theme) {
+// servicesSummaryText is how far the check through the rules got: how many
+// services work, how many it has checked while it runs, or that it has not
+// run.
+func (d *Dashboard) servicesSummaryText() string {
 	s := &d.unlock.services
-	label := locales.ServicesTitle()
 	switch {
 	case s.running:
-		label = locales.ServicesChecking(len(s.results), len(model.UnlockServices))
+		return locales.ServicesChecking(len(s.results), len(model.UnlockServices))
 	case len(s.results) > 0:
 		results := make([]model.UnlockResult, 0, len(s.results))
 		for _, r := range s.results {
 			results = append(results, r)
 		}
-		label = locales.ServicesSummary(workingCount(results), len(results))
+		return locales.ServicesSummary(workingCount(results), len(results))
 	}
-	textButton(c, t, label, iconUnlock, d.services.Unlock == nil, false, func() { s.open = true }).
-		Key("servicesEntry").Tooltip(locales.ServicesHint())
+	return locales.ServicesNotChecked()
+}
+
+// serviceTileTip is a checked service's tooltip: its name, its state with
+// the region it placed the route in, the time it took and the route it took.
+func serviceTileTip(svc model.UnlockService, r model.UnlockResult) string {
+	state := serviceState(r)
+	if r.Region != "" {
+		state += locales.UnlockRegion(service.CountryName(r.Region))
+	}
+	lines := []string{serviceNames[svc], state}
+	if r.Latency > 0 {
+		lines = append(lines, delayText(model.Delay{Millis: int(r.Latency / time.Millisecond), Measured: true}))
+	}
+	if route := routeText(r.Route); route != "" {
+		lines = append(lines, route)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // servicesDialog lists every service with what the check through the rules
@@ -334,7 +350,11 @@ func (d *Dashboard) servicesDialog(c *ui.Context, t *ui.Theme) {
 			ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 				ui.Column(c).Grow(1).MinWidth(0).Gap(gapTight).Children(func() {
 					ui.Text(c, locales.ServicesTitle()).FontSize(fontHeadline).FontWeight(weightSemibold)
-					mutedText(c, t, locales.ServicesHint())
+					if s.running || len(s.results) > 0 {
+						mutedText(c, t, d.servicesSummaryText())
+					} else {
+						mutedText(c, t, locales.ServicesHint())
+					}
 				})
 				spec := buttonSpec{label: locales.ServicesCheck(), icon: iconRefresh, style: primaryButton(t),
 					disabled: d.services.Unlock == nil}
@@ -397,12 +417,19 @@ func serviceRow(c *ui.Context, t *ui.Theme, svc model.UnlockService, r model.Unl
 	})
 }
 
-// unlockMark is a service's mark, or its initials, on a small tile.
+// unlockMark is a service's mark, or its initials, on a tile of the dialog's
+// size.
 func unlockMark(c *ui.Context, t *ui.Theme, svc model.UnlockService) {
-	ui.Box(c).Key("mark").Width(serviceMarkTile).Height(serviceMarkTile).Radius(radiusControl).Center().
+	unlockMarkSized(c, t, svc, serviceMarkTile)
+}
+
+// unlockMarkSized is unlockMark on a tile of size.
+func unlockMarkSized(c *ui.Context, t *ui.Theme, svc model.UnlockService, size float32) {
+	ui.Box(c).Key("mark").Width(size).Height(size).Radius(radiusControl).Center().
 		Background(t.Text.Alpha(neutralFillAlpha)).Children(func() {
 		if mark, ok := serviceMarks[svc]; ok {
-			ui.Icon(c, mark).Width(serviceMarkGlyph).Height(serviceMarkGlyph).TextColor(t.Text)
+			glyph := size * serviceMarkRatio
+			ui.Icon(c, mark).Width(glyph).Height(glyph).TextColor(t.Text)
 			return
 		}
 		ui.Text(c, serviceInitials[svc]).FontSize(fontCaption).FontWeight(weightBold).TextColor(t.Text).NoWrap()
