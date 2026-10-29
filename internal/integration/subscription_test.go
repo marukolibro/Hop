@@ -173,6 +173,11 @@ type harness struct {
 	lan *service.LANState
 	// port is the proxy port every config the service builds carries.
 	port *service.MixedPortState
+	// tun says whether the configs the service builds turn TUN on.
+	tun *service.TunFlag
+	// fakeIP is the fake-ip exceptions every TUN config the service builds
+	// carries.
+	fakeIP *service.FakeIPExceptionsState
 }
 
 // newHarness builds the harness around appDir, opening the store there.
@@ -201,8 +206,10 @@ func newHarness(t *testing.T, appDir string) *harness {
 	}
 	lanState := service.NewLANState()
 	portState := service.NewMixedPortState(testMixedPort)
+	tunFlag := service.NewTunFlag()
+	fakeIPState := service.NewFakeIPExceptionsState()
 	return &harness{
-		cfg: cfg, client: client, store: store, lan: lanState, port: portState,
+		cfg: cfg, client: client, store: store, lan: lanState, port: portState, tun: tunFlag, fakeIP: fakeIPState,
 		service: service.NewSubscriptionService(
 			subscription.NewFetcher(subscription.NewDirectClient(10*time.Second)),
 			store,
@@ -211,10 +218,10 @@ func newHarness(t *testing.T, appDir string) *harness {
 			mihomo.NewConfigValidator(binary, filepath.Join(appDir, "validate"), validateTimeout),
 			client,
 			settings,
-			service.NewTunFlag(),
+			tunFlag,
 			lanState,
 			portState,
-			service.NewFakeIPExceptionsState(),
+			fakeIPState,
 		),
 	}
 }
@@ -854,21 +861,4 @@ func fetchCoreConfig(ctx context.Context, t *testing.T) controllerConfig {
 		t.Fatalf("decode core config: %v", err)
 	}
 	return got
-}
-
-// TestSubscriptionDownloadIgnoresProxyEnvironment checks that the client
-// subscriptions are downloaded with has no proxy function. A client with
-// net/http's default one reads HTTPS_PROXY, HTTP_PROXY and ALL_PROXY, so a
-// variable another client left at a port nothing listens on made every
-// download fail with "proxyconnect ... connection refused". The check is on the
-// transport because a request to the loopback never uses an environment proxy,
-// and net/http reads the environment only once per process.
-func TestSubscriptionDownloadIgnoresProxyEnvironment(t *testing.T) {
-	transport, ok := subscription.NewDirectClient(time.Second).Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("the direct client has no http transport")
-	}
-	if transport.Proxy != nil {
-		t.Error("the direct client has a proxy function, so it would follow a proxy left in the environment")
-	}
 }

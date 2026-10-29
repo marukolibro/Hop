@@ -248,13 +248,20 @@ func hopDNS() dnsConfig {
 func tunDNS(exceptions []string) dnsConfig {
 	cfg := hopDNS()
 	cfg.EnhancedMode = "fake-ip"
-	cfg.FakeIPFilter = slices.Clone(tunFakeIPFilter)
-	for _, name := range exceptions {
-		if !slices.Contains(cfg.FakeIPFilter, name) {
-			cfg.FakeIPFilter = append(cfg.FakeIPFilter, name)
+	cfg.FakeIPFilter = withMissing(tunFakeIPFilter, exceptions)
+	return cfg
+}
+
+// withMissing returns a copy of list followed by each of names it does not
+// hold yet, in order.
+func withMissing(list []string, names []string) []string {
+	merged := slices.Clone(list)
+	for _, name := range names {
+		if !slices.Contains(merged, name) {
+			merged = append(merged, name)
 		}
 	}
-	return cfg
+	return merged
 }
 
 // tunFakeIPFilter names what must never resolve to a fake IP: the LAN's own

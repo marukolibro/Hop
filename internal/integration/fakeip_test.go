@@ -2,7 +2,7 @@ package integration
 
 import (
 	"context"
-	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -77,7 +77,7 @@ func TestNormalizeFakeIPExceptions(t *testing.T) {
 	if want := []string{"example.com", "*.example.com", "+.example.com"}; !slices.Equal(got, want) {
 		t.Errorf("normalized %v, want %v", got, want)
 	}
-	for _, bad := range []string{"", "localhost", "*.com.", "a b.com", "*.*.example.com", "https://example.com", "exa_mple.com"} {
+	for _, bad := range []string{"", "localhost", "*.com.", "a b.com", "*.*.example.com", "*.+.example.com", "https://example.com", "exa_mple.com"} {
 		if _, err := service.NormalizeFakeIPExceptions([]string{bad}); err == nil {
 			t.Errorf("%q was accepted", bad)
 		}
@@ -95,34 +95,34 @@ func countOf(names []string, name string) int {
 	return count
 }
 
-// failingReloader is a core that rejects every config it is handed.
-type failingReloader struct{}
-
-func (failingReloader) ReloadRuntime(context.Context) error { return errors.New("config rejected") }
-
 // TestFakeIPExceptionsSurviveARejectedChange checks that a list is kept on
-// disk across a restart, and that a config the core rejects leaves the list
-// the user had, in the store and in the state the configs are built from.
+// disk across a restart, and that a change the core does not take leaves the
+// list the user had, in the store and in the state the configs are built
+// from. The core is never started: under TUN the change is applied to it, and
+// a test never turns TUN on, so the change fails as it does when the core is
+// down.
 func TestFakeIPExceptionsSurviveARejectedChange(t *testing.T) {
 	dir := t.TempDir()
-	store, err := profile.NewStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	state := service.NewFakeIPExceptionsState()
-	tun := service.NewTunFlag()
-	exceptions := service.NewFakeIPExceptionsService(state, store, failingReloader{}, tun)
+	h := newHarness(t, dir)
+	exceptions := service.NewFakeIPExceptionsService(h.fakeIP, h.store, h.service, h.tun)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-	// With TUN off nothing is reloaded, so the change is kept.
-	if err := exceptions.Save(context.Background(), []string{"a.example.com"}); err != nil {
+	// With TUN off nothing is applied, so the change is kept.
+	if err := exceptions.Save(ctx, []string{"a.example.com"}); err != nil {
 		t.Fatal(err)
 	}
-	tun.Set(true)
-	if err := exceptions.Save(context.Background(), []string{"b.example.com"}); err == nil {
-		t.Fatal("a config the core rejected was kept")
+	// The change would carry TUN to a core that answers, so none may.
+	if conn, err := net.DialTimeout("tcp", testController, time.Second); err == nil {
+		conn.Close()
+		t.Fatalf("something answers on %s; a TUN config must not reach it", testController)
+	}
+	h.tun.Set(true)
+	if err := exceptions.Save(ctx, []string{"b.example.com"}); err == nil {
+		t.Fatal("a change the core did not take was kept")
 	}
 	if got := exceptions.List(); !slices.Equal(got, []string{"a.example.com"}) {
-		t.Errorf("after the rejected change the list is %v, want the previous one", got)
+		t.Errorf("after the failed change the list is %v, want the previous one", got)
 	}
 
 	// A new start reads what the store holds.

@@ -24,6 +24,7 @@
   "actionReadTun": "Couldn't read the TUN status",
   "actionRefreshSubscription": "Couldn't refresh the subscription",
   "actionRestoreCore": "Couldn't restore the bundled core",
+  "actionSaveFakeIP": "Couldn't save Fake-IP exceptions",
   "actionSaveRules": "Couldn't save custom rules",
   "actionSaveSettings": "Couldn't save settings",
   "actionSwitchMode": "Couldn't switch the outbound mode",

@@ -274,6 +274,16 @@ func (msgs Messages) ActionRestoreCore() string {
 	return Catalog.Format(msgs.locale, "actionRestoreCore", nil)
 }
 
+// ActionSaveFakeIP says "Couldn't save Fake-IP exceptions"
+// in the language the app shows.
+func ActionSaveFakeIP() string { return In(i18n.Locale()).ActionSaveFakeIP() }
+
+// ActionSaveFakeIP says "Couldn't save Fake-IP exceptions"
+// in the language of msgs.
+func (msgs Messages) ActionSaveFakeIP() string {
+	return Catalog.Format(msgs.locale, "actionSaveFakeIP", nil)
+}
+
 // ActionSaveRules says "Couldn't save custom rules"
 // in the language the app shows.
 func ActionSaveRules() string { return In(i18n.Locale()).ActionSaveRules() }

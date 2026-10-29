@@ -145,13 +145,7 @@ func applyNodeEntries(cfg *runtimeConfig, entries nodeEntries, servers []string,
 		cfg.DNS.NameserverPolicy = policy
 	}
 	if cfg.DNS.EnhancedMode == "fake-ip" {
-		filter := slices.Clone(cfg.DNS.FakeIPFilter)
-		for _, name := range append(slices.Clone(servers), entries.aliases...) {
-			if !slices.Contains(filter, name) {
-				filter = append(filter, name)
-			}
-		}
-		cfg.DNS.FakeIPFilter = filter
+		cfg.DNS.FakeIPFilter = withMissing(cfg.DNS.FakeIPFilter, append(slices.Clone(servers), entries.aliases...))
 	}
 	return nil
 }

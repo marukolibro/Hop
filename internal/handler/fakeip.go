@@ -23,7 +23,7 @@ type fakeIPState struct {
 // fakeIPNamesFromText reads the names the user typed: one per line, though
 // commas and spaces between names work too.
 func fakeIPNamesFromText(text string) []string {
-	return strings.FieldsFunc(text, func(r rune) bool { return r == ',' || r == ';' || unicode.IsSpace(r) })
+	return strings.FieldsFunc(text, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
 }
 
 // openFakeIPEditor shows the dialog with the stored names, one per line.
@@ -37,8 +37,10 @@ func (d *Dashboard) openFakeIPEditor() {
 }
 
 // submitFakeIPEditor saves the typed names in the background. The dialog
-// stays open with the service's reason when the list is refused, and the
-// service keeps the previous list when the core rejects the rebuilt config.
+// stays open with the service's reason when the list is refused, or the
+// reason is shown as a failure when the user closed it meanwhile; the service
+// keeps the previous list when the core rejects the rebuilt config. A kept
+// list may have reloaded the core, so the view is read again.
 func (d *Dashboard) submitFakeIPEditor() {
 	f := &d.fakeIP
 	if f.busy || d.controlsLocked() {
@@ -53,10 +55,16 @@ func (d *Dashboard) submitFakeIPEditor() {
 			f.busy = false
 			f.names = d.services.FakeIP.List()
 			if err != nil {
-				f.err = err.Error()
+				if f.editorOpen {
+					f.err = err.Error()
+					return
+				}
+				d.fail(actionSaveFakeIP, err)
 				return
 			}
 			f.editorOpen = false
+			gen := d.nextViewGen()
+			go d.loadView(ctx, win, gen)
 		})
 	}()
 }
@@ -104,7 +112,7 @@ func (d *Dashboard) fakeIPDialog(c *ui.Context, t *ui.Theme) {
 				})
 				ui.Row(c).Gap(gapSmall).Justify(ui.End).Children(func() {
 					button(c, buttonSpec{label: locales.Cancel(), style: softButton(t), disabled: f.busy}, func() { f.editorOpen = false })
-					button(c, buttonSpec{label: locales.SaveChanges(), style: primaryButton(t), busy: f.busy, disabled: f.busy}, d.submitFakeIPEditor)
+					button(c, buttonSpec{label: locales.SaveChanges(), style: primaryButton(t), busy: f.busy, disabled: d.controlsLocked()}, d.submitFakeIPEditor)
 				})
 			})
 		})

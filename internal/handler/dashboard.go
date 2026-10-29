@@ -896,6 +896,7 @@ var (
 	actionSaveSettings        = action{"save-settings", locales.ActionSaveSettings}
 	actionReadRules           = action{"read-rules", locales.ActionReadRules}
 	actionSaveRules           = action{"save-rules", locales.ActionSaveRules}
+	actionSaveFakeIP          = action{"save-fake-ip", locales.ActionSaveFakeIP}
 	actionReadGeodata         = action{"read-geodata", locales.ActionReadGeodata}
 	actionUpdateGeodata       = action{"update-geodata", locales.ActionUpdateGeodata}
 	actionCheckAppUpdate      = action{"check-app-update", locales.ActionCheckAppUpdate}

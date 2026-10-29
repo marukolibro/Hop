@@ -85,11 +85,22 @@ func validateFakeIPException(name string) error {
 	if name == "" {
 		return errors.New("the name is empty")
 	}
-	domain := strings.TrimPrefix(strings.TrimPrefix(name, fakeIPSubdomains), fakeIPSuffix)
+	domain := name
+	if rest, found := strings.CutPrefix(name, fakeIPSubdomains); found {
+		domain = rest
+	} else if rest, found := strings.CutPrefix(name, fakeIPSuffix); found {
+		domain = rest
+	}
 	if !strings.Contains(domain, ".") {
 		return errors.New("a name needs at least two labels, such as example.com")
 	}
 	return validateDomain(domain)
+}
+
+// FakeIPRuntime has the core run the config Hop would start it with now, a
+// subscription's or the bootstrap profile.
+type FakeIPRuntime interface {
+	ApplyCurrent(ctx context.Context) error
 }
 
 // FakeIPExceptionsService keeps the names the user asks the TUN resolver to
@@ -98,7 +109,7 @@ func validateFakeIPException(name string) error {
 type FakeIPExceptionsService struct {
 	state   *FakeIPExceptionsState
 	store   FakeIPExceptionStore
-	runtime RuntimeReloader
+	runtime FakeIPRuntime
 	tun     *TunFlag
 	// mu serializes changes, so two never reload at once.
 	mu sync.Mutex
@@ -107,7 +118,7 @@ type FakeIPExceptionsService struct {
 // NewFakeIPExceptionsService returns a service keeping the list in store and
 // state. A change reaches a running core through runtime, but only while tun
 // is on: the exceptions mean nothing to the plain resolver.
-func NewFakeIPExceptionsService(state *FakeIPExceptionsState, store FakeIPExceptionStore, runtime RuntimeReloader, tun *TunFlag) *FakeIPExceptionsService {
+func NewFakeIPExceptionsService(state *FakeIPExceptionsState, store FakeIPExceptionStore, runtime FakeIPRuntime, tun *TunFlag) *FakeIPExceptionsService {
 	return &FakeIPExceptionsService{state: state, store: store, runtime: runtime, tun: tun}
 }
 
@@ -133,7 +144,7 @@ func (s *FakeIPExceptionsService) Save(ctx context.Context, names []string) erro
 	if !s.tun.On() {
 		return nil
 	}
-	if err := s.runtime.ReloadRuntime(ctx); err != nil {
+	if err := s.runtime.ApplyCurrent(ctx); err != nil {
 		s.state.Set(previous)
 		if undoErr := s.store.SaveFakeIPExceptions(previous); undoErr != nil {
 			return errors.Join(err, fmt.Errorf("put the previous fake-ip exceptions back in the store: %w", undoErr))

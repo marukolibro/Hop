@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -34,13 +33,6 @@ const (
 	minBareCredentialLen = 8
 	fetchAttempts        = 3
 	retryDelay           = 2 * time.Second
-
-	// The direct client's connection settings are net/http's own defaults.
-	directDialTimeout         = 30 * time.Second
-	directKeepAlive           = 30 * time.Second
-	directMaxIdleConns        = 100
-	directIdleConnTimeout     = 90 * time.Second
-	directTLSHandshakeTimeout = 10 * time.Second
 )
 
 // StatusError is a provider response that was not a success.
@@ -54,20 +46,14 @@ func (e *StatusError) Error() string {
 	return fmt.Sprintf("subscription provider %s returned status %d: %s", e.Target, e.Status, e.Body)
 }
 
-// NewDirectClient returns a client that reaches providers directly: it does not
-// read HTTP_PROXY, HTTPS_PROXY or ALL_PROXY, which another client may have
-// left in the environment pointing at a port nothing listens on, and it does
-// not use the system proxy. timeout bounds each request.
+// NewDirectClient returns a client that reaches providers directly: net/http's
+// default transport without its proxy, so it does not read HTTP_PROXY or
+// HTTPS_PROXY, which another client may have left in the environment pointing
+// at a port nothing listens on. timeout bounds each request.
 func NewDirectClient(timeout time.Duration) *http.Client {
-	return &http.Client{Timeout: timeout, Transport: &http.Transport{
-		Proxy:                 nil,
-		DialContext:           (&net.Dialer{Timeout: directDialTimeout, KeepAlive: directKeepAlive}).DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          directMaxIdleConns,
-		IdleConnTimeout:       directIdleConnTimeout,
-		TLSHandshakeTimeout:   directTLSHandshakeTimeout,
-		ExpectContinueTimeout: time.Second,
-	}}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	return &http.Client{Timeout: timeout, Transport: transport}
 }
 
 // Fetcher is a connector to subscription providers.

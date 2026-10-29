@@ -24,6 +24,7 @@
   "actionReadTun": "读取 TUN 状态失败",
   "actionRefreshSubscription": "刷新订阅失败",
   "actionRestoreCore": "恢复内置内核失败",
+  "actionSaveFakeIP": "保存 Fake-IP 例外失败",
   "actionSaveRules": "保存自定义规则失败",
   "actionSaveSettings": "保存设置失败",
   "actionSwitchMode": "切换出站模式失败",
