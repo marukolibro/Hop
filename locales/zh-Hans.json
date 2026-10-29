@@ -316,6 +316,7 @@
   "subFileFilterAll": "所有文件",
   "subFileFilterConfig": "配置文件",
   "subFileRead": "已读取 {name}",
+  "subApplying": "正在加载订阅。第一次加载要下载它引用的远程规则集，可能需要一分钟左右。",
   "subFileTypes": "支持 .yaml、.yml、.txt、.conf，或任意文件",
   "subLocalNameHint": "选择文件时会自动填入文件名；名称留空时显示为「{fallback}」。",
   "subManage": "管理订阅",

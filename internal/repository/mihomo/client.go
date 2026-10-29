@@ -25,6 +25,14 @@ import (
 const (
 	globalGroup = "GLOBAL"
 	maxBodySize = 4 << 20
+	// reloadTimeout bounds a config reload, which the core answers only
+	// after it has loaded every provider the config names. One it has no
+	// copy of yet it downloads then, direct, giving each 20 s; the proxy
+	// providers load before the rule providers, each kind all at once on
+	// 64-bit builds, so a first reload can take some 40 s. It stays under
+	// the app's helper call timeout, so a reload the helper runs fails with
+	// the helper's own error, not the app's.
+	reloadTimeout = 50 * time.Second
 )
 
 // APIError is a controller response that was not a success.
@@ -45,7 +53,8 @@ type Client struct {
 	secret     string
 	configPath string
 	http       *http.Client
-	// timeout bounds each request; a delay test adds its own timeout to it.
+	// timeout bounds each request but a reload (see reloadTimeout); a delay
+	// test adds its own timeout to it.
 	timeout time.Duration
 }
 
@@ -238,7 +247,7 @@ func (c *Client) reload(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("encode reload request (path=%q): %w", c.configPath, err)
 	}
-	_, err = c.do(ctx, c.timeout, http.MethodPut, "/configs?force=true", body, http.StatusNoContent)
+	_, err = c.do(ctx, reloadTimeout, http.MethodPut, "/configs?force=true", body, http.StatusNoContent)
 	return err
 }
 

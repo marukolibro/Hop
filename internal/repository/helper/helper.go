@@ -19,8 +19,10 @@ import (
 // version 8 accepts a config that serves the private networks (LAN access)
 // where 7 refused every config that serves a network, and version 9 installs
 // a core only from a release archive it verified against GitHub itself, where
-// 8 took any binary that called itself mihomo.
-const Version = "9"
+// 8 took any binary that called itself mihomo, and version 10 waits for a
+// reload as long as the core takes to download the config's providers, where
+// 9 gave up after 5 s and reported a config the core went on to run.
+const Version = "10"
 
 // LANSources are the only source ranges a core run as root may be told to
 // answer when the config serves the network: this computer and the private

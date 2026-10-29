@@ -100,7 +100,7 @@ on this machine while developing Hop. Hop must never interfere with it.
   inside `helper.LANSources` (the one list the app writes too), and refuses a
   listener that is not on the loopback; `TestHelperServesItsCore` checks that
   against a real helper. That rule is a privileged boundary: widening it needs
-  the user's say, and it changes `helper.Version` (now 9), which makes an
+  the user's say, and it changes `helper.Version` (now 10), which makes an
   installed older helper be replaced on the user's authorization.
 - The unlock check (`service/unlock.go`, `repository/unlock`) needs a request
   through one chosen group, which the controller cannot make: its delay test
