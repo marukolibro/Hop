@@ -204,7 +204,7 @@ func newHarness(t *testing.T, appDir string) *harness {
 	return &harness{
 		cfg: cfg, client: client, store: store, lan: lanState, port: portState,
 		service: service.NewSubscriptionService(
-			subscription.NewFetcher(&http.Client{Timeout: 10 * time.Second}),
+			subscription.NewFetcher(subscription.NewDirectClient(10*time.Second)),
 			store,
 			store,
 			client,
@@ -854,4 +854,21 @@ func fetchCoreConfig(ctx context.Context, t *testing.T) controllerConfig {
 		t.Fatalf("decode core config: %v", err)
 	}
 	return got
+}
+
+// TestSubscriptionDownloadIgnoresProxyEnvironment checks that the client
+// subscriptions are downloaded with has no proxy function. A client with
+// net/http's default one reads HTTPS_PROXY, HTTP_PROXY and ALL_PROXY, so a
+// variable another client left at a port nothing listens on made every
+// download fail with "proxyconnect ... connection refused". The check is on the
+// transport because a request to the loopback never uses an environment proxy,
+// and net/http reads the environment only once per process.
+func TestSubscriptionDownloadIgnoresProxyEnvironment(t *testing.T) {
+	transport, ok := subscription.NewDirectClient(time.Second).Transport.(*http.Transport)
+	if !ok {
+		t.Fatal("the direct client has no http transport")
+	}
+	if transport.Proxy != nil {
+		t.Error("the direct client has a proxy function, so it would follow a proxy left in the environment")
+	}
 }

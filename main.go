@@ -174,7 +174,7 @@ func run() (err error) {
 		return err
 	}
 	profiles := service.NewSubscriptionService(
-		subscription.NewFetcher(&http.Client{Timeout: downloadTimeout}),
+		subscription.NewFetcher(subscription.NewDirectClient(downloadTimeout)),
 		store,
 		// The custom rules go ahead of every config the service builds.
 		store,

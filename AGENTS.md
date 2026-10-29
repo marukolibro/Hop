@@ -47,6 +47,10 @@ on this machine while developing Hop. Hop must never interfere with it.
 - A leftover core is stopped only through `mihomo.ReapStale`, which acts on
   the pid in Hop's own `mihomo.pid` and only when that process's command line
   carries Hop's home directory. Never kill a process by name or by port.
+- Subscription downloads go direct (`subscription.NewDirectClient`): they never
+  read `HTTP(S)_PROXY` from the environment, where another client may have left
+  a dead port. Only core releases, geodata and the exit IP go through Hop's own
+  mixed port.
 - Hop listens only on `127.0.0.1:17890` (mixed, or the port the user chose in
   settings, see below) and `127.0.0.1:19090`
   (controller), plus `127.0.0.1:17853` (the core's DNS, opened only for a
