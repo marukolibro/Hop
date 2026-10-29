@@ -4158,11 +4158,11 @@ func (msgs Messages) LanStateOn() string {
 	return Catalog.Format(msgs.locale, "lanStateOn", nil)
 }
 
-// LanStateOnPort says "On · port {port}"
+// LanStateOnPort says "Port {port}"
 // in the language the app shows.
 func LanStateOnPort(port string) string { return In(i18n.Locale()).LanStateOnPort(port) }
 
-// LanStateOnPort says "On · port {port}"
+// LanStateOnPort says "Port {port}"
 // in the language of msgs.
 func (msgs Messages) LanStateOnPort(port string) string {
 	return Catalog.Format(msgs.locale, "lanStateOnPort", map[string]any{"port": port})

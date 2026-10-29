@@ -805,7 +805,7 @@
   "lanProxy": "LAN proxy",
   "lanStateOff": "Off",
   "lanStateOn": "On",
-  "lanStateOnPort": "On · port {port}",
+  "lanStateOnPort": "Port {port}",
   "servicesAll": "All services",
   "servicesAllWork": "All work",
   "servicesIdle": "Not checked"

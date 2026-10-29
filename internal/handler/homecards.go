@@ -3,33 +3,47 @@ package handler
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/internal/service"
 	"hop/locales"
 )
 
 const (
-	// homeCardPadY and homeCardPadX pad a card of the home row.
-	homeCardPadY float32 = 14
-	homeCardPadX float32 = 16
+	// homeCardPadY and homeCardPadX pad a card of the row.
+	homeCardPadY float32 = 16
+	homeCardPadX float32 = 18
+	// cardHeaderHeight is a card's title row, as tall as the icon buttons at
+	// its end; cardHeaderIcon is the icon before the title and cardTitleInk
+	// how dark the title is against the card.
+	cardHeaderHeight float32 = 24
+	cardHeaderIcon   float32 = 14
+	cardTitleInk     float32 = 0.72
+	// modeButtonHeight is a mode's button; the bar holds them with
+	// modeBarPad around.
+	modeButtonHeight float32 = 40
+	modeBarPad       float32 = 8
 	// serviceTilesShown is how many services the services card shows; the
 	// dialog behind it lists them all.
 	serviceTilesShown = 4
 	// serviceMarkRatio is a mark's glyph as a share of the tile it sits on.
 	serviceMarkRatio float32 = 0.54
-	// lanSwitchPad pads the row that holds the LAN proxy's switch.
+	// lanSwitchPad pads the row that holds the LAN proxy's switch, and
+	// lanOnFill is how much of the accent that row takes while it is on.
 	lanSwitchPad float32 = 9
+	lanOnFill    float32 = 0.14
 )
 
-// homeCardColumns is how many cards the row holds in width: four in a wide
-// window, then two, then one.
+// homeCardColumns is how many of the three cards the row holds in width:
+// three in a wide window, then two, then one.
 func homeCardColumns(width float32) int {
 	switch {
-	case width >= 4*homeCardMinWidth+3*gapMedium:
-		return 4
+	case width >= 3*homeCardMinWidth+2*gapMedium:
+		return 3
 	case width >= 2*homeCardMinWidth+gapMedium:
 		return 2
 	}
@@ -43,38 +57,94 @@ func nodesPaneWidth(c *ui.Context) float32 {
 	return width - sidebarWidthFor(width) - hairlineWidth - 2*pagePadding
 }
 
-// homeCards is the row of four cards under the hero: the outbound mode, the
-// address other devices use with the LAN proxy's switch, the services, and
-// the memory Hop and its core hold.
+// homeCards is what sits between the hero and the nodes: the outbound mode as
+// one bar across, then a row of cards for the address other devices use with
+// the LAN proxy's switch, the services, and the memory Hop and its core hold.
 func (d *Dashboard) homeCards(c *ui.Context, t *ui.Theme) {
-	paneWidth := nodesPaneWidth(c)
-	columns := homeCardColumns(paneWidth)
-	cardWidth := (paneWidth - float32(columns-1)*gapMedium) / float32(columns)
+	d.modeBar(c, t)
+	columns := homeCardColumns(nodesPaneWidth(c))
 	ui.Grid(c).Key("homeCards").Columns(columns).Gap(gapMedium).Children(func() {
-		d.modeCard(c, t, cardWidth)
 		d.lanCard(c, t)
 		d.servicesCard(c, t)
 		d.memoryCard(c, t)
 	})
 }
 
-// homeCard is one card of the row: the panel glass with room around it.
+// homeCard is one card of the row: the panel glass, as round and as lifted as
+// the hero, with room around it.
 func homeCard(c *ui.Context, t *ui.Theme, key string) ui.Element {
-	return panelCard(c, t).Key(key).Padding(homeCardPadY, homeCardPadX).Gap(gapMedium)
+	return panelCard(c, t).Key(key).Padding(homeCardPadY, homeCardPadX).Gap(gapMedium).Radius(heroRadius).
+		Shadow(0, 3, 12, 0, glassCardShadow(t))
 }
 
-// cardTitle is a card's name.
-func cardTitle(c *ui.Context, title string) {
-	ui.Text(c, title).FontSize(fontEmphasis).FontWeight(weightSemibold).NoWrap()
+// cardHeader is a card's title row: its icon, its name, and what trails it.
+func cardHeader(c *ui.Context, t *ui.Theme, key string, icon *ui.SVG, title string, trailing func()) {
+	ui.Row(c).Key(key).Gap(gapSmall).Height(cardHeaderHeight).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, icon).Width(cardHeaderIcon).Height(cardHeaderIcon).TextColor(t.TextMuted)
+		ui.Text(c, title).FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(t.Text.Alpha(cardTitleInk)).NoWrap().
+			Translate(0, -opticalLift)
+		ui.Box(c).Grow(1)
+		if trailing != nil {
+			trailing()
+		}
+	})
 }
 
-// modeCard chooses the outbound mode, with what the mode does under it.
-func (d *Dashboard) modeCard(c *ui.Context, t *ui.Theme, cardWidth float32) {
-	homeCard(c, t, "modeCard").Children(func() {
-		cardTitle(c, locales.OutboundMode())
-		segment := (cardWidth - 2*homeCardPadX - 2*switchInset) / float32(len(modeLabels()))
-		d.modeSwitch(c, pageSwitchStyle(t, segment))
-		captionText(c, t, modeHints()[d.modeIndex]).MaxLines(2)
+// modeBar chooses the outbound mode: its name, then a button for each mode
+// across the row, the chosen one filled with the accent. Each button's
+// tooltip says what the mode does.
+func (d *Dashboard) modeBar(c *ui.Context, t *ui.Theme) {
+	disabled := d.modeLocked()
+	bar := ui.Row(c).Key("modeBar").Gap(gapMedium).AlignItems(ui.Center).Disabled(disabled).
+		Padding(modeBarPad, modeBarPad, modeBarPad, homeCardPadX).Radius((modeButtonHeight+2*modeBarPad)/2).
+		Border(hairlineWidth, glassMaterialLine(t)).Shadow(0, 3, 12, 0, glassCardShadow(t))
+	if onGlass(t) {
+		bar.Background(glassPanel(t))
+	} else {
+		bar.Background(t.Surface)
+	}
+	if disabled {
+		bar.Opacity(disabledOpacity)
+	}
+	icons := []*ui.SVG{iconList, iconGlobe, iconDirect}
+	bar.Children(func() {
+		ui.Icon(c, iconRoute).Width(cardHeaderIcon).Height(cardHeaderIcon).TextColor(t.TextMuted)
+		ui.Text(c, locales.OutboundMode()).FontSize(fontSecondary).FontWeight(weightSemibold).
+			TextColor(t.Text.Alpha(cardTitleInk)).NoWrap().Translate(0, -opticalLift)
+		for i, label := range modeLabels() {
+			d.modeButton(c, t, i, label, icons[i])
+		}
+	})
+}
+
+// modeButton is one mode on the bar.
+func (d *Dashboard) modeButton(c *ui.Context, t *ui.Theme, index int, label string, icon *ui.SVG) {
+	chosen := d.modeIndex == index
+	b := ui.ButtonBase(c).Key("mode-" + strconv.Itoa(index)).Label(label).Grow(1).Basis(0).MinWidth(0).
+		Height(modeButtonHeight).Radius(modeButtonHeight / 2).Gap(gapSmall).Cursor(ui.CursorPointer).
+		Tooltip(modeHints()[index])
+	fill, ink := t.Text.Alpha(neutralFillAlpha), t.Text
+	switch {
+	case chosen:
+		fill, ink = t.Accent, t.AccentText
+	case b.Hovered():
+		fill = t.Text.Alpha(2 * neutralFillAlpha)
+	}
+	b.Background(b.AnimateColor("fill", fill, ui.Smooth))
+	b.OnClick(func() {
+		if d.modeIndex == index || d.modeLocked() {
+			return
+		}
+		d.modeIndex = index
+		d.setMode(service.Modes[index])
+	})
+	b.Children(func() {
+		ui.Icon(c, icon).Width(cardHeaderIcon + 2).Height(cardHeaderIcon + 2).TextColor(ink)
+		weight := weightMedium
+		if chosen {
+			weight = weightSemibold
+		}
+		ui.Text(c, label).FontSize(fontBody).FontWeight(weight).TextColor(ink).NoWrap().Translate(0, -opticalLift)
 	})
 }
 
@@ -100,9 +170,7 @@ func (d *Dashboard) lanCard(c *ui.Context, t *ui.Theme) {
 	host, port := lanAddress(l.status, l.loaded)
 	locked := !l.loaded || l.busy || d.controlsLocked()
 	homeCard(c, t, "lanCard").Children(func() {
-		ui.Row(c).Key("lanTitle").AlignItems(ui.Center).Children(func() {
-			cardTitle(c, locales.LanIP())
-			ui.Box(c).Grow(1)
+		cardHeader(c, t, "lanTitle", iconLaptop, locales.LanIP(), func() {
 			if host != "" {
 				iconButton(c, locales.Copy(), iconCopy, mainSoftButton(t), func() {
 					c.WriteClipboard(host)
@@ -113,13 +181,19 @@ func (d *Dashboard) lanCard(c *ui.Context, t *ui.Theme) {
 		if host == "" {
 			mutedText(c, t, lanMissing(l.loaded))
 		} else {
-			ui.Text(c, host).Font("monospace").FontSize(fontHeadline).FontWeight(weightSemibold).NoWrap()
+			ui.Text(c, host).FontSize(fontExit).FontWeight(weightSemibold).FontFeatures("tnum").LetterSpacing(-0.4).NoWrap()
+		}
+		ui.Box(c).Grow(1)
+		// While the proxy is on, its row and its icon take the accent.
+		rowFill, badgeFill, badgeInk := t.Text.Alpha(neutralFillAlpha/2), t.Text.Alpha(neutralFillAlpha), t.TextMuted
+		if l.status.Enabled {
+			rowFill, badgeFill, badgeInk = t.Accent.Alpha(lanOnFill), t.Accent, t.AccentText
 		}
 		ui.Row(c).Key("lanSwitch").Gap(gapMedium).Padding(lanSwitchPad).Radius(radiusTile).AlignItems(ui.Center).
-			Background(t.Text.Alpha(neutralFillAlpha / 2)).Children(func() {
+			Background(rowFill).Children(func() {
 			ui.Box(c).Key("lanIcon").Width(serviceMarkTile).Height(serviceMarkTile).Radius(serviceMarkTile / 2).Center().
-				Background(t.Text.Alpha(neutralFillAlpha)).Children(func() {
-				ui.Icon(c, iconWifi).Width(serviceMarkGlyph).Height(serviceMarkGlyph).TextColor(t.TextMuted)
+				Background(badgeFill).Children(func() {
+				ui.Icon(c, iconWifi).Width(serviceMarkGlyph).Height(serviceMarkGlyph).TextColor(badgeInk)
 			})
 			ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(1).Children(func() {
 				ui.Text(c, locales.LanProxy()).FontSize(fontBody).FontWeight(weightSemibold).MaxLines(1)
@@ -160,9 +234,7 @@ func lanState(enabled bool, port string) string {
 func (d *Dashboard) servicesCard(c *ui.Context, t *ui.Theme) {
 	s := &d.unlock.services
 	homeCard(c, t, "servicesCard").Children(func() {
-		ui.Row(c).Key("servicesTitle").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-			cardTitle(c, locales.ServicesTitle())
-			ui.Box(c).Grow(1)
+		cardHeader(c, t, "servicesTitle", iconShieldCheck, locales.ServicesTitle(), func() {
 			d.servicesPill(c, t)
 			label, icon := locales.ServicesCheck(), iconBolt
 			if s.running {
@@ -241,21 +313,19 @@ func serviceTile(c *ui.Context, t *ui.Theme, svc model.UnlockService, r model.Un
 	})
 }
 
-// memoryCard is the physical memory Hop and its core hold now: the sum, and a
-// bar split between the two with each one's amount under it.
+// memoryCard is the physical memory Hop and its core hold now: the sum large,
+// and under it a bar split between the two with each one's amount.
 func (d *Dashboard) memoryCard(c *ui.Context, t *ui.Theme) {
 	m := d.memory
 	total := m.App + m.Core
 	homeCard(c, t, "memoryCard").Children(func() {
-		ui.Row(c).Key("memoryTitle").AlignItems(ui.End).Children(func() {
-			cardTitle(c, locales.StatsMemory())
-			ui.Box(c).Grow(1)
-			if d.memoryKnown {
-				statsAmount(c, t, int64(total), fontHeadline)
-			} else {
-				mutedText(c, t, "—")
-			}
-		})
+		cardHeader(c, t, "memoryTitle", iconMemory, locales.StatsMemory(), nil)
+		if d.memoryKnown {
+			statsAmount(c, t, int64(total), fontExit)
+		} else {
+			mutedText(c, t, "—")
+		}
+		ui.Box(c).Grow(1)
 		share := float32(0)
 		if total > 0 {
 			share = float32(m.App) / float32(total)
@@ -263,12 +333,12 @@ func (d *Dashboard) memoryCard(c *ui.Context, t *ui.Theme) {
 		ui.Box(c).Key("memoryBar").Height(statMemoryBar).Label(locales.StatsMemory()).Draw(func(p *ui.Painter, r ui.Rect) {
 			drawMemoryBar(p, r, share, t)
 		})
-		if d.memoryKnown {
-			ui.Column(c).Key("memorySplit").Gap(gapTight).Children(func() {
+		ui.Row(c).Key("memorySplit").Wrap().Gap(gapLarge).GapY(gapTight).Height(cardHeaderHeight - gapSmall).Children(func() {
+			if d.memoryKnown {
 				statsSplit(c, t, "Hop", int64(m.App), t.Accent)
 				statsSplit(c, t, locales.StatsMemoryCore(), int64(m.Core), t.TextMuted.Alpha(statsDirectAlpha))
-			})
-		}
+			}
+		})
 	})
 }
 

@@ -255,10 +255,10 @@ for font sizes, weights, gaps or radii in views.
   height: the subscription in use on a card at its top (picker, the `Hop 智能规则`
   tag only while the profile runs Hop's rules, usage, expiry, refresh and
   manage), the groups, and the core's state at its foot. The content column
-  scrolls as one: the hero card, a row of four home cards (outbound mode, the
-  LAN address with the LAN proxy's switch, the services, the memory Hop and
-  its core hold; `homecards.go`, four across from `homeCardMinWidth` each,
-  then two, then one), the group's header, the region filters and one grid of
+  scrolls as one: the hero card, the outbound mode as one bar across, a row of
+  three home cards (the LAN address with the LAN proxy's switch, the services,
+  the memory Hop and its core hold; `homecards.go`, three across from
+  `homeCardMinWidth` each, then two, then one), the group's header, the region filters and one grid of
   node tiles. Node tiles and the lists, charts and tables on the other pages
   are translucent cards, as the design shows. Dialogs, picker popups, tooltips,
   toasts and the menu-bar flyout stay opaque cards.
@@ -311,8 +311,8 @@ for font sizes, weights, gaps or radii in views.
   the chosen page); settings and mode
   choices are `slidingSwitch`, on/off settings `ui.Switch`. In the window, the
   system proxy and TUN are the header's `statusToggle` buttons (a green dot
-  while on; every page shows them) and the outbound mode is a `slidingSwitch`
-  on its own home card; the flyout keeps all three as `togglePill`
+  while on; every page shows them) and the outbound mode is three buttons on its
+  own bar (the chosen one filled with the accent); the flyout keeps all three as `togglePill`
   (`pill.go`). Text actions are `textButton`.
 - Icons: 24-unit SVG strokes in `icons.go`, tinted by text colour.
 - CJK text in small controls sits ~1px low: apply `Translate(0, -opticalLift)`.

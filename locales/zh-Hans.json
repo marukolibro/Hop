@@ -410,7 +410,7 @@
   "lanProxy": "局域网代理",
   "lanStateOff": "已关闭",
   "lanStateOn": "已开启",
-  "lanStateOnPort": "已开启 · 端口 {port}",
+  "lanStateOnPort": "端口 {port}",
   "servicesAll": "全部服务",
   "servicesAllWork": "全部可用",
   "servicesIdle": "未检测"

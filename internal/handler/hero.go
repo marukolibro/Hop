@@ -6,7 +6,6 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
-	"hop/internal/service"
 	"hop/locales"
 )
 
@@ -155,20 +154,6 @@ func (d *Dashboard) heroReadout(c *ui.Context, t *ui.Theme) {
 // an apply could carry the mode the user just left back in.
 func (d *Dashboard) modeLocked() bool {
 	return d.view.Mode == "" || d.subscription.mutations > 0 || d.core.busy
-}
-
-// modeSwitch chooses the outbound mode as one sliding switch.
-func (d *Dashboard) modeSwitch(c *ui.Context, style switchStyle) {
-	disabled := d.modeLocked()
-	mode := ui.Box(c).Key("mode").Disabled(disabled).Tooltip(modeHints()[d.modeIndex])
-	if disabled {
-		mode.Opacity(disabledOpacity)
-	}
-	mode.Children(func() {
-		slidingSwitch(c, locales.OutboundMode(), &d.modeIndex, modeLabels(), style, func(i int) {
-			d.setMode(service.Modes[i])
-		})
-	})
 }
 
 func heroSpeedLine(c *ui.Context, t *ui.Theme, arrow string, r readout, color ui.Color) {
