@@ -113,7 +113,7 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 		})
 		entrance(ui.Column(c).Key("routes"), 4).Gap(gapSmall).
 			Disabled(d.controlsLocked()).Children(func() {
-			d.quickRoutes(c, t)
+			d.quickRoutes(c, t, openWindow)
 		})
 		entrance(ui.Row(c).Key("footer"), 5).Gap(gapSmall).Children(func() {
 			button(c, buttonSpec{label: locales.OpenMainWindow(), icon: iconWindow, style: softButton(t)}, openWindow).Grow(1)
@@ -162,6 +162,67 @@ func compactSpeed(c *ui.Context, t *ui.Theme, arrow string, r readout, color ui.
 	})
 }
 
+// flyoutSubChars is how much of a subscription's name the route row shows; the
+// menu shows the whole of each name.
+const flyoutSubChars = 8
+
+// flyoutSubName shortens a subscription name for the route row: at most
+// flyoutSubChars characters, an ellipsis when it was cut.
+func flyoutSubName(name string) string {
+	runes := []rune(name)
+	if len(runes) <= flyoutSubChars {
+		return name
+	}
+	return string(runes[:flyoutSubChars]) + "…"
+}
+
+// flyoutSubscription is the subscription in use, at the left of the panel's
+// route row: it shows the profile's name shortened by flyoutSubName and opens a
+// menu of the saved ones, the one in use checked, each item naming the whole
+// subscription. The menu's last item opens the management page in the window.
+// With no subscription in use the row draws nothing.
+func (d *Dashboard) flyoutSubscription(c *ui.Context, t *ui.Theme, openWindow func()) {
+	s := &d.subscription
+	active, ok := s.active()
+	if !ok {
+		return
+	}
+	locked := d.controlsLocked()
+	row := ui.ButtonBase(c).Key("flyoutSubscription").Label(locales.SubSelect()).
+		Value(pickerLabel(s.view.Items, active.ID)).
+		Height(switchHeight).Padding(0).Radius(radiusControl).Gap(gapTight).
+		Justify(ui.Start).Background(ui.Transparent).Disabled(locked)
+	if !locked {
+		row.Cursor(ui.CursorPointer)
+	}
+	ink := t.Text
+	if !locked && row.Hovered() {
+		ink = accentInk(t)
+	}
+	color := row.AnimateColor("ink", ink, ui.Smooth)
+	row.Menu(func(m *ui.Menu) {
+		for _, item := range s.view.Items {
+			if m.Item(pickerLabel(s.view.Items, item.ID)).Checked(item.ID == s.view.ActiveID).Chosen() {
+				d.useSubscription(item.ID)
+			}
+		}
+		m.Separator()
+		if m.Item(locales.SubManage()).Chosen() {
+			d.page = pageNodes
+			s.managing = true
+			openWindow()
+		}
+	})
+	row.Children(func() {
+		// The row shows the name alone; the menu carries the label that tells
+		// two same-named profiles apart by host.
+		ui.Icon(c, iconGlobe).Width(iconLead).Height(iconLead).TextColor(t.TextMuted)
+		ui.Text(c, flyoutSubName(active.Name)).FontSize(fontBody).
+			FontWeight(weightMedium).MaxLines(1).TextColor(color).Translate(0, -opticalLift)
+		ui.Icon(c, iconChevron).Width(iconInline).Height(iconInline).TextColor(t.TextMuted)
+	})
+}
+
 // quickGroup is the group the panel switches nodes in: the first that
 // takes a choice.
 func (d *Dashboard) quickGroup() (model.GroupView, bool) {
@@ -173,32 +234,52 @@ func (d *Dashboard) quickGroup() (model.GroupView, bool) {
 	return model.GroupView{}, false
 }
 
+// hasSubscription says a subscription is in use: the panel's routes, their
+// header and their test all follow it.
+func (d *Dashboard) hasSubscription() bool {
+	_, ok := d.subscription.active()
+	return ok
+}
+
 // testQuickRoutes measures the panel's routes as it opens, so their delays
 // are fresh without a click; a test that ran in the last quickTestEvery is
 // recent enough.
 func (d *Dashboard) testQuickRoutes() {
 	group, ok := d.quickGroup()
-	if !ok || d.testDelay == nil || d.testing != "" || time.Since(d.quickTestedAt) < quickTestEvery {
+	if !ok || !d.hasSubscription() || d.testDelay == nil || d.testing != "" || time.Since(d.quickTestedAt) < quickTestEvery {
 		return
 	}
 	d.quickTestedAt = time.Now()
 	d.testDelay(group.Name)
 }
 
-// quickRoutes lists the main group's routes with their delays; a click
-// switches to one.
-func (d *Dashboard) quickRoutes(c *ui.Context, t *ui.Theme) {
+// quickRoutes heads the panel's routes with the subscription in use and lists
+// the quick group's routes with their delays; a click switches to one. The row
+// names no group, as the window's toolbar does. With no subscription in use the
+// section offers adding one, which opens the window's add dialog, instead of the
+// built-in profile's only choices, DIRECT and REJECT.
+func (d *Dashboard) quickRoutes(c *ui.Context, t *ui.Theme, openWindow func()) {
+	if !d.hasSubscription() {
+		button(c, buttonSpec{label: locales.SubAdd(), icon: iconPlus, style: softButton(t),
+			disabled: d.controlsLocked()}, func() {
+			d.page = pageNodes
+			d.openEditor(editorAdd, "")
+			openWindow()
+		})
+		return
+	}
 	group, ok := d.quickGroup()
+	ui.Row(c).Key("routeHead").Gap(gapSmall).AlignItems(ui.Center).Height(26).Children(func() {
+		d.flyoutSubscription(c, t, openWindow)
+		ui.Box(c).Grow(1)
+		if ok {
+			d.testButton(c, t, group.Name)
+		}
+	})
 	if !ok {
 		return
 	}
 	routes := service.QuickRoutes(group, fastestCount)
-	ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Height(26).Children(func() {
-		sectionTitle(c, locales.ColumnRoute())
-		mutedText(c, t, shownName(group.Label))
-		ui.Box(c).Grow(1)
-		d.testButton(c, t, group.Name)
-	})
 	if len(routes) == 0 {
 		mutedText(c, t, locales.FlyoutNoDelays())
 		return

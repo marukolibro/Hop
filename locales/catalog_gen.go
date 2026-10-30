@@ -1164,11 +1164,11 @@ func (msgs Messages) FlyoutNoDelays() string {
 	return Catalog.Format(msgs.locale, "flyoutNoDelays", nil)
 }
 
-// FlyoutNoSubscription says "No subscription in use. Open the main window to add one."
+// FlyoutNoSubscription says "No subscription in use."
 // in the language the app shows.
 func FlyoutNoSubscription() string { return In(i18n.Locale()).FlyoutNoSubscription() }
 
-// FlyoutNoSubscription says "No subscription in use. Open the main window to add one."
+// FlyoutNoSubscription says "No subscription in use."
 // in the language of msgs.
 func (msgs Messages) FlyoutNoSubscription() string {
 	return Catalog.Format(msgs.locale, "flyoutNoSubscription", nil)
