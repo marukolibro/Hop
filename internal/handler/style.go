@@ -145,11 +145,6 @@ func captionText(c *ui.Context, t *ui.Theme, text string) ui.Element {
 	return e
 }
 
-// sectionTitle heads a group of things on a page.
-func sectionTitle(c *ui.Context, text string) ui.Element {
-	return ui.Text(c, text).FontSize(fontBody).FontWeight(weightSemibold)
-}
-
 // horizontalHairline separates one full-width region from the next.
 func horizontalHairline(c *ui.Context, t *ui.Theme) ui.Element {
 	return ui.Box(c).Height(hairlineWidth).Background(t.Border)
