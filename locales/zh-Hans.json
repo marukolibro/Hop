@@ -107,7 +107,7 @@
       }
     }
   },
-  "fakeIPDialogNote": "每行一个域名。example.com 只匹配它自己,*.example.com 匹配它的子域名,+.example.com 两者都匹配。会加在内置列表之外;TUN 开着时立即生效。",
+  "fakeIPDialogNote": "每行一个域名。example.com 只匹配它自己,*.example.com 只匹配一级子域名,+.example.com 匹配它自己和任意层级的子域名。会加在内置列表之外;TUN 开着时立即生效。",
   "fakeIPEdit": "编辑",
   "fakeIPNone": "未设置",
   "fakeIPNote": "这些域名在 TUN 下返回真实地址,而不是假地址(198.18.x.x)。某个应用在 TUN 下连不上时可以加在这里。只改 DNS 的答案,不改走哪条线路。",

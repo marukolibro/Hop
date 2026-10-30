@@ -1044,11 +1044,11 @@ func (msgs Messages) FakeIPCount(count int) string {
 	return Catalog.Format(msgs.locale, "fakeIPCount", map[string]any{"count": count})
 }
 
-// FakeIPDialogNote says "One name per line. example.com matches that name only, *.example.com its subdomains, +.example.com both. They are add…"
+// FakeIPDialogNote says "One name per line. example.com matches only itself, *.example.com one level of subdomains, and +.example.com itself a…"
 // in the language the app shows.
 func FakeIPDialogNote() string { return In(i18n.Locale()).FakeIPDialogNote() }
 
-// FakeIPDialogNote says "One name per line. example.com matches that name only, *.example.com its subdomains, +.example.com both. They are add…"
+// FakeIPDialogNote says "One name per line. example.com matches only itself, *.example.com one level of subdomains, and +.example.com itself a…"
 // in the language of msgs.
 func (msgs Messages) FakeIPDialogNote() string {
 	return Catalog.Format(msgs.locale, "fakeIPDialogNote", nil)

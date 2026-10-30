@@ -110,6 +110,10 @@ running in a webview, and the same code runs on macOS and Windows.
   does. On macOS the helper also points the system DNS at resolvers whose
   traffic enters the TUN and restores the previous DNS when the core stops.
   Hop refuses to turn TUN on while another TUN holds the default routes.
+  **Settings → TUN → Fake-IP exceptions** lists names that must get their
+  real addresses without changing routing rules. `example.com` matches only
+  itself, `*.example.com` one level of subdomains, and `+.example.com` itself
+  and subdomains at any depth.
 - **Menu bar and tray.** On macOS the menu bar shows the live speed beside the
   icon (optional); on Windows the same panel opens from the tray. It switches
   routes, nodes, modes and the proxy without opening the window.

@@ -176,7 +176,7 @@
       }
     }
   },
-  "fakeIPDialogNote": "One name per line. example.com matches that name only, *.example.com its subdomains, +.example.com both. They are added to the built-in list, and apply at once while TUN is on.",
+  "fakeIPDialogNote": "One name per line. example.com matches only itself, *.example.com one level of subdomains, and +.example.com itself and subdomains at any depth. Added to the built-in list; applied at once while TUN is on.",
   "fakeIPEdit": "Edit",
   "fakeIPNone": "None",
   "fakeIPNote": "Names that get their real address under TUN instead of a fake one (198.18.x.x). Add one when an app can't connect under TUN. This changes the DNS answer only, not the route.",

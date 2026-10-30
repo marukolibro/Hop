@@ -17,9 +17,8 @@ import (
 	"hop/internal/service"
 )
 
-// TestFakeIPExceptionsReachTunResolver checks that the user's names join the
-// built-in fake-ip filter under TUN, once each, that the plain resolver has no
-// filter at all, and that the real core accepts the result.
+// TestFakeIPExceptionsReachTunResolver 验证三种配置的例外合并及内核校验 / Verify exception merging and core validation for all three profile builders.
+// 普通解析不带过滤器，TUN 保留内置条目且去重 / Plain DNS omits the filter; TUN retains built-in entries without duplicates.
 func TestFakeIPExceptionsReachTunResolver(t *testing.T) {
 	binary := os.Getenv("HOP_MIHOMO_BINARY")
 	if binary == "" {
@@ -30,39 +29,60 @@ func TestFakeIPExceptionsReachTunResolver(t *testing.T) {
 		t.Fatal(err)
 	}
 	validator := mihomo.NewConfigValidator(binary, validateDir, 30*time.Second)
-	// The second name is a built-in one, which must not be written twice.
+	// 重复的内置域名只能保留一次 / Keep a repeated built-in domain only once.
 	exceptions := []string{"+.example.com", "*.lan", "host.example.net"}
-	for _, tun := range []bool{false, true} {
-		config, err := service.RuntimeConfig([]byte(profileA), model.RulesProvider, nil, service.RuntimeSettings{
-			MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
-			BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop",
-			Mode: model.ModeRule, Tun: tun, FakeIPExceptions: exceptions,
+	builders := []struct {
+		name  string
+		build func(service.RuntimeSettings) ([]byte, error)
+	}{
+		{name: "bootstrap", build: service.BootstrapConfig},
+		{name: "provider", build: func(settings service.RuntimeSettings) ([]byte, error) {
+			return service.RuntimeConfig([]byte(profileA), model.RulesProvider, nil, settings)
+		}},
+		{name: "hop", build: func(settings service.RuntimeSettings) ([]byte, error) {
+			return service.RuntimeConfig([]byte(profileA), model.RulesHop, nil, settings)
+		}},
+	}
+	for _, builder := range builders {
+		t.Run(builder.name, func(t *testing.T) {
+			for _, mode := range []struct {
+				name string
+				tun  bool
+			}{{name: "plain"}, {name: "tun", tun: true}} {
+				t.Run(mode.name, func(t *testing.T) {
+					config, err := builder.build(service.RuntimeSettings{
+						MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
+						BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop",
+						Mode: model.ModeRule, Tun: mode.tun, FakeIPExceptions: exceptions,
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+					var got struct {
+						DNS struct {
+							FakeIPFilter []string `yaml:"fake-ip-filter"`
+						} `yaml:"dns"`
+					}
+					if err := yaml.Unmarshal(config, &got); err != nil {
+						t.Fatal(err)
+					}
+					filter := got.DNS.FakeIPFilter
+					switch {
+					case !mode.tun && len(filter) != 0:
+						t.Errorf("the plain resolver has a fake-ip filter %v", filter)
+					case mode.tun && (!slices.Contains(filter, "+.example.com") || !slices.Contains(filter, "host.example.net")):
+						t.Errorf("the exceptions are missing from the fake-ip filter %v", filter)
+					case mode.tun && !slices.Contains(filter, "captive.apple.com"):
+						t.Errorf("the built-in names are missing from the fake-ip filter %v", filter)
+					case mode.tun && countOf(filter, "*.lan") != 1:
+						t.Errorf("a built-in name is written twice in %v", filter)
+					}
+					if err := validator.Validate(t.Context(), config); err != nil {
+						t.Errorf("the core rejected the config: %v", err)
+					}
+				})
+			}
 		})
-		if err != nil {
-			t.Fatalf("tun=%v: %v", tun, err)
-		}
-		var got struct {
-			DNS struct {
-				FakeIPFilter []string `yaml:"fake-ip-filter"`
-			} `yaml:"dns"`
-		}
-		if err := yaml.Unmarshal(config, &got); err != nil {
-			t.Fatal(err)
-		}
-		filter := got.DNS.FakeIPFilter
-		switch {
-		case !tun && len(filter) != 0:
-			t.Errorf("tun=false: the plain resolver has a fake-ip filter %v", filter)
-		case tun && (!slices.Contains(filter, "+.example.com") || !slices.Contains(filter, "host.example.net")):
-			t.Errorf("tun=true: the exceptions are missing from the fake-ip filter %v", filter)
-		case tun && !slices.Contains(filter, "captive.apple.com"):
-			t.Errorf("tun=true: the built-in names are missing from the fake-ip filter %v", filter)
-		case tun && countOf(filter, "*.lan") != 1:
-			t.Errorf("tun=true: a built-in name is written twice in %v", filter)
-		}
-		if err := validator.Validate(context.Background(), config); err != nil {
-			t.Errorf("tun=%v: the core rejected the config: %v", tun, err)
-		}
 	}
 }
 
