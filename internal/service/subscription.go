@@ -100,6 +100,8 @@ type SubscriptionService struct {
 	lan *LANState
 	// port is the proxy port every config built here carries.
 	port *MixedPortState
+	// fakeIP is the user's fake-ip exceptions every config built here carries.
+	fakeIP *FakeIPExceptionsState
 	// mu serializes every read and write: the core and the store are only ever
 	// changed one operation at a time, and no read races a commit sweeping old
 	// bodies.
@@ -110,20 +112,21 @@ type SubscriptionService struct {
 // settings, validates it with validator, applies it through applier and
 // reads the mode the core runs in through core. customRules are matched
 // ahead of every profile's own rules. tun is the flag saying whether TUN is
-// on, lan the LAN access and port the proxy port, which replaces the one in
-// settings in every config.
-func NewSubscriptionService(downloader Downloader, store SubscriptionStore, customRules CustomRuleStore, applier ConfigApplier, validator ConfigValidator, core ModeReader, settings RuntimeSettings, tun *TunFlag, lan *LANState, port *MixedPortState) *SubscriptionService {
+// on, lan the LAN access, port the proxy port, which replaces the one in
+// settings in every config, and fakeIP the names kept out of fake-ip under TUN.
+func NewSubscriptionService(downloader Downloader, store SubscriptionStore, customRules CustomRuleStore, applier ConfigApplier, validator ConfigValidator, core ModeReader, settings RuntimeSettings, tun *TunFlag, lan *LANState, port *MixedPortState, fakeIP *FakeIPExceptionsState) *SubscriptionService {
 	return &SubscriptionService{
 		downloader: downloader, store: store, customRules: customRules,
-		applier: applier, validator: validator, core: core, settings: settings, tun: tun, lan: lan, port: port,
+		applier: applier, validator: validator, core: core, settings: settings, tun: tun, lan: lan, port: port, fakeIP: fakeIP,
 	}
 }
 
 // baseSettings are the settings every config is built under, with the proxy
-// port the user has now.
+// port the user has now and the fake-ip exceptions.
 func (s *SubscriptionService) baseSettings() RuntimeSettings {
 	settings := s.settings
 	settings.MixedPort = s.port.Get()
+	settings.FakeIPExceptions = s.fakeIP.Get()
 	return settings
 }
 

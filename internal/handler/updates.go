@@ -43,7 +43,7 @@ func (d *Dashboard) runUpdateScheduler(ctx context.Context, win Updater) {
 // else is changing the core or the store.
 func (d *Dashboard) requestAutoUpdate(ctx context.Context, win Updater) {
 	win.Update(func() {
-		dialogOpen := d.subscription.editorOpen || d.subscription.deleteOpen || d.tun.installOpen || d.rules.editorOpen
+		dialogOpen := d.subscription.editorOpen || d.subscription.deleteOpen || d.tun.installOpen || d.rules.editorOpen || d.fakeIP.editorOpen
 		if d.autoBusy || d.controlsLocked() || d.testing != "" || dialogOpen || ctx.Err() != nil {
 			return
 		}

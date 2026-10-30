@@ -110,6 +110,10 @@ running in a webview, and the same code runs on macOS and Windows.
   does. On macOS the helper also points the system DNS at resolvers whose
   traffic enters the TUN and restores the previous DNS when the core stops.
   Hop refuses to turn TUN on while another TUN holds the default routes.
+  **Settings → TUN → Fake-IP exceptions** lists names that must get their
+  real addresses without changing routing rules. `example.com` matches only
+  itself, `*.example.com` one level of subdomains, and `+.example.com` itself
+  and subdomains at any depth.
 - **Menu bar and tray.** On macOS the menu bar shows the live speed beside the
   icon (optional); on Windows the same panel opens from the tray. It switches
   routes, nodes, modes and the proxy without opening the window.
@@ -288,6 +292,11 @@ The ports sit away from the ones other Clash clients use.
   **More info → Run anyway**.
 - **TUN will not turn on.** Another VPN or Clash client holds the
   default routes; turn its TUN off first. Hop never takes routes over.
+- **An app can't connect under TUN (for example Tailscale registering).** TUN
+  answers lookups with fake addresses (198.18.x.x) so rules can match by name,
+  and a few apps need the real one. Add the name in **Settings → TUN → Fake-IP
+  exceptions** (`example.com`, `*.example.com` or `+.example.com`); it changes
+  the DNS answer only, not the route.
 - **Another client uses the same ports.** Hop's own are `17890`, `19090`,
   `17853`, apart from other clients', so both can run at once.
 - **Latency looks high.** Hop uses the provider's nearest entry when the

@@ -173,6 +173,11 @@ type harness struct {
 	lan *service.LANState
 	// port is the proxy port every config the service builds carries.
 	port *service.MixedPortState
+	// tun says whether the configs the service builds turn TUN on.
+	tun *service.TunFlag
+	// fakeIP is the fake-ip exceptions every TUN config the service builds
+	// carries.
+	fakeIP *service.FakeIPExceptionsState
 }
 
 // newHarness builds the harness around appDir, opening the store there.
@@ -201,19 +206,22 @@ func newHarness(t *testing.T, appDir string) *harness {
 	}
 	lanState := service.NewLANState()
 	portState := service.NewMixedPortState(testMixedPort)
+	tunFlag := service.NewTunFlag()
+	fakeIPState := service.NewFakeIPExceptionsState()
 	return &harness{
-		cfg: cfg, client: client, store: store, lan: lanState, port: portState,
+		cfg: cfg, client: client, store: store, lan: lanState, port: portState, tun: tunFlag, fakeIP: fakeIPState,
 		service: service.NewSubscriptionService(
-			subscription.NewFetcher(&http.Client{Timeout: 10 * time.Second}),
+			subscription.NewFetcher(subscription.NewDirectClient(10*time.Second)),
 			store,
 			store,
 			client,
 			mihomo.NewConfigValidator(binary, filepath.Join(appDir, "validate"), validateTimeout),
 			client,
 			settings,
-			service.NewTunFlag(),
+			tunFlag,
 			lanState,
 			portState,
+			fakeIPState,
 		),
 	}
 }

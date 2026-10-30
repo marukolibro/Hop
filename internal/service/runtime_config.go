@@ -34,6 +34,9 @@ type RuntimeSettings struct {
 	// Every config the subscription service builds takes the live value; a
 	// config built from settings directly has it as given.
 	LAN LANSettings
+	// FakeIPExceptions are the names the user keeps out of fake-ip under TUN,
+	// on top of the built-in ones.
+	FakeIPExceptions []string
 }
 
 // TunDevice is the interface name Hop's TUN claims. It is fixed, so the
@@ -112,7 +115,7 @@ func baseConfig(s RuntimeSettings) runtimeConfig {
 	if s.Tun {
 		cfg.Tun = hopTun()
 		cfg.Sniffer = hopSniffer()
-		cfg.DNS = tunDNS()
+		cfg.DNS = tunDNS(s.FakeIPExceptions)
 	} else {
 		cfg.DNS = hopDNS()
 	}
@@ -240,12 +243,25 @@ func hopDNS() dnsConfig {
 
 // tunDNS is the resolver under TUN: the same DoH upstreams, answering every
 // client in fake-ip so destinations are matched by name however the packets
-// arrive, with the names that must stay real filtered out.
-func tunDNS() dnsConfig {
+// arrive, with the names that must stay real filtered out: the built-in ones
+// and the user's exceptions.
+func tunDNS(exceptions []string) dnsConfig {
 	cfg := hopDNS()
 	cfg.EnhancedMode = "fake-ip"
-	cfg.FakeIPFilter = tunFakeIPFilter
+	cfg.FakeIPFilter = withMissing(tunFakeIPFilter, exceptions)
 	return cfg
+}
+
+// withMissing returns a copy of list followed by each of names it does not
+// hold yet, in order.
+func withMissing(list []string, names []string) []string {
+	merged := slices.Clone(list)
+	for _, name := range names {
+		if !slices.Contains(merged, name) {
+			merged = append(merged, name)
+		}
+	}
+	return merged
 }
 
 // tunFakeIPFilter names what must never resolve to a fake IP: the LAN's own

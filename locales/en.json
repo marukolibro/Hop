@@ -24,6 +24,7 @@
   "actionReadTun": "Couldn't read the TUN status",
   "actionRefreshSubscription": "Couldn't refresh the subscription",
   "actionRestoreCore": "Couldn't restore the bundled core",
+  "actionSaveFakeIP": "Couldn't save Fake-IP exceptions",
   "actionSaveRules": "Couldn't save custom rules",
   "actionSaveSettings": "Couldn't save settings",
   "actionSwitchMode": "Couldn't switch the outbound mode",
@@ -167,6 +168,20 @@
   "exitIpNone": "Exit IP not found",
   "exitIpRetry": "Click to retry",
   "exitIpTip": "The exit IP of the default route. Sites on dedicated routes, such as AI, may differ. Click to copy.",
+  "fakeIPCount": "{count, plural, one {# name} other {# names}}",
+  "@fakeIPCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fakeIPDialogNote": "One name per line. example.com matches only itself, *.example.com one level of subdomains, and +.example.com itself and subdomains at any depth. Added to the built-in list; applied at once while TUN is on.",
+  "fakeIPEdit": "Edit",
+  "fakeIPNone": "None",
+  "fakeIPNote": "Names that get their real address under TUN instead of a fake one (198.18.x.x). Add one when an app can't connect under TUN. This changes the DNS answer only, not the route.",
+  "fakeIPPlaceholder": "example.com\n*.example.com\n+.example.com",
+  "fakeIPTitle": "Fake-IP exceptions",
   "fileCloseFailed": "Couldn't close “{name}”: ",
   "@fileCloseFailed": {
     "placeholders": {
@@ -438,6 +453,7 @@
   "settingsThemeNote": "Glass background colors. Takes effect immediately.",
   "settingsTimeout": "Speed test timeout",
   "settingsTimeoutNote": "Shorter is faster, but slow routes may be counted as timed out",
+  "settingsTun": "TUN",
   "sidebarAuto": "Auto",
   "sidebarMain": "Main",
   "sidebarOther": "Other",

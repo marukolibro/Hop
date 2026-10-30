@@ -24,6 +24,7 @@
   "actionReadTun": "读取 TUN 状态失败",
   "actionRefreshSubscription": "刷新订阅失败",
   "actionRestoreCore": "恢复内置内核失败",
+  "actionSaveFakeIP": "保存 Fake-IP 例外失败",
   "actionSaveRules": "保存自定义规则失败",
   "actionSaveSettings": "保存设置失败",
   "actionSwitchMode": "切换出站模式失败",
@@ -98,6 +99,20 @@
   "exitIpNone": "未检测到出口 IP",
   "exitIpRetry": "点击重试",
   "exitIpTip": "默认线路的出口 IP。AI 等走专用线路的网站可能不同。点击复制。",
+  "fakeIPCount": "{count} 个域名",
+  "@fakeIPCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fakeIPDialogNote": "每行一个域名。example.com 只匹配它自己,*.example.com 只匹配一级子域名,+.example.com 匹配它自己和任意层级的子域名。会加在内置列表之外;TUN 开着时立即生效。",
+  "fakeIPEdit": "编辑",
+  "fakeIPNone": "未设置",
+  "fakeIPNote": "这些域名在 TUN 下返回真实地址,而不是假地址(198.18.x.x)。某个应用在 TUN 下连不上时可以加在这里。只改 DNS 的答案,不改走哪条线路。",
+  "fakeIPPlaceholder": "example.com\n*.example.com\n+.example.com",
+  "fakeIPTitle": "Fake-IP 例外",
   "fileCloseFailed": "关闭「{name}」失败：",
   "fileOpenFailed": "打开「{name}」失败：",
   "fileReadFailed": "读取「{name}」失败：",
@@ -241,6 +256,7 @@
   "settingsThemeNote": "玻璃背景配色,切换后立即生效",
   "settingsTimeout": "测速超时",
   "settingsTimeoutNote": "越短测得越快,较慢的线路可能被记为超时",
+  "settingsTun": "TUN 模式",
   "sidebarAuto": "自动选择",
   "sidebarMain": "主线路",
   "sidebarOther": "其他",

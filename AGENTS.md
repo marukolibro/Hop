@@ -20,8 +20,9 @@ on this machine while developing Hop. Hop must never interfere with it.
   exception, and only through Hop's privileged helper (`cmd/hop-helper`).
   While its core runs with TUN on, the helper points the system DNS of the
   enabled network services at public resolvers whose traffic enters the TUN
-  (so lookups get fake IPs), backs up what was there first, and restores it
-  when the core stops, when the helper starts and finds a backup, and at
+  (so lookups get fake IPs, except the built-in `tunFakeIPFilter` and the
+  user's own `fake-ip-exceptions.json`), backs up what was there first, and
+  restores it when the core stops, when the helper starts and finds a backup, and at
   quit. Tests never let the helper touch the real DNS. TUN is off
   by default, turned on by the user, refused while another TUN holds the
   default routes, and never turned on in a test or experiment unless the user
@@ -46,6 +47,10 @@ on this machine while developing Hop. Hop must never interfere with it.
 - A leftover core is stopped only through `mihomo.ReapStale`, which acts on
   the pid in Hop's own `mihomo.pid` and only when that process's command line
   carries Hop's home directory. Never kill a process by name or by port.
+- Subscription downloads go direct (`subscription.NewDirectClient`): they never
+  read `HTTP(S)_PROXY` from the environment, where another client may have left
+  a dead port. Core releases, geodata, the exit IP and service status checks go
+  through Hop's own mixed port.
 - Hop listens only on `127.0.0.1:17890` (mixed, or the port the user chose in
   settings, see below) and `127.0.0.1:19090`
   (controller), plus `127.0.0.1:17853` (the core's DNS, opened only for a
