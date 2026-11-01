@@ -118,6 +118,33 @@ func TestTunRouteConflict(t *testing.T) {
 			ownDevice: TunDevice,
 			wantTaken: false,
 		},
+		{
+			name: "tailscale with an interface-scoped default",
+			table: routetable.ParseNetstat(`Destination Gateway Flags Netif Expire
+default 192.168.1.1 UGScg en1
+default link#25 UCSIg utun5
+100.64/10 link#25 UCS utun5
+100.100.100.100/32 link#25 UCS utun5
+224.0.0/4 link#25 UmCSI utun5`),
+			ownDevice: TunDevice,
+			wantTaken: false,
+		},
+		{
+			name:      "interface reference is not interface scope",
+			table:     routetable.ParseNetstat("default link#25 UCSig utun5"),
+			ownDevice: TunDevice,
+			wantTaken: true,
+			wantBy:    "utun5",
+		},
+		{
+			name: "scoped default does not hide unscoped takeover",
+			table: routetable.ParseNetstat(`default link#25 UCSIg utun5
+0/1 198.18.0.1 UGSc utun5
+128.0/1 198.18.0.1 UGSc utun5`),
+			ownDevice: TunDevice,
+			wantTaken: true,
+			wantBy:    "utun5",
+		},
 		{name: "headers only", table: routetable.ParseNetstat("Routing tables\n\nInternet:\n"), ownDevice: TunDevice},
 		{name: "empty", table: nil, ownDevice: TunDevice},
 	}

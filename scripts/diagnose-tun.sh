@@ -103,7 +103,7 @@ check_routes() {
 	section "Routes"
 	via=$(route_iface 1.1.1.1)
 	info "1.1.1.1 routes via $via"
-	others=$(netstat -rn -f inet | awk '$1 ~ /^(default|0\/1|128\.0\/1|1|2\/7|4\/6|8\/5|16\/4|32\/3|64\/2)$/ && $4 ~ /^utun/ {print $4}' | sort -u | tr '\n' ' ')
+	others=$(netstat -rn -f inet | awk '$1 ~ /^(default|0\/1|128\.0\/1|1|2\/7|4\/6|8\/5|16\/4|32\/3|64\/2)$/ && $3 !~ /I/ && $4 ~ /^utun/ {print $4}' | sort -u | tr '\n' ' ')
 	info "utun interfaces holding default-ish routes: ${others:-none}"
 	if ! helper_core_running; then
 		for other in $others; do
