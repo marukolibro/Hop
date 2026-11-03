@@ -220,9 +220,13 @@ handler → service → repository, interfaces defined where they are used.
   cards.
 - `mygo.json` — the update public key and the `updates.privateKey` path.
   `service/updates.go` wraps `mygo.Updater`: the settings 版本 row checks; the
-  row and the flyout download and install, then `mygo.App.Relaunch`. mygo fetches
-  GitHub with `http.DefaultClient` directly, not Hop's loopback proxy; never
-  change `http.DefaultTransport`/`DefaultClient` globally to route it. The
+  row and the flyout download and install, then `mygo.App.Relaunch`. The manifest and
+  the archive come through Hop's own mixed port: `repository/appupdate` is the
+  `mygo.Updater.SetSource` that `NewAppUpdateService` installs (mygo still
+  checks the signature); mygo's own fetch, which goes direct or through the
+  system proxy, is never used, and a platform with no published release does
+  not update itself. Never change `http.DefaultTransport`/`DefaultClient`
+  globally to route it. The
   quit releases (system proxy, helper core) run in `mygo.App.OnQuit`, which
   fires before a Relaunch's new instance starts; `App.Run` returns only after
   finish, so the releases must not move back below it.

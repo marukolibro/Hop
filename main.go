@@ -21,6 +21,7 @@ import (
 
 	"hop/config"
 	"hop/internal/handler"
+	"hop/internal/repository/appupdate"
 	"hop/internal/repository/corerelease"
 	"hop/internal/repository/corestore"
 	"hop/internal/repository/exitip"
@@ -238,7 +239,7 @@ func run() (err error) {
 		tunFlag,
 	)
 
-	appUpdateService := service.NewAppUpdateService()
+	appUpdateService := service.NewAppUpdateService(appUpdateSource(portState))
 	customRulesService := service.NewCustomRulesService(store, profiles)
 	fakeIPService := service.NewFakeIPExceptionsService(fakeIPState, store, profiles, tunFlag)
 	geodataService := service.NewGeodataService(
@@ -486,6 +487,17 @@ func unlockRouted(port *service.MixedPortState, connections unlock.ConnectionLis
 // hopProxyURL is Hop's own mixed port, where its core accepts HTTP proxies.
 func hopProxyURL(mixedPort int) *url.URL {
 	return &url.URL{Scheme: "http", Host: net.JoinHostPort(bindAddress, strconv.Itoa(mixedPort))}
+}
+
+// appUpdateSource serves Hop's releases to the updater through Hop's own
+// proxy, or nil on a platform no release is published for.
+func appUpdateSource(port *service.MixedPortState) mygo.UpdateSource {
+	manifest, err := appupdate.ManifestURL(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		slog.Info("the app does not update itself", "error", err)
+		return nil
+	}
+	return appupdate.NewSource(hopProxyClient(port), manifest)
 }
 
 // geodataDownloadClient reaches the databases through the same proxy, with
