@@ -168,7 +168,9 @@ running in a webview, and the same code runs on macOS and Windows.
 
 - **Hop updates itself** from GitHub releases. Every update is signed, and the
   app checks the signature before it installs one; when it can, it downloads
-  only what changed since your version.
+  only what changed since your version. Update checks and downloads use Hop's
+  own proxy. If updating from 0.4.18 or earlier fails, use the
+  [installation script](#install) to get the new version.
 - **The core upgrades from Settings**, with its download checked against the
   digest GitHub publishes, and rolls back by itself if the new core does not
   come up. The bundled core can always be restored.

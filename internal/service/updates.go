@@ -25,11 +25,14 @@ var ErrNoAppUpdate = errors.New("no newer version is published")
 const appUpdateCheckTimeout = 30 * time.Second
 
 // AppUpdateService wraps mygo's signed updater for the dashboard. The
-// updater reads the public key built into the app, checks the manifests of
+// updater reads the public key built into the app, checks the manifest of
 // the latest GitHub release, verifies the Ed25519 signature of the archive
-// it downloads, and replaces the app bundle. It fetches GitHub with the
-// standard library's default client, directly, not through Hop's proxy.
+// it downloads, and replaces the app bundle. The manifest and the archive
+// come from the source the service is given, which reaches GitHub through
+// Hop's own proxy; mygo's own direct fetch is never used.
 type AppUpdateService struct {
+	// hasSource is false on a platform Hop publishes no release for.
+	hasSource bool
 	// mu guards the check clock. checkMu serializes the checks themselves.
 	mu             sync.Mutex
 	checkMu        sync.Mutex
@@ -37,17 +40,22 @@ type AppUpdateService struct {
 	lastCheck      time.Time
 }
 
-// NewAppUpdateService returns a service over mygo.Updater.
-func NewAppUpdateService() *AppUpdateService {
-	return &AppUpdateService{}
+// NewAppUpdateService returns a service over mygo.Updater that gets updates
+// from source. A nil source means no release is published for this platform,
+// and the app does not update itself.
+func NewAppUpdateService(source mygo.UpdateSource) *AppUpdateService {
+	if source != nil {
+		mygo.Updater.SetSource(source)
+	}
+	return &AppUpdateService{hasSource: source != nil}
 }
 
-// Enabled reports whether this build can update itself: it was built with
-// the update public key, is not a development build, and can write where it
-// is installed. mygo does not tell which of those failed, so the row's
-// reason stays approximate.
+// Enabled reports whether this build can update itself: a release is
+// published for its platform, it was built with the update public key, is
+// not a development build, and can write where it is installed. mygo does
+// not tell which of those failed, so the row's reason stays approximate.
 func (s *AppUpdateService) Enabled() bool {
-	return mygo.Updater.Enabled()
+	return s.hasSource && mygo.Updater.Enabled()
 }
 
 // DisabledReason is the short Chinese reason shown when Enabled is false.
