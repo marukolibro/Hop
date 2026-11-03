@@ -55,6 +55,24 @@ func TestParseNetstat(t *testing.T) {
 	if table := ParseNetstat("Routing tables\n\nInternet:\n"); len(table) != 0 {
 		t.Errorf("headers parsed as %d routes: %v", len(table), table)
 	}
+	for _, tc := range []struct {
+		flags  string
+		scoped bool
+	}{
+		{"UCSIg", true},
+		{"UCSig", false},
+		{"UGScg", false},
+	} {
+		t.Run(tc.flags, func(t *testing.T) {
+			table := ParseNetstat("default link#25 " + tc.flags + " utun5")
+			if len(table) != 1 {
+				t.Fatalf("parsed %d routes, want 1", len(table))
+			}
+			if got := table[0].InterfaceScoped; got != tc.scoped {
+				t.Errorf("InterfaceScoped = %v, want %v", got, tc.scoped)
+			}
+		})
+	}
 }
 
 // TestParseDestination pins macOS's shorthand and plain prefixes.
@@ -94,6 +112,19 @@ func TestDefaultCoverage(t *testing.T) {
 			table: Table{{Destination: "default", Interface: "utun4", Tunnel: true}},
 			iface: "utun4",
 			want:  1,
+		},
+		{
+			name:  "interface-scoped default",
+			table: ParseNetstat("default link#25 UCSIg utun5"),
+			iface: "utun5",
+			want:  0,
+		},
+		{
+			name: "scoped default and unscoped half on the same interface",
+			table: ParseNetstat(`default link#25 UCSIg utun5
+128.0/1 198.18.0.1 UGSc utun5`),
+			iface: "utun5",
+			want:  0.5,
 		},
 		{
 			name:  "one half",

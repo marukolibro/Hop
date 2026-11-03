@@ -18,6 +18,9 @@ type Route struct {
 	Destination string
 	Interface   string
 	Tunnel      bool
+	// InterfaceScoped routes apply only to traffic scoped to this interface,
+	// not to the global default path (macOS RTF_IFSCOPE).
+	InterfaceScoped bool
 }
 
 // Table is the IPv4 routing table.
@@ -51,9 +54,10 @@ func ParseNetstat(out string) Table {
 		}
 		iface := fields[3]
 		table = append(table, Route{
-			Destination: fields[0],
-			Interface:   iface,
-			Tunnel:      strings.HasPrefix(iface, "utun"),
+			Destination:     fields[0],
+			Interface:       iface,
+			Tunnel:          strings.HasPrefix(iface, "utun"),
+			InterfaceScoped: strings.Contains(fields[2], "I"),
 		})
 	}
 	return table
@@ -93,15 +97,15 @@ func TunnelAdapter(alias string, description string, ifType uint32) bool {
 	return false
 }
 
-// DefaultCoverage is the fraction of the IPv4 unicast space that the routes
-// on iface cover, from 0 to 1. A TUN that takes the default path covers
+// DefaultCoverage is the fraction of the IPv4 unicast space that the unscoped
+// routes on iface cover, from 0 to 1. A TUN that takes the default path covers
 // (nearly) all of it: even with the private ranges excluded, the excluded
 // part is a small minority. A split-tunnel VPN's single subnet covers a
 // sliver.
 func DefaultCoverage(table Table, iface string) float64 {
 	var spans [][2]uint64
 	for _, route := range table {
-		if !strings.EqualFold(route.Interface, iface) {
+		if route.InterfaceScoped || !strings.EqualFold(route.Interface, iface) {
 			continue
 		}
 		prefix, ok := parseDestination(route.Destination)
