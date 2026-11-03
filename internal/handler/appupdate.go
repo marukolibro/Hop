@@ -18,6 +18,7 @@ type appUpdateState struct {
 	enabled        bool
 	disabledReason string
 	checking       bool
+	checked        bool
 	updating       bool
 	update         model.AppUpdate
 	progressDone   int64
@@ -33,6 +34,7 @@ func (d *Dashboard) beginAppCheck() {
 	if !s.enabled || s.checking || s.updating || d.controlsLocked() {
 		return
 	}
+	s.checked = false
 	s.checking = true
 	ctx, win := d.opCtx, d.opWin
 	go func() {
@@ -49,6 +51,7 @@ func (d *Dashboard) beginAppCheck() {
 				return
 			}
 			s.update = update
+			s.checked = true
 		})
 	}()
 }
@@ -99,6 +102,8 @@ func (d *Dashboard) appVersionRow(c *ui.Context, t *ui.Theme) func() {
 			if note == "" {
 				note = locales.AppUpdateBlocked()
 			}
+		} else if s.checked && !s.update.Available {
+			note = locales.CoreUpToDate()
 		}
 		settingRow(c, t, locales.AppVersion(), note, func() {
 			ui.Column(c).Key("app-version").Gap(gapSmall).AlignItems(ui.End).Children(func() {
