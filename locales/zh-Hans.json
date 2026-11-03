@@ -119,7 +119,7 @@
   "fileTooLarge": "「{name}」超过 {limit} MB，未读取。",
   "flyoutNewVersion": "新版本",
   "flyoutNoDelays": "还没有测速结果。点「测速」看看哪个节点最快。",
-  "flyoutNoSubscription": "还没有使用中的订阅。打开主窗口添加一个。",
+  "flyoutNoSubscription": "还没有使用中的订阅。",
   "followSystem": "跟随系统",
   "geodataBundled": "随应用自带",
   "geodataFailed": "读取失败",

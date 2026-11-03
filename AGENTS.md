@@ -270,7 +270,12 @@ for font sizes, weights, gaps or radii in views.
   wraps under the exit in a narrow window and drops the plot below
   `heroPlotMinPane`. It has no current-line caption. The flyout has the same
   card (`heroFace`) around its own smaller gauge and plot, then the three modes as pills and
-  the two traffic switches as pills on the next line.
+  the two traffic switches as pills on the next line; above its routes, the
+  subscription in use shows eight characters of its name, a menu of the saved
+  ones with the whole name and the one in use checked, so a profile can be
+  switched without opening the window. The row names no group, as the window's
+  toolbar does; with no subscription in use it offers adding one, which opens
+  the window's add dialog.
 - Node tiles: the chosen tile is filled with the accent (`onAccentTheme` is
   its ink) and carries a check; there is no choice ring. The region filters
   (`regionChips`: the groups and DIRECT as 线路 first, then 全部, then one per

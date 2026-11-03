@@ -219,7 +219,7 @@
   },
   "flyoutNewVersion": "New version",
   "flyoutNoDelays": "No speed test results yet. Click “Test speed” to see which node is fastest.",
-  "flyoutNoSubscription": "No subscription in use. Open the main window to add one.",
+  "flyoutNoSubscription": "No subscription in use.",
   "followSystem": "System",
   "geodataBundled": "Bundled with the app",
   "geodataFailed": "Couldn't read",
