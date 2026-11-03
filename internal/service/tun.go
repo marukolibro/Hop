@@ -129,6 +129,9 @@ type TunService struct {
 	// controller is Hop's client of the controller, whose idle connections
 	// are closed before the helper's core stops.
 	controller ControllerConns
+	// disagree is whether the last Status found the remembered state and the
+	// helper's core apart, so a lasting disagreement is logged once.
+	disagree atomic.Bool
 }
 
 // NewTunService returns a TUN service whose helper talks on the helper
@@ -175,10 +178,23 @@ func (s *TunService) Status(ctx context.Context) (model.TunStatus, error) {
 	if coreErr == nil {
 		status.CoreRunning = core.Running
 	}
-	if s.state.On() != status.CoreRunning {
-		slog.Warn("TUN's remembered state and the helper's core disagree", "remembered", s.state.On(), "running", status.CoreRunning)
-	}
+	s.noteAgreement(s.state.On(), status.CoreRunning)
 	return status, nil
+}
+
+// noteAgreement logs when TUN's remembered state and the helper's core start
+// or stop disagreeing. Status runs every few seconds, so a disagreement that
+// lasts is logged once, not on every poll.
+func (s *TunService) noteAgreement(remembered bool, running bool) {
+	disagree := remembered != running
+	if s.disagree.Swap(disagree) == disagree {
+		return
+	}
+	if disagree {
+		slog.Warn("TUN's remembered state and the helper's core disagree", "remembered", remembered, "running", running)
+		return
+	}
+	slog.Info("TUN's remembered state and the helper's core agree again", "on", remembered)
 }
 
 // Enable turns TUN on from the user's click: it installs the helper when
