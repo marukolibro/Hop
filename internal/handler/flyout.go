@@ -83,6 +83,7 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 			statusDot(c, d.statusColor(t), d.proxying())
 			mutedText(c, t, d.statusText())
 		})
+		d.notice(c, t)
 		// The exit and the traffic are one card, tinted with the theme's accent
 		// as the window's hero is.
 		entrance(ui.Column(c).Key("route"), 1).Gap(gapSmall).Padding(gapMedium).Radius(radiusPanel).
@@ -263,7 +264,9 @@ func (d *Dashboard) quickRoutes(c *ui.Context, t *ui.Theme, openWindow func()) {
 		button(c, buttonSpec{label: locales.SubAdd(), icon: iconPlus, style: softButton(t),
 			disabled: d.controlsLocked()}, func() {
 			d.page = pageNodes
-			d.openEditor(editorAdd, "")
+			if !d.subscription.editorOpen {
+				d.openEditor(editorAdd, "")
+			}
 			openWindow()
 		})
 		return

@@ -116,7 +116,9 @@ running in a webview, and the same code runs on macOS and Windows.
   and subdomains at any depth.
 - **Menu bar and tray.** On macOS the menu bar shows the live speed beside the
   icon (optional); on Windows the same panel opens from the tray. It switches
-  routes, nodes, modes and the proxy without opening the window.
+  subscriptions, routes, nodes, modes and the proxy without opening the window.
+  With no subscription, its Add action opens the window's form and preserves
+  any unfinished draft. Failed switches show their error in the panel.
 - **Starts the way you want.** Close the window and Hop keeps running in the
   menu bar or tray; start it at login; copy a ready-made command that points a
   terminal at Hop.
