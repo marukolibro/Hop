@@ -469,10 +469,12 @@ func windowVibrancy() mygo.Vibrancy {
 // or lookup works wherever the subscription's lines reach. It does not touch
 // the system proxy or any other client's.
 func hopProxyClient(port *service.MixedPortState) *http.Client {
-	return &http.Client{Transport: &http.Transport{Proxy: func(*http.Request) (*url.URL, error) {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = func(*http.Request) (*url.URL, error) {
 		// The port is read for each request: the user can move it while Hop runs.
 		return hopProxyURL(port.Get()), nil
-	}}}
+	}
+	return &http.Client{Transport: transport}
 }
 
 // unlockRouted is the checker through Hop's own mixed port, where the rules
