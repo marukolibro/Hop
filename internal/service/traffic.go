@@ -158,6 +158,16 @@ func (s *TrafficService) Summary(now time.Time) model.TrafficView {
 	return summarizeTraffic(s.snapshotLocked(), now)
 }
 
+// MonthlyProxyForSource 返回该订阅本月经过代理的本机上行和下行。/ MonthlyProxyForSource returns a source's local proxy upload and download this month.
+func MonthlyProxyForSource(view model.TrafficView, sourceID string) model.Usage {
+	for _, source := range view.Sources {
+		if source.ID == sourceID {
+			return model.Usage{Upload: source.Split.ProxyUp, Download: source.Split.ProxyDown}
+		}
+	}
+	return model.Usage{}
+}
+
 // Flush writes the history when it changed since the last write. A failure
 // leaves it dirty, so the next flush tries again.
 func (s *TrafficService) Flush() error {

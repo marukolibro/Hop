@@ -55,6 +55,13 @@ func TestTrafficRecordSplitsAndRollsOver(t *testing.T) {
 		if len(view.Sources) != 1 || view.Sources[0].Name != source.Name {
 			t.Fatalf("sources = %+v, want one named %q", view.Sources, source.Name)
 		}
+		wantUsage := model.Usage{Upload: 133, Download: 267}
+		if got := MonthlyProxyForSource(view, source.ID); got != wantUsage {
+			t.Fatalf("monthly proxy = %+v, want %+v", got, wantUsage)
+		}
+		if got := MonthlyProxyForSource(view, "missing"); got != (model.Usage{}) {
+			t.Fatalf("missing source monthly proxy = %+v, want zero", got)
+		}
 		if len(view.Days) != trafficChartDays || view.Days[len(view.Days)-1].Split != want {
 			t.Fatalf("last chart day = %+v, want %+v", view.Days[len(view.Days)-1], want)
 		}

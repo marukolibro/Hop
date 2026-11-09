@@ -3288,6 +3288,16 @@ func (msgs Messages) SubMetricExpires() string {
 	return Catalog.Format(msgs.locale, "subMetricExpires", nil)
 }
 
+// SubMetricLocalProxy says "Local proxy this month"
+// in the language the app shows.
+func SubMetricLocalProxy() string { return In(i18n.Locale()).SubMetricLocalProxy() }
+
+// SubMetricLocalProxy says "Local proxy this month"
+// in the language of msgs.
+func (msgs Messages) SubMetricLocalProxy() string {
+	return Catalog.Format(msgs.locale, "subMetricLocalProxy", nil)
+}
+
 // SubMetricUpdated says "Last updated"
 // in the language the app shows.
 func SubMetricUpdated() string { return In(i18n.Locale()).SubMetricUpdated() }

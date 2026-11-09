@@ -619,6 +619,7 @@
   },
   "subManage": "Manage subscriptions",
   "subMetricExpires": "Expires",
+  "subMetricLocalProxy": "Local proxy this month",
   "subMetricUpdated": "Last updated",
   "subMetricUsed": "Data used",
   "subMoreActions": "More actions for {name}",

@@ -331,6 +331,7 @@
   "subLocalNameHint": "选择文件时会自动填入文件名；名称留空时显示为「{fallback}」。",
   "subManage": "管理订阅",
   "subMetricExpires": "到期时间",
+  "subMetricLocalProxy": "本月本机代理",
   "subMetricUpdated": "最近成功更新",
   "subMetricUsed": "已用流量",
   "subMoreActions": "{name}的更多操作",

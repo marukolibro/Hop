@@ -379,14 +379,17 @@ func (d *Dashboard) sidebarSubscription(c *ui.Context, t *ui.Theme) {
 		case active.Source != model.SourceRemote:
 			mutedText(c, t, service.LocalProfileName()).NoWrap()
 		case active.HasUsage:
-			subscriptionUsage(c, t, active.Usage, now, barWidth)
-		case len(d.view.Plan) > 0:
-			ui.Column(c).Gap(gapTight).Children(func() {
-				for _, note := range d.view.Plan {
-					label, value := splitPlanNote(note)
-					planNote(c, t, label, value)
-				}
-			})
+			subscriptionUsage(c, t, active.Usage, now, barWidth, "")
+		default:
+			subscriptionUsage(c, t, service.MonthlyProxyForSource(d.stats, active.ID), now, barWidth, locales.SubMetricLocalProxy())
+			if len(d.view.Plan) > 0 {
+				ui.Column(c).Gap(gapTight).Children(func() {
+					for _, note := range d.view.Plan {
+						label, value := splitPlanNote(note)
+						planNote(c, t, label, value)
+					}
+				})
+			}
 		}
 		ui.Row(c).Wrap().Gap(gapLarge).GapY(gapTight).AlignItems(ui.Center).Children(func() {
 			if active.Source == model.SourceRemote {
@@ -418,9 +421,8 @@ func (d *Dashboard) noSubscription(c *ui.Context, t *ui.Theme) {
 	textButton(c, t, locales.SubManage(), iconList, false, false, func() { s.managing = true })
 }
 
-// subscriptionUsage is the account at a glance: used of total, a thin bar
-// barWidth wide, and the days left.
-func subscriptionUsage(c *ui.Context, t *ui.Theme, usage model.Usage, now time.Time, barWidth float32) {
+// subscriptionUsage 展示套餐用量；没有总量时用细条表示上传和下载构成。/ subscriptionUsage shows account usage, or upload/download composition when no total exists.
+func subscriptionUsage(c *ui.Context, t *ui.Theme, usage model.Usage, now time.Time, barWidth float32, label string) {
 	used := usage.Upload + usage.Download
 	usedReadout := formatBytes(used)
 	value := usedReadout.value + " " + usedReadout.unit
@@ -434,6 +436,11 @@ func subscriptionUsage(c *ui.Context, t *ui.Theme, usage model.Usage, now time.T
 		ui.Text(c, value).FontSize(fontSecondary).TextColor(t.TextMuted).FontFeatures("tnum").MaxLines(1)
 		if usage.Total > 0 {
 			stripUsageBar(c, t, ratio, barWidth)
+		} else {
+			stripLocalUsageBar(c, t, usage, barWidth)
+		}
+		if label != "" {
+			captionText(c, t, label).MaxLines(1)
 		}
 		if !usage.Expire.IsZero() {
 			left := usage.Expire.Sub(now)
@@ -443,6 +450,27 @@ func subscriptionUsage(c *ui.Context, t *ui.Theme, usage model.Usage, now time.T
 			}
 			ui.Text(c, remainingText(left)).FontSize(fontSecondary).TextColor(color).MaxLines(1)
 		}
+	})
+}
+
+// stripLocalUsageBar 用上传色和下载色组成细条，不表示套餐进度。/ stripLocalUsageBar shows upload/download composition, never account quota.
+func stripLocalUsageBar(c *ui.Context, t *ui.Theme, usage model.Usage, width float32) {
+	const height float32 = 4
+	used := usage.Upload + usage.Download
+	trackFill := t.SurfacePressed
+	if onGlass(t) {
+		trackFill = glassFill(t, glassTrackAlpha)
+	}
+	if used > 0 {
+		trackFill = uploadColor(t)
+	}
+	track := ui.Box(c).Width(width).Height(height).Radius(height / 2).Background(trackFill)
+	if used == 0 {
+		return
+	}
+	fill := track.AnimateTo("download", float32(usage.Download)/float32(used)*width, ui.Snappy)
+	track.Children(func() {
+		ui.Box(c).Width(fill).Height(height).Radius(height / 2).Background(t.Accent)
 	})
 }
 
@@ -686,9 +714,7 @@ func (d *Dashboard) cardMenu(c *ui.Context, t *ui.Theme, item model.Subscription
 	})
 }
 
-// cardMetrics shows what the provider reports: the account's use, its term, and
-// when the subscription last refreshed successfully. Metrics the provider omit
-// are left out rather than shown empty. A local profile has none of them.
+// cardMetrics 显示机场上报的用量，没有用量头时显示本月本机代理流量。/ cardMetrics shows provider usage, or local proxy traffic when no usage header exists.
 func (d *Dashboard) cardMetrics(c *ui.Context, t *ui.Theme, item model.SubscriptionSummary) {
 	if item.Source == model.SourceLocal {
 		return
@@ -698,7 +724,9 @@ func (d *Dashboard) cardMetrics(c *ui.Context, t *ui.Theme, item model.Subscript
 		horizontalHairline(c, t)
 		ui.Row(c).Gap(gapSection).GapY(gapMedium).Wrap().AlignItems(ui.Start).Children(func() {
 			if item.HasUsage {
-				usageMetric(c, t, item.Usage)
+				usageMetric(c, t, item.Usage, locales.SubMetricUsed())
+			} else {
+				usageMetric(c, t, service.MonthlyProxyForSource(d.stats, item.ID), locales.SubMetricLocalProxy())
 			}
 			if hasExpiry {
 				expiryMetric(c, t, item.Usage.Expire)
@@ -708,10 +736,10 @@ func (d *Dashboard) cardMetrics(c *ui.Context, t *ui.Theme, item model.Subscript
 	})
 }
 
-func usageMetric(c *ui.Context, t *ui.Theme, usage model.Usage) {
+func usageMetric(c *ui.Context, t *ui.Theme, usage model.Usage, label string) {
 	used := usage.Upload + usage.Download
 	ui.Column(c).Key("已用流量").Grow(1.4).Basis(0).MinWidth(cardUsageBarWidth).Gap(gapTight).Children(func() {
-		metricLabel(c, t, locales.SubMetricUsed())
+		metricLabel(c, t, label)
 		ui.Row(c).Gap(gapTight).AlignItems(ui.End).Children(func() {
 			usedReadout := formatBytes(used)
 			ui.Text(c, usedReadout.value+" "+usedReadout.unit).FontSize(fontSecondary).FontWeight(weightSemibold).
@@ -726,6 +754,8 @@ func usageMetric(c *ui.Context, t *ui.Theme, usage model.Usage) {
 		})
 		if usage.Total > 0 {
 			cardUsageBar(c, t, min(1, float32(used)/float32(usage.Total)))
+		} else {
+			stripLocalUsageBar(c, t, usage, cardUsageBarWidth)
 		}
 	})
 }
