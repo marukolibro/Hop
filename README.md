@@ -25,7 +25,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/en/nodes-dark.png">
-    <img src="docs/screenshots/en/nodes-light.png" width="860" alt="The nodes page: the route's exit, live traffic, and the nodes by region">
+    <img src="docs/screenshots/en/nodes-light.png" width="860" alt="The nodes page: the route's exit on a world map, the switches and modes, the services, and the groups">
   </picture>
 </p>
 
@@ -80,8 +80,11 @@ running in a webview, and the same code runs on macOS and Windows.
   (many nodes in parallel), then switch the grid from the subscription's order
   to **latency order**, fastest first.
 - **The route.** A ring gauge with the exit's flag (outer arc download, inner
-  arc upload), the exit node, the groups traffic passes through, a two-minute
-  trace and the live speed.
+  arc upload), the exit node, the groups traffic passes through and the live
+  speed, over a dot map of the world that draws the route from where you are
+  (read from the system time zone, offline) to the exit. The exit is placed by
+  the country its address was measured in, else by the flag in its name; when it
+  cannot be placed no line is drawn, and none when it is close to you.
 - **The exit's address.** Click to copy the public IP and country traffic
   leaves by. Hop looks it up once through its own proxy when the exit changes
   and keeps it in memory only.
@@ -101,7 +104,7 @@ running in a webview, and the same code runs on macOS and Windows.
 
 ### System integration
 
-- **System proxy.** One switch in the header. Hop refuses when another app
+- **System proxy.** One switch on the home page, beside TUN and the three modes. Hop refuses when another app
   already holds the system proxy, clears only a proxy that points at itself, and
   puts it back when it quits.
 - **TUN.** Carries every app's traffic through a small
@@ -116,7 +119,8 @@ running in a webview, and the same code runs on macOS and Windows.
   and subdomains at any depth.
 - **Menu bar and tray.** On macOS the menu bar shows the live speed beside the
   icon (optional); on Windows the same panel opens from the tray. It switches
-  subscriptions, routes, nodes, modes and the proxy without opening the window.
+  subscriptions, routes, nodes, modes and the proxy without opening the window;
+  the card fades while nothing sends traffic through Hop.
   With no subscription, its Add action opens the window's form and preserves
   any unfinished draft. Failed switches show their error in the panel.
 - **Starts the way you want.** Close the window and Hop keeps running in the
@@ -234,7 +238,7 @@ From then on Hop keeps itself up to date on both platforms.
 2. **Pick the rules.** Keep the provider's rules, or use Hop's smart rules.
 3. **Choose a route.** Pick a group in the sidebar, test it, and click a node
    (or switch the grid to latency order).
-4. **Turn something on.** The system proxy switch in the header points your
+4. **Turn something on.** The system proxy switch on the home page points your
    apps at Hop. TUN asks to install the helper the first time.
 5. **Adjust.** Add your own rules from **Settings** or from any connection,
    choose the theme and appearance, and decide whether Hop starts at login.

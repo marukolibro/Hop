@@ -166,7 +166,7 @@ h2 { font-size: 30px; }
 
 /* menu bar */
 .split { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 64px; align-items: center; justify-content: center; max-width: 880px; margin-inline: auto; }
-.menubar { aspect-ratio: 680 / 1062; filter: drop-shadow(0 24px 40px rgba(20, 40, 80, .25)); }
+.menubar { aspect-ratio: 680 / 878; filter: drop-shadow(0 24px 40px rgba(20, 40, 80, .25)); }
 :root[data-scheme="dark"] .menubar { filter: drop-shadow(0 24px 40px rgba(0, 0, 0, .6)); }
 .split .sub { margin-left: 0; }
 .split ul { margin: 24px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; color: var(--muted); font-size: 16px; }
@@ -338,8 +338,8 @@ html[data-lang="zh"] h1 { font-size: 36px; }
         </p>
       </div>
       <div class="win" data-shot="nodes"
-           data-alt-zh="Hop 的节点页:出口节点、实时速度、按地区分组的节点和延迟"
-           data-alt-en="Hop's nodes page: the exit node, live speed, and nodes grouped by region with their latency"></div>
+           data-alt-zh="Hop 的节点页:世界地图上的出口线路、代理与模式开关、服务状态和分组"
+           data-alt-en="Hop's nodes page: the exit route on a world map, the proxy and mode switches, service status and groups"></div>
       <p class="fine sample"><span data-l="zh">截图中的节点和流量为示例数据</span><span data-l="en">Nodes and traffic in the screenshots are sample data</span></p>
       <div class="bar">
         <p><strong><span data-l="zh">原生界面</span><span data-l="en">Native UI</span></strong><span data-l="zh">Go 与 MyGo 直接绘制,不是网页套壳</span><span data-l="en">Drawn in Go and MyGo, not a web page in a shell</span></p>
@@ -412,7 +412,7 @@ html[data-lang="zh"] h1 { font-size: 36px; }
       <div class="cards">
         <div class="card">
           <h3><span data-l="zh">系统代理</span><span data-l="en">System proxy</span></h3>
-          <p><span data-l="zh">顶栏一个开关。别的程序已经占着系统代理时,Hop 不会抢;只清除指向自己的代理,退出时还原。</span><span data-l="en">One switch in the header. If another app already holds the system proxy, Hop leaves it alone; it clears only a proxy that points at itself, and puts things back when it quits.</span></p>
+          <p><span data-l="zh">首页一个开关。别的程序已经占着系统代理时,Hop 不会抢;只清除指向自己的代理,退出时还原。</span><span data-l="en">One switch on the home page. If another app already holds the system proxy, Hop leaves it alone; it clears only a proxy that points at itself, and puts things back when it quits.</span></p>
         </div>
         <div class="card">
           <h3>TUN</h3>
@@ -435,7 +435,7 @@ html[data-lang="zh"] h1 { font-size: 36px; }
         <div><h3><span data-l="zh">订阅与本地配置</span><span data-l="en">Subscriptions and local configs</span></h3><p><span data-l="zh">导入订阅链接,或直接粘贴节点链接、Clash 配置。定时刷新,显示用量和到期时间。</span><span data-l="en">Import a subscription link, or paste node links or a Clash config. Refreshed on a schedule, with usage and expiry shown.</span></p></div>
         <div><h3><span data-l="zh">智能规则</span><span data-l="en">Smart rules</span></h3><p><span data-l="zh">AI、流媒体、Telegram、Google、Apple、Microsoft 分组,地区分组,以及每周更新的国内直连。也可以沿用机场自己的规则。</span><span data-l="en">Groups for AI, streaming, Telegram, Google, Apple and Microsoft, region groups, and direct routing for China that updates weekly. Or keep the provider's own rules.</span></p></div>
         <div><h3><span data-l="zh">测速与解锁检测</span><span data-l="en">Speed and unlock checks</span></h3><p><span data-l="zh">整组节点并发测速,按延迟排序。一次检测 ChatGPT、Netflix 和 YouTube Premium 在各分组里能不能用。</span><span data-l="en">Test a whole group at once and sort by latency. One check tries ChatGPT, Netflix and YouTube Premium through every group.</span></p></div>
-        <div><h3><span data-l="zh">出口 IP</span><span data-l="en">Exit address</span></h3><p><span data-l="zh">点一下复制当前出口的公网 IP 和国家。只在出口变化时查一次,不落盘。</span><span data-l="en">Click to copy the public IP and country traffic leaves by. Looked up once when the exit changes, kept in memory only.</span></p></div>
+        <div><h3><span data-l="zh">出口 IP 与地图</span><span data-l="en">Exit address and map</span></h3><p><span data-l="zh">点一下复制当前出口的公网 IP 和国家,首页的世界地图画出从你到出口的线路。只在出口变化时查一次,不落盘。</span><span data-l="en">Click to copy the public IP and country traffic leaves by, while the home page's world map draws the route from you to it. Looked up once when the exit changes, kept in memory only.</span></p></div>
         <div><h3><span data-l="zh">三种模式</span><span data-l="en">Three modes</span></h3><p><span data-l="zh">规则、全局、直连,每种模式都写明它做什么。</span><span data-l="en">Rule, Global and Direct, each with a note on what it does.</span></p></div>
         <div><h3><span data-l="zh">实时日志</span><span data-l="en">Live logs</span></h3><p><span data-l="zh">内核日志实时滚动,可以按级别筛选。</span><span data-l="en">The core's log, live, with a level filter.</span></p></div>
         <div><h3><span data-l="zh">自动更新</span><span data-l="en">Automatic updates</span></h3><p><span data-l="zh">装好之后 Hop 自己保持最新,每个更新都带签名,先验证再安装。</span><span data-l="en">After install Hop keeps itself current. Every update is signed, and verified before it installs.</span></p></div>
