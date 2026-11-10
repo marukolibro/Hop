@@ -444,6 +444,26 @@ func (msgs Messages) ActionWatchTraffic() string {
 	return Catalog.Format(msgs.locale, "actionWatchTraffic", nil)
 }
 
+// ActivitySubtitle says "What is passing through Hop now, and what the core says"
+// in the language the app shows.
+func ActivitySubtitle() string { return In(i18n.Locale()).ActivitySubtitle() }
+
+// ActivitySubtitle says "What is passing through Hop now, and what the core says"
+// in the language of msgs.
+func (msgs Messages) ActivitySubtitle() string {
+	return Catalog.Format(msgs.locale, "activitySubtitle", nil)
+}
+
+// ActivityViewLabel says "Activity view"
+// in the language the app shows.
+func ActivityViewLabel() string { return In(i18n.Locale()).ActivityViewLabel() }
+
+// ActivityViewLabel says "Activity view"
+// in the language of msgs.
+func (msgs Messages) ActivityViewLabel() string {
+	return Catalog.Format(msgs.locale, "activityViewLabel", nil)
+}
+
 // Add says "Add"
 // in the language the app shows.
 func Add() string { return In(i18n.Locale()).Add() }
@@ -534,16 +554,6 @@ func BadgeInUse() string { return In(i18n.Locale()).BadgeInUse() }
 // in the language of msgs.
 func (msgs Messages) BadgeInUse() string {
 	return Catalog.Format(msgs.locale, "badgeInUse", nil)
-}
-
-// BadgeLive says "Live"
-// in the language the app shows.
-func BadgeLive() string { return In(i18n.Locale()).BadgeLive() }
-
-// BadgeLive says "Live"
-// in the language of msgs.
-func (msgs Messages) BadgeLive() string {
-	return Catalog.Format(msgs.locale, "badgeLive", nil)
 }
 
 // Cancel says "Cancel"
@@ -784,16 +794,6 @@ func ConnectionsNoMatchHint(query string) string {
 // in the language of msgs.
 func (msgs Messages) ConnectionsNoMatchHint(query string) string {
 	return Catalog.Format(msgs.locale, "connectionsNoMatchHint", map[string]any{"query": query})
-}
-
-// ConnectionsSubtitle says "See which route each app is taking"
-// in the language the app shows.
-func ConnectionsSubtitle() string { return In(i18n.Locale()).ConnectionsSubtitle() }
-
-// ConnectionsSubtitle says "See which route each app is taking"
-// in the language of msgs.
-func (msgs Messages) ConnectionsSubtitle() string {
-	return Catalog.Format(msgs.locale, "connectionsSubtitle", nil)
 }
 
 // Copied says "Copied"
@@ -1650,26 +1650,6 @@ func (msgs Messages) LogsLines(count int) string {
 	return Catalog.Format(msgs.locale, "logsLines", map[string]any{"count": count})
 }
 
-// LogsSubtitle says "A record of connections and rules"
-// in the language the app shows.
-func LogsSubtitle() string { return In(i18n.Locale()).LogsSubtitle() }
-
-// LogsSubtitle says "A record of connections and rules"
-// in the language of msgs.
-func (msgs Messages) LogsSubtitle() string {
-	return Catalog.Format(msgs.locale, "logsSubtitle", nil)
-}
-
-// LogsTitle says "Log"
-// in the language the app shows.
-func LogsTitle() string { return In(i18n.Locale()).LogsTitle() }
-
-// LogsTitle says "Log"
-// in the language of msgs.
-func (msgs Messages) LogsTitle() string {
-	return Catalog.Format(msgs.locale, "logsTitle", nil)
-}
-
 // ModeGlobal says "Global"
 // in the language the app shows.
 func ModeGlobal() string { return In(i18n.Locale()).ModeGlobal() }
@@ -1848,6 +1828,16 @@ func OutboundMode() string { return In(i18n.Locale()).OutboundMode() }
 // in the language of msgs.
 func (msgs Messages) OutboundMode() string {
 	return Catalog.Format(msgs.locale, "outboundMode", nil)
+}
+
+// PageActivity says "Activity"
+// in the language the app shows.
+func PageActivity() string { return In(i18n.Locale()).PageActivity() }
+
+// PageActivity says "Activity"
+// in the language of msgs.
+func (msgs Messages) PageActivity() string {
+	return Catalog.Format(msgs.locale, "pageActivity", nil)
 }
 
 // PageConnections says "Connections"

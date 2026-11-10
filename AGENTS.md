@@ -145,7 +145,7 @@ on this machine while developing Hop. Hop must never interfere with it.
 - Hop's data lives in `~/Library/Application Support/hop/` (files mode 0600); the dev build's in `hop-dev/`.
 - The log file is `logs/hop.log` there (`internal/repository/logfile`, 2 MiB, three files). It holds Hop's own
   `slog` output and the core's warnings and errors, never the core's info lines: those name the host of every
-  connection, a browsing history. The Logs page's "Open log folder" shows it; a user sends it for support.
+  connection, a browsing history. The log view's "Open log folder" (on the 活动 page) shows it; a user sends it for support.
   The TUN helper keeps its own log (`hop-helper.log` on Windows).
 
 ## Architecture
@@ -272,7 +272,11 @@ for font sizes, weights, gaps or radii in views.
   when the system does; the flyout's hint for that pill gives way to it. The
   header holds no switch: on the right it says, read only, whether Hop carries
   the traffic (the same dot and words as the flyout), so every page shows the
-  state while the switches live on the home page. Node tiles and the lists, charts and tables on the other pages
+  state while the switches live on the home page. The pages are 节点, 活动,
+  统计 and 设置: 活动 is what is happening now, the connections or the core's
+  log under one switch in its heading (`activity.go`; the log is rarely read,
+  so it is a view of that page and not a tab of its own). Node tiles and the
+  lists, charts and tables on the other pages
   are translucent cards, as the design shows. Dialogs, picker popups, tooltips,
   toasts and the menu-bar flyout stay opaque cards.
 - The hero is one card: the panel glass with the theme's own accent mixed in

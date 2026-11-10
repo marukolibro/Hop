@@ -36,14 +36,13 @@ const (
 // Pages of the main window, in the order the switch shows them.
 const (
 	pageNodes = iota
-	pageConnections
+	pageActivity
 	pageStats
-	pageLogs
 	pageSettings
 )
 
 func pageLabels() []string {
-	return []string{locales.PageNodes(), locales.PageConnections(), locales.PageStats(), locales.PageLogs(), locales.PageSettings()}
+	return []string{locales.PageNodes(), locales.PageActivity(), locales.PageStats(), locales.PageSettings()}
 }
 
 // modeLabels name service.Modes, index for index.
@@ -342,7 +341,9 @@ type Dashboard struct {
 	// appVersion is Hop's own version, as the settings row shows it.
 	appVersion string
 
-	page         int
+	page int
+	// activity is the view the activity page shows, one of the activity constants.
+	activity     int
 	status       string
 	failure      *failure
 	subscription subscriptionsState
@@ -946,12 +947,10 @@ func (d *Dashboard) View(c *ui.Context) {
 		// new element that enters.
 		ui.Column(c).Key("page-" + strconv.Itoa(d.page)).Grow(1).Basis(0).MinHeight(0).Transition(pageTransition).Children(func() {
 			switch d.page {
-			case pageConnections:
-				d.connectionsPage(c, t)
+			case pageActivity:
+				d.activityPage(c, t)
 			case pageStats:
 				d.statsPage(c, t)
-			case pageLogs:
-				d.logsPage(c, t)
 			case pageSettings:
 				d.settingsPage(c, t)
 			default:

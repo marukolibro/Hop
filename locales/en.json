@@ -41,6 +41,8 @@
   "actionWatchConnections": "Couldn't read the connection list",
   "actionWatchLogs": "Couldn't read the core log",
   "actionWatchTraffic": "Lost the connection to the core",
+  "activitySubtitle": "What is passing through Hop now, and what the core says",
+  "activityViewLabel": "Activity view",
   "add": "Add",
   "all": "All",
   "appDevBuild": "Dev build",
@@ -57,7 +59,6 @@
   },
   "appVersion": "Version",
   "badgeInUse": "In use",
-  "badgeLive": "Live",
   "cancel": "Cancel",
   "checkForUpdates": "Check for updates",
   "checking": "Checking",
@@ -116,7 +117,6 @@
       }
     }
   },
-  "connectionsSubtitle": "See which route each app is taking",
   "copied": "Copied",
   "copy": "Copy",
   "coreChecking": "Checking that the new core runs",
@@ -316,8 +316,6 @@
       }
     }
   },
-  "logsSubtitle": "A record of connections and rules",
-  "logsTitle": "Log",
   "modeGlobal": "Global",
   "modeHintDirect": "Everything goes direct, nothing through the proxy",
   "modeHintGlobal": "All traffic goes through the proxy",
@@ -336,6 +334,7 @@
   "openMainWindow": "Open main window",
   "optional": "Optional",
   "outboundMode": "Outbound mode",
+  "pageActivity": "Activity",
   "pageConnections": "Connections",
   "pageLogs": "Log",
   "pageNodes": "Nodes",

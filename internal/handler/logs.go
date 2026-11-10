@@ -26,18 +26,16 @@ type logFilter struct {
 	levels []string
 }
 
-// logsPage shows the core's log as it arrives, following the newest line
-// until the user scrolls away from it.
-func (d *Dashboard) logsPage(c *ui.Context, t *ui.Theme) {
+// logsView shows the core's log as it arrives, following the newest line
+// until the user scrolls away from it. It is one of the activity page's two
+// views, below its heading.
+func (d *Dashboard) logsView(c *ui.Context, t *ui.Theme) {
 	visible := filterLogs(d.logs.entries, logFilters()[d.logs.level].levels)
 	labels := make([]string, len(logFilters()))
 	for i, f := range logFilters() {
 		labels[i] = f.label
 	}
-	ui.Column(c).Fill().Children(func() {
-		ui.Column(c).Padding(28, pageGutter(c), 26, pageGutter(c)).Children(func() {
-			pageHeading(c, t, locales.LogsTitle(), locales.LogsSubtitle())
-		})
+	ui.Column(c).Key("log").Grow(1).Basis(0).MinHeight(0).Children(func() {
 		toolbar(c, func() {
 			slidingSwitch(c, locales.LogsLevel(), &d.logs.level, labels, pageSwitchStyle(t, 52), func(int) {})
 			mutedText(c, t, locales.LogsLines(len(visible))).FontFeatures("tnum")

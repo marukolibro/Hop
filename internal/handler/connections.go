@@ -33,19 +33,15 @@ func connectionColumns() []ui.TableColumn {
 	}
 }
 
-// connectionsPage lists the connections the core carries, newest first,
-// with a filter and a way to close them.
-func (d *Dashboard) connectionsPage(c *ui.Context, t *ui.Theme) {
+// connectionsView lists the connections the core carries, newest first,
+// with a filter and a way to close them. It is one of the activity page's two
+// views, below its heading.
+func (d *Dashboard) connectionsView(c *ui.Context, t *ui.Theme) {
 	conns := d.connections.data
 	visible := d.visibleConnections()
 	width, _ := c.Size()
 	columns, order := connectionLayout(width < 760)
-	ui.Column(c).Fill().Children(func() {
-		ui.Column(c).Padding(28, pageGutter(c), 26, pageGutter(c)).Children(func() {
-			pageHeadingRow(c, t, locales.PageConnections(), locales.ConnectionsSubtitle(), func() {
-				badge(c, t, locales.BadgeLive())
-			})
-		})
+	ui.Column(c).Key("connections").Grow(1).Basis(0).MinHeight(0).Children(func() {
 		toolbar(c, func() {
 			ui.TextInput(c, &d.connections.filter).Placeholder(locales.ConnectionsFilter()).Width(270)
 			mutedText(c, t, locales.ConnectionsCount(len(conns.Active))).FontFeatures("tnum")
