@@ -95,7 +95,7 @@ func button(c *ui.Context, spec buttonSpec, onClick func()) ui.Element {
 // textButton is the design's quiet text action, with an optional icon. It
 // has no capsule or fill; the ink turns accent under the pointer.
 func textButton(c *ui.Context, t *ui.Theme, label string, icon *ui.SVG, disabled bool, busy bool, onClick func()) ui.Element {
-	b := ui.ButtonBase(c).Key(label).Label(label).Height(switchHeight).Padding(0).Gap(6).
+	b := ui.ButtonBase(c).Key(label).Label(label).Height(switchHeight).Padding(0).Gap(6).MinWidth(0).Shrink(1).
 		Radius(0).Background(ui.Transparent).Disabled(disabled || busy)
 	ink := t.TextMuted
 	if b.Hovered() && !disabled {
@@ -113,7 +113,7 @@ func textButton(c *ui.Context, t *ui.Theme, label string, icon *ui.SVG, disabled
 			ui.Icon(c, icon).Width(buttonIconSize).Height(buttonIconSize).TextColor(ink)
 		}
 		ui.Text(c, label).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(ink).
-			NoWrap().Translate(0, -opticalLift)
+			MaxLines(1).Shrink(1).Translate(0, -opticalLift)
 	})
 	return b
 }

@@ -165,7 +165,7 @@ func (d *Dashboard) sidebarItem(c *ui.Context, t *ui.Theme, group model.GroupVie
 	item.OnClick(func() { d.activeGroup = name })
 	item.Children(func() {
 		groupIcon(c, t, group, sidebarIconSize)
-		ui.Column(c).Grow(1).Basis(0).Gap(4).Children(func() {
+		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(4).Children(func() {
 			title := ui.Text(c, groupTitle(group)).FontSize(fontBody).MaxLines(1)
 			captionText(c, t, groupDestination(group)).MaxLines(1)
 			if isActive {
