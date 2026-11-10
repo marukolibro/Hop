@@ -427,11 +427,16 @@ for fills. One orchestrated entrance (the flyout), no scattered fade-ins.
    — the integration test starts a real core on 17891/19091. This is Hop's
    own bundled core, which CI uses too (run `scripts/fetch-mihomo.sh` if it is
    missing); never depend on another client being installed.
-3. For UI changes, render and look at the result before claiming it works:
-   a temporary `internal/handler/preview_test.go` using `ui.NewTester`
-   (`SetScale(2)`, `SetDark`, `SetTitleBar`, `Advance` past animations,
-   `Image()` → PNG) — light and dark, with realistic data (the running core's
-   `View` is best). Delete the preview file afterwards; it is not a test.
+3. For UI changes, render and look at the result before claiming it works.
+   `internal/handler/shots_test.go` does it with sample data (the nodes,
+   activity, stats and settings pages, the add-rule dialog and the menu bar
+   panel, light and dark): `HOP_SHOTS_DIR=<dir> MYGO_LOCALE=zh-Hans go test
+   ./internal/handler -run TestShots -count=1`, then again with
+   `MYGO_LOCALE=en`; it does nothing without `HOP_SHOTS_DIR`, so it is not
+   part of the test run. Add the page or state you changed to it. For
+   anything else (another size, a state it lacks) write a temporary test the
+   same way (`ui.NewTester`, `SetScale(2)`, `SetDark`, `SetTitleBar`,
+   `Advance` past animations, `Image()` → PNG) and delete it afterwards.
 4. If `go tool mygo dev` is running, confirm it rebuilt (`✓ Rebuilt`) and its
    log has no `panic`. Editing files restarts the core: wait before querying it.
 5. Report what was verified and what was not (real-window interaction,
@@ -508,9 +513,9 @@ static `index.html`, no build step, English and Chinese in the same file
 scheme the system). Its pictures are `docs/assets/<lang>/<page>-<light|dark>.webp`,
 made from the PNGs in `docs/screenshots/` (Chinese, which the Chinese README
 uses) and `docs/screenshots/en/` (English, for `README.md`) with
-`cwebp -q 84 -alpha_q 90`. Retake them with a temporary preview test as in
-"Verify every change" (sample data, the UI in each language through
-`MYGO_LOCALE`, light and dark), and convert again after a UI change. Keep the
+`cwebp -q 84 -alpha_q 90`. Retake them with `shots_test.go` as in "Verify
+every change" (the names nodes, connections, stats, add-rule and menubar are
+the ones the READMEs and the site use), and convert again after a UI change. Keep the
 page plain: a sentence and a real screenshot per section, no decoration.
 Check it at desktop and phone width, in both languages and both schemes.
 
