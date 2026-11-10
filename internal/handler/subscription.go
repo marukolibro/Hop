@@ -377,7 +377,10 @@ func (d *Dashboard) sidebarSubscription(c *ui.Context, t *ui.Theme) {
 		})
 		switch {
 		case active.Source != model.SourceRemote:
+			// A local profile has no account to report, but what went through
+			// it this month is still Hop's to say.
 			mutedText(c, t, service.LocalProfileName()).NoWrap()
+			subscriptionUsage(c, t, service.MonthlyProxyForSource(d.stats, active.ID), now, barWidth, locales.SubMetricLocalProxy())
 		case active.HasUsage:
 			subscriptionUsage(c, t, active.Usage, now, barWidth, "")
 		default:
@@ -714,11 +717,8 @@ func (d *Dashboard) cardMenu(c *ui.Context, t *ui.Theme, item model.Subscription
 	})
 }
 
-// cardMetrics 显示机场上报的用量，没有用量头时显示本月本机代理流量。/ cardMetrics shows provider usage, or local proxy traffic when no usage header exists.
+// cardMetrics 显示机场上报的用量，没有用量头时显示本月本机代理流量。/ cardMetrics shows provider usage, or local proxy traffic when no usage header exists. A local profile never refreshes, so it shows the traffic only.
 func (d *Dashboard) cardMetrics(c *ui.Context, t *ui.Theme, item model.SubscriptionSummary) {
-	if item.Source == model.SourceLocal {
-		return
-	}
 	hasExpiry := item.HasUsage && !item.Usage.Expire.IsZero()
 	ui.Column(c).Key("指标").Gap(gapMedium).Children(func() {
 		horizontalHairline(c, t)
@@ -731,7 +731,9 @@ func (d *Dashboard) cardMetrics(c *ui.Context, t *ui.Theme, item model.Subscript
 			if hasExpiry {
 				expiryMetric(c, t, item.Usage.Expire)
 			}
-			updatedMetric(c, t, item.UpdatedAt)
+			if item.Source != model.SourceLocal {
+				updatedMetric(c, t, item.UpdatedAt)
+			}
 		})
 	})
 }
