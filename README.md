@@ -129,10 +129,11 @@ running in a webview, and the same code runs on macOS and Windows.
 
 ### Insight
 
-- **Connections.** Every connection the core carries, with its application,
+- **Activity.** Under one switch, the connections and the log. The connections
+  are every connection the core carries, with its application,
   the rule that matched and the node it leaves by. Filter by host, application,
-  rule or route; close one or all; add a rule.
-- **Logs.** The core's log, live, with a level filter. Hop also keeps a log file
+  rule or route; close one or all; add a rule. The log is the core's, live, with
+  a level filter. Hop also keeps a log file
   (Hop's own messages and the core's warnings and errors, no browsing history)
   that "Open log folder" shows, to send when something goes wrong.
 - **Statistics.** Today, this month and the last 30 days, split into proxied and
@@ -155,8 +156,8 @@ running in a webview, and the same code runs on macOS and Windows.
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/en/connections-light.png" width="420" alt="The connections page">
-  <img src="docs/screenshots/en/connections-dark.png" width="420" alt="The connections page in dark appearance">
+  <img src="docs/screenshots/en/connections-light.png" width="420" alt="The activity page, showing the connections">
+  <img src="docs/screenshots/en/connections-dark.png" width="420" alt="The activity page in dark appearance">
 </p>
 
 <p align="center">

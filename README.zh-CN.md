@@ -68,8 +68,7 @@ macOS 和 Windows 上运行。
 
 ### 洞察
 
-- **连接**:内核正在承载的每一条连接,显示应用、命中的规则和走的节点。可按主机、应用、规则或线路筛选,断开一条或全部,也可以直接加规则。
-- **日志**:内核日志实时显示,可按级别筛选。Hop 还会把自己的日志和内核的警告、错误写进日志文件(不含访问了哪些网站),在日志页点「打开日志文件夹」就能找到,出问题时发给我们。
+- **活动**:一个切换里放连接和日志。连接是内核正在承载的每一条连接,显示应用、命中的规则和走的节点。可按主机、应用、规则或线路筛选,断开一条或全部,也可以直接加规则。日志是内核日志,实时显示,可按级别筛选。Hop 还会把自己的日志和内核的警告、错误写进日志文件(不含访问了哪些网站),在活动页切到日志,点「打开日志文件夹」就能找到,出问题时发给我们。
 - **统计**:今天、本月和最近 30 天,区分代理和直连,并按订阅统计本月流量。
 
 ### 外观
@@ -85,8 +84,8 @@ macOS 和 Windows 上运行。
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/connections-light.png" width="420" alt="连接页">
-  <img src="docs/screenshots/connections-dark.png" width="420" alt="深色外观下的连接页">
+  <img src="docs/screenshots/connections-light.png" width="420" alt="活动页,显示连接">
+  <img src="docs/screenshots/connections-dark.png" width="420" alt="深色外观下的活动页">
 </p>
 
 <p align="center">
