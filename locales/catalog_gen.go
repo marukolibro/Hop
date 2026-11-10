@@ -2432,14 +2432,14 @@ func (msgs Messages) SettingsCopyCommand() string {
 	return Catalog.Format(msgs.locale, "settingsCopyCommand", nil)
 }
 
-// SettingsCore says "Core"
+// SettingsCoreAbout says "Core and about"
 // in the language the app shows.
-func SettingsCore() string { return In(i18n.Locale()).SettingsCore() }
+func SettingsCoreAbout() string { return In(i18n.Locale()).SettingsCoreAbout() }
 
-// SettingsCore says "Core"
+// SettingsCoreAbout says "Core and about"
 // in the language of msgs.
-func (msgs Messages) SettingsCore() string {
-	return Catalog.Format(msgs.locale, "settingsCore", nil)
+func (msgs Messages) SettingsCoreAbout() string {
+	return Catalog.Format(msgs.locale, "settingsCoreAbout", nil)
 }
 
 // SettingsCustomRules says "Custom rules"
@@ -2452,14 +2452,14 @@ func (msgs Messages) SettingsCustomRules() string {
 	return Catalog.Format(msgs.locale, "settingsCustomRules", nil)
 }
 
-// SettingsGeneral says "General"
+// SettingsInterface says "Interface"
 // in the language the app shows.
-func SettingsGeneral() string { return In(i18n.Locale()).SettingsGeneral() }
+func SettingsInterface() string { return In(i18n.Locale()).SettingsInterface() }
 
-// SettingsGeneral says "General"
+// SettingsInterface says "Interface"
 // in the language of msgs.
-func (msgs Messages) SettingsGeneral() string {
-	return Catalog.Format(msgs.locale, "settingsGeneral", nil)
+func (msgs Messages) SettingsInterface() string {
+	return Catalog.Format(msgs.locale, "settingsInterface", nil)
 }
 
 // SettingsLan says "LAN"
@@ -2542,14 +2542,34 @@ func (msgs Messages) SettingsMenuBarSpeedNote() string {
 	return Catalog.Format(msgs.locale, "settingsMenuBarSpeedNote", nil)
 }
 
-// SettingsRules says "Rules"
+// SettingsNetwork says "Network"
 // in the language the app shows.
-func SettingsRules() string { return In(i18n.Locale()).SettingsRules() }
+func SettingsNetwork() string { return In(i18n.Locale()).SettingsNetwork() }
 
-// SettingsRules says "Rules"
+// SettingsNetwork says "Network"
 // in the language of msgs.
-func (msgs Messages) SettingsRules() string {
-	return Catalog.Format(msgs.locale, "settingsRules", nil)
+func (msgs Messages) SettingsNetwork() string {
+	return Catalog.Format(msgs.locale, "settingsNetwork", nil)
+}
+
+// SettingsStartup says "Startup and menu bar"
+// in the language the app shows.
+func SettingsStartup() string { return In(i18n.Locale()).SettingsStartup() }
+
+// SettingsStartup says "Startup and menu bar"
+// in the language of msgs.
+func (msgs Messages) SettingsStartup() string {
+	return Catalog.Format(msgs.locale, "settingsStartup", nil)
+}
+
+// SettingsSubscriptionsRules says "Subscriptions and rules"
+// in the language the app shows.
+func SettingsSubscriptionsRules() string { return In(i18n.Locale()).SettingsSubscriptionsRules() }
+
+// SettingsSubscriptionsRules says "Subscriptions and rules"
+// in the language of msgs.
+func (msgs Messages) SettingsSubscriptionsRules() string {
+	return Catalog.Format(msgs.locale, "settingsSubscriptionsRules", nil)
 }
 
 // SettingsSubtitle says "Set Hop up your way and let it run quietly"

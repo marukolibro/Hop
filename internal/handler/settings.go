@@ -142,111 +142,114 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 		ui.Row(c).Justify(ui.Center).Padding(28, pageGutter(c), 40, pageGutter(c)).Children(func() {
 			ui.Column(c).Grow(1).MaxWidth(settingsWidth).Gap(26).Children(func() {
 				pageHeading(c, t, locales.PageSettings(), locales.SettingsSubtitle())
-				general := []func(){
-					func() {
-						settingRow(c, t, locales.SettingsLaunchAtLogin(), locales.SettingsLaunchAtLoginNote(), func() {
-							on := d.openAtLogin
-							ui.Switch(c.Key("open-at-login"), &on).Label(locales.SettingsLaunchAtLogin()).OnChange(func() {
-								d.setOpenAtLogin(!d.openAtLogin)
-							})
-						})
-					},
-					func() {
-						settingRow(c, t, locales.SettingsMenuBarSpeed(), locales.SettingsMenuBarSpeedNote(), func() {
-							on := s.settings.MenuBarSpeed
-							ui.Switch(c.Key("menu-bar-speed"), &on).Label(locales.SettingsMenuBarSpeed()).OnChange(func() {
-								next := s.settings
-								next.MenuBarSpeed = !next.MenuBarSpeed
-								d.saveSettings(next)
-							})
-						})
-					},
-					d.portRow(c, t),
-					func() {
-						settingRow(c, t, locales.SettingsTerminalProxy(), locales.SettingsTerminalProxyNote(), func() {
-							button(c, buttonSpec{label: locales.SettingsCopyCommand(), icon: iconTerminal, style: mainSoftButton(t)}, func() {
-								c.WriteClipboard(service.TerminalProxyCommand(runtime.GOOS, d.proxyAddress()))
-								c.Toast(locales.SettingsCommandCopied())
-							})
-						})
-					},
-					func() {
-						settingRow(c, t, locales.SettingsTheme(), locales.SettingsThemeNote(), func() {
-							slidingSwitch(c, "color-theme", &s.themeIndex, colorThemeLabels(), pageSwitchStyle(t, themeSegmentWidth), func(i int) {
-								next := s.settings
-								next.Theme = service.ColorThemes[i]
-								d.saveSettings(next)
-							})
-						})
-					},
-					func() {
-						settingRow(c, t, locales.SettingsLanguage(), locales.SettingsLanguageNote(), func() {
-							slidingSwitch(c, "language", &s.languageIndex, languageLabels(), pageSwitchStyle(t, languageSegmentWidth), func(i int) {
-								next := s.settings
-								next.Language = service.Languages[i]
-								d.saveSettings(next)
-							})
-						})
-					},
-					func() {
-						settingRow(c, t, locales.SettingsAppearance(), "", func() {
-							slidingSwitch(c, "appearance", &s.appearanceIndex, appearanceLabels(), pageSwitchStyle(t, 64), func(i int) {
-								next := s.settings
-								next.Appearance = service.Appearances[i]
-								d.saveSettings(next)
-							})
-						})
-					},
-				}
-				if runtime.GOOS == "darwin" && c.Vibrancy() {
-					general = append(general, func() {
-						settingRow(c, t, locales.SettingsClarity(), locales.SettingsClarityNote(), func() {
-							ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-								ui.Slider(c, &s.clarity, model.WindowClarityMin, model.WindowClarityMax).
-									Label(locales.SettingsClarity()).Width(150).OnChange(func() {
-									next := s.settings
-									next.WindowClarity = int(math.Round(s.clarity))
-									if next.WindowClarity != s.settings.WindowClarity {
-										d.saveSettings(next)
-									}
-								})
-								ui.Text(c, fmt.Sprintf("%d%%", int(math.Round(s.clarity)))).
-									FontSize(fontSecondary).FontFeatures("tnum").Width(34).TextAlign(ui.End)
-							})
+				launchRow := func() {
+					settingRow(c, t, locales.SettingsLaunchAtLogin(), locales.SettingsLaunchAtLoginNote(), func() {
+						on := d.openAtLogin
+						ui.Switch(c.Key("open-at-login"), &on).Label(locales.SettingsLaunchAtLogin()).OnChange(func() {
+							d.setOpenAtLogin(!d.openAtLogin)
 						})
 					})
 				}
-				general = append(general,
-					func() {
-						settingRow(c, t, locales.SettingsTimeout(), locales.SettingsTimeoutNote(), func() {
-							slidingSwitch(c, "timeout", &s.timeoutIndex, timeoutLabels(), pageSwitchStyle(t, 52), func(i int) {
-								next := s.settings
-								next.DelayTimeoutSeconds = service.DelayTimeouts[i]
-								d.saveSettings(next)
-							})
+				menuBarSpeedRow := func() {
+					settingRow(c, t, locales.SettingsMenuBarSpeed(), locales.SettingsMenuBarSpeedNote(), func() {
+						on := s.settings.MenuBarSpeed
+						ui.Switch(c.Key("menu-bar-speed"), &on).Label(locales.SettingsMenuBarSpeed()).OnChange(func() {
+							next := s.settings
+							next.MenuBarSpeed = !next.MenuBarSpeed
+							d.saveSettings(next)
 						})
-					},
-					d.appVersionRow(c, t),
-				)
-				settingsGroup(c, t, locales.SettingsGeneral(), general...)
+					})
+				}
+				terminalProxyRow := func() {
+					settingRow(c, t, locales.SettingsTerminalProxy(), locales.SettingsTerminalProxyNote(), func() {
+						button(c, buttonSpec{label: locales.SettingsCopyCommand(), icon: iconTerminal, style: mainSoftButton(t)}, func() {
+							c.WriteClipboard(service.TerminalProxyCommand(runtime.GOOS, d.proxyAddress()))
+							c.Toast(locales.SettingsCommandCopied())
+						})
+					})
+				}
+				timeoutRow := func() {
+					settingRow(c, t, locales.SettingsTimeout(), locales.SettingsTimeoutNote(), func() {
+						slidingSwitch(c, "timeout", &s.timeoutIndex, timeoutLabels(), pageSwitchStyle(t, 52), func(i int) {
+							next := s.settings
+							next.DelayTimeoutSeconds = service.DelayTimeouts[i]
+							d.saveSettings(next)
+						})
+					})
+				}
+				themeRow := func() {
+					settingRow(c, t, locales.SettingsTheme(), locales.SettingsThemeNote(), func() {
+						slidingSwitch(c, "color-theme", &s.themeIndex, colorThemeLabels(), pageSwitchStyle(t, themeSegmentWidth), func(i int) {
+							next := s.settings
+							next.Theme = service.ColorThemes[i]
+							d.saveSettings(next)
+						})
+					})
+				}
+				appearanceRow := func() {
+					settingRow(c, t, locales.SettingsAppearance(), "", func() {
+						slidingSwitch(c, "appearance", &s.appearanceIndex, appearanceLabels(), pageSwitchStyle(t, 64), func(i int) {
+							next := s.settings
+							next.Appearance = service.Appearances[i]
+							d.saveSettings(next)
+						})
+					})
+				}
+				languageRow := func() {
+					settingRow(c, t, locales.SettingsLanguage(), locales.SettingsLanguageNote(), func() {
+						slidingSwitch(c, "language", &s.languageIndex, languageLabels(), pageSwitchStyle(t, languageSegmentWidth), func(i int) {
+							next := s.settings
+							next.Language = service.Languages[i]
+							d.saveSettings(next)
+						})
+					})
+				}
+				clarityRow := func() {
+					settingRow(c, t, locales.SettingsClarity(), locales.SettingsClarityNote(), func() {
+						ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+							ui.Slider(c, &s.clarity, model.WindowClarityMin, model.WindowClarityMax).
+								Label(locales.SettingsClarity()).Width(150).OnChange(func() {
+								next := s.settings
+								next.WindowClarity = int(math.Round(s.clarity))
+								if next.WindowClarity != s.settings.WindowClarity {
+									d.saveSettings(next)
+								}
+							})
+							ui.Text(c, fmt.Sprintf("%d%%", int(math.Round(s.clarity)))).
+								FontSize(fontSecondary).FontFeatures("tnum").Width(34).TextAlign(ui.End)
+						})
+					})
+				}
+				subscriptionUpdateRow := func() {
+					settingRow(c, t, locales.SettingsAutoUpdate(), locales.SettingsAutoUpdateNote(), func() {
+						slidingSwitch(c, "subscription-update", &s.updateIndex, updateLabels(), pageSwitchStyle(t, 58), func(i int) {
+							next := s.settings
+							next.SubscriptionUpdateHours = service.SubscriptionUpdateIntervals[i]
+							d.saveSettings(next)
+						})
+					})
+				}
+
+				// The groups go by what the user is doing, in the order a
+				// first run goes: how Hop looks, how it starts, how it
+				// reaches the network, then what its rules and its core are.
+				interfaceRows := []func(){themeRow, appearanceRow}
+				if runtime.GOOS == "darwin" && c.Vibrancy() {
+					interfaceRows = append(interfaceRows, clarityRow)
+				}
+				interfaceRows = append(interfaceRows, languageRow)
+				settingsGroup(c, t, locales.SettingsInterface(), interfaceRows...)
+				settingsGroup(c, t, locales.SettingsStartup(), launchRow, menuBarSpeedRow)
+				settingsGroup(c, t, locales.SettingsNetwork(), d.portRow(c, t), terminalProxyRow, timeoutRow)
 				settingsGroup(c, t, locales.SettingsLan(), d.lanRows(c, t)...)
-				settingsGroup(c, t, locales.Subscriptions(),
-					func() {
-						settingRow(c, t, locales.SettingsAutoUpdate(), locales.SettingsAutoUpdateNote(), func() {
-							slidingSwitch(c, "subscription-update", &s.updateIndex, updateLabels(), pageSwitchStyle(t, 58), func(i int) {
-								next := s.settings
-								next.SubscriptionUpdateHours = service.SubscriptionUpdateIntervals[i]
-								d.saveSettings(next)
-							})
-						})
-					},
-				)
-				settingsGroup(c, t, locales.SettingsRules(), d.geodataRow(c, t))
+				settingsGroup(c, t, locales.SettingsSubscriptionsRules(), subscriptionUpdateRow, d.geodataRow(c, t))
 				settingsGroup(c, t, locales.SettingsCustomRules(), d.customRulesRows(c, t)...)
 				settingsGroup(c, t, locales.SettingsTun(), d.fakeIPRows(c, t)...)
+				aboutRows := []func(){}
 				if d.core.loaded {
-					settingsGroup(c, t, locales.SettingsCore(), append(append(d.coreRows(c, t), d.helperRows(c, t)...), d.memoryRow(c, t))...)
+					aboutRows = append(append(append(aboutRows, d.coreRows(c, t)...), d.helperRows(c, t)...), d.memoryRow(c, t))
 				}
+				settingsGroup(c, t, locales.SettingsCoreAbout(), append(aboutRows, d.appVersionRow(c, t))...)
 				mutedText(c, t, locales.SettingsLicense()).AlignSelf(ui.Center)
 			})
 		})
