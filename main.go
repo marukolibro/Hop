@@ -36,6 +36,7 @@ import (
 	"hop/internal/repository/subscription"
 	"hop/internal/repository/sysproxy"
 	"hop/internal/repository/unlock"
+	"hop/internal/repository/zoneinfo"
 	"hop/internal/service"
 	"hop/locales"
 )
@@ -331,6 +332,7 @@ func run() (err error) {
 		Folders:       mygo.Shell,
 		LogDir:        cfg.LogDir,
 		ExitIP:        service.NewExitIPService(exitip.NewClient(exitip.TraceURL, hopProxyClient(portState))),
+		Place:         service.NewPlaceService(zoneinfo.New()),
 		Unlock:        service.NewUnlockService(unlockRouted(portState, client)),
 		LAN:           lanService,
 		Port:          portService,

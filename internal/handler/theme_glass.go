@@ -49,7 +49,7 @@ const (
 	glassChartHover        float32 = 0.25
 	glassDangerFill        float32 = 0.08
 	glassDangerHover       float32 = 0.12
-	glassNoticeDanger      float32 = 0.10
+	glassNoticeTint        float32 = 0.10
 	glassToggleOnTint      float32 = 0.10
 	glassBadgeTint         float32 = 0.08
 )

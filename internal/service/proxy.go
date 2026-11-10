@@ -211,19 +211,3 @@ func LeftBehind(conns model.Connections, group string, proxy string) []string {
 func (s *ProxyService) WatchTraffic(ctx context.Context, handle func(model.Traffic)) error {
 	return s.controller.StreamTraffic(ctx, handle)
 }
-
-// PushSample returns history with sample appended, keeping at most limit
-// samples. The input is not modified.
-func PushSample(history model.TrafficHistory, sample model.Traffic, limit int) model.TrafficHistory {
-	return model.TrafficHistory{
-		Up:   pushBounded(history.Up, float32(sample.Up), limit),
-		Down: pushBounded(history.Down, float32(sample.Down), limit),
-	}
-}
-
-func pushBounded(values []float32, value float32, limit int) []float32 {
-	start := max(0, len(values)+1-limit)
-	out := make([]float32, 0, len(values)+1-start)
-	out = append(out, values[start:]...)
-	return append(out, value)
-}

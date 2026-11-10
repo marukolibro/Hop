@@ -23,6 +23,10 @@ var (
 	accentDark     = ui.Hex("#6CB8FF")
 	accentInkLight = ui.Hex("#1B5C8E")
 	accentInkDark  = accentDark
+	// dangerFillLight/Dark are Danger as a fill or a light: the glass palette's
+	// Danger is a pale ink made for text, which glows white.
+	dangerFillLight = ui.Hex("#D92D4A")
+	dangerFillDark  = ui.Hex("#FF6B84")
 	// uploadLight/Dark mark upload: the ring's inner arc, the plot's upload
 	// line and the ↑ arrow. Blue-slate, not orange.
 	uploadLight = ui.Hex("#3A4F6B")
@@ -55,6 +59,14 @@ func accentInk(t *ui.Theme) ui.Color {
 		return accentInkDark
 	}
 	return accentInkLight
+}
+
+// dangerFill is Danger where it fills a shape or lights a card.
+func dangerFill(t *ui.Theme) ui.Color {
+	if t.Dark {
+		return dangerFillDark
+	}
+	return dangerFillLight
 }
 
 // uploadColor is the upload side's ink: the ring's inner arc, the plot's

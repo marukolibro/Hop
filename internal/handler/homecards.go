@@ -2,9 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -24,19 +22,28 @@ const (
 	cardHeaderHeight float32 = 24
 	cardHeaderIcon   float32 = 14
 	cardTitleInk     float32 = 0.72
-	// modeButtonHeight is a mode's button; the bar holds them with
-	// modeBarPad around.
+	// modeButtonHeight is a mode's button.
 	modeButtonHeight float32 = 40
-	modeBarPad       float32 = 8
+	// controlBarPad pads the control bar; controlBarMinWidth is the content
+	// width from which it is one capsule, modeGroupBasis the width the outbound
+	// mode asks for before the switches wrap under it, and controlDividerHeight
+	// the divider between the two.
+	controlBarPad        float32 = 8
+	controlBarMinWidth   float32 = 760
+	modeGroupBasis       float32 = 380
+	controlDividerHeight float32 = 22
+	captureGroupBasis    float32 = 220
+	captureToggleBasis   float32 = 110
 	// serviceTilesShown is how many services the services card shows; the
 	// dialog behind it lists them all.
 	serviceTilesShown = 4
+	// servicesStripMinWidth is the content width from which the services card
+	// is one strip; serviceTileBasis is the width a tile asks for before the
+	// tiles wrap.
+	servicesStripMinWidth float32 = 780
+	serviceTileBasis      float32 = 104
 	// serviceMarkRatio is a mark's glyph as a share of the tile it sits on.
 	serviceMarkRatio float32 = 0.54
-	// lanSwitchPad pads the row that holds the LAN proxy's switch, and
-	// lanOnFill is how much of the accent that row takes while it is on.
-	lanSwitchPad float32 = 9
-	lanOnFill    float32 = 0.14
 )
 
 // nodesPaneWidth is the width of the content column beside the sidebar, less
@@ -46,17 +53,13 @@ func nodesPaneWidth(c *ui.Context) float32 {
 	return width - sidebarWidthFor(width) - hairlineWidth - 2*pagePadding
 }
 
-// homeCards is what sits between the hero and the nodes: the outbound mode as
-// one bar across, then the cards for the address other devices use with the
-// LAN proxy's switch, the services, and the memory Hop and its core hold. The
-// cards wrap as the window narrows, and a card left alone on a row grows to
-// fill it.
+// homeCards is what sits between the hero and the nodes: the control bar, which
+// says how traffic is handled, then the services card. The LAN proxy and the
+// memory Hop holds are rarely used, so they live in the settings.
 func (d *Dashboard) homeCards(c *ui.Context, t *ui.Theme) {
-	d.modeBar(c, t)
+	d.controlBar(c, t)
 	ui.Row(c).Key("homeCards").Wrap().Gap(gapMedium).GapY(gapMedium).AlignItems(ui.Stretch).Children(func() {
-		d.lanCard(c, t)
 		d.servicesCard(c, t)
-		d.memoryCard(c, t)
 	})
 }
 
@@ -67,12 +70,17 @@ func homeCard(c *ui.Context, t *ui.Theme, key string) ui.Element {
 		Padding(homeCardPadY, homeCardPadX).Gap(gapMedium).Radius(heroRadius).Shadow(0, 3, 12, 0, glassCardShadow(t))
 }
 
+// cardTitle is a card's icon and its name.
+func cardTitle(c *ui.Context, t *ui.Theme, icon *ui.SVG, title string) {
+	ui.Icon(c, icon).Width(cardHeaderIcon).Height(cardHeaderIcon).TextColor(t.TextMuted)
+	ui.Text(c, title).FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(t.Text.Alpha(cardTitleInk)).NoWrap().
+		Translate(0, -opticalLift)
+}
+
 // cardHeader is a card's title row: its icon, its name, and what trails it.
 func cardHeader(c *ui.Context, t *ui.Theme, key string, icon *ui.SVG, title string, trailing func()) {
 	ui.Row(c).Key(key).Gap(gapSmall).Height(cardHeaderHeight).AlignItems(ui.Center).Children(func() {
-		ui.Icon(c, icon).Width(cardHeaderIcon).Height(cardHeaderIcon).TextColor(t.TextMuted)
-		ui.Text(c, title).FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(t.Text.Alpha(cardTitleInk)).NoWrap().
-			Translate(0, -opticalLift)
+		cardTitle(c, t, icon, title)
 		ui.Box(c).Grow(1)
 		if trailing != nil {
 			trailing()
@@ -80,24 +88,49 @@ func cardHeader(c *ui.Context, t *ui.Theme, key string, icon *ui.SVG, title stri
 	})
 }
 
-// modeBar chooses the outbound mode: its name, then a button for each mode
-// across the row, the chosen one filled with the accent. Each button's
-// tooltip says what the mode does.
-func (d *Dashboard) modeBar(c *ui.Context, t *ui.Theme) {
-	disabled := d.modeLocked()
-	bar := ui.Row(c).Key("modeBar").Gap(gapMedium).AlignItems(ui.Center).Disabled(disabled).
-		Padding(modeBarPad, modeBarPad, modeBarPad, homeCardPadX).Radius((modeButtonHeight+2*modeBarPad)/2).
+// controlBar is how traffic is handled, on one bar, in the order it happens:
+// the two ways traffic reaches Hop as switches, then the outbound mode as
+// three buttons, the chosen one filled with the accent. In a wide pane it is
+// one capsule; in a narrow one the mode wraps under the switches.
+func (d *Dashboard) controlBar(c *ui.Context, t *ui.Theme) {
+	single := nodesPaneWidth(c) >= controlBarMinWidth
+	radius := heroRadius
+	if single {
+		radius = (modeButtonHeight + 2*controlBarPad) / 2
+	}
+	bar := ui.Row(c).Key("controlBar").Wrap().Gap(gapMedium).GapY(gapSmall).AlignItems(ui.Center).
+		Padding(controlBarPad).Radius(radius).
 		Border(hairlineWidth, glassMaterialLine(t)).Shadow(0, 3, 12, 0, glassCardShadow(t))
 	if onGlass(t) {
 		bar.Background(glassPanel(t))
 	} else {
 		bar.Background(t.Surface)
 	}
+	bar.Children(func() {
+		// Wrapped, the switches share their line as the modes share theirs.
+		group := ui.Row(c)
+		if !single {
+			group = group.Grow(1).Basis(captureGroupBasis).MinWidth(0)
+		}
+		d.captureGroup(c, t, group)
+		if single {
+			ui.Box(c).Key("divider").Width(hairlineWidth).Height(controlDividerHeight).Background(glassStrongLine(t))
+		}
+		d.modeGroup(c, t)
+	})
+}
+
+// modeGroup is the outbound mode: its name, then a button for each mode. Each
+// button's tooltip says what the mode does.
+func (d *Dashboard) modeGroup(c *ui.Context, t *ui.Theme) {
+	disabled := d.modeLocked()
+	group := ui.Row(c).Key("modeGroup").Grow(1).Basis(modeGroupBasis).MinWidth(0).Gap(gapMedium).AlignItems(ui.Center).
+		Disabled(disabled)
 	if disabled {
-		bar.Opacity(disabledOpacity)
+		group.Opacity(disabledOpacity)
 	}
 	icons := []*ui.SVG{iconList, iconGlobe, iconDirect}
-	bar.Children(func() {
+	group.Children(func() {
 		ui.Icon(c, iconRoute).Width(cardHeaderIcon).Height(cardHeaderIcon).TextColor(t.TextMuted)
 		ui.Text(c, locales.OutboundMode()).FontSize(fontSecondary).FontWeight(weightSemibold).
 			TextColor(t.Text.Alpha(cardTitleInk)).NoWrap().Translate(0, -opticalLift)
@@ -138,133 +171,133 @@ func (d *Dashboard) modeButton(c *ui.Context, t *ui.Theme, index int, label stri
 	})
 }
 
-// lanAddress is the address a device on the network reaches this computer at,
-// and the port the proxy listens on; both "" while the computer is on no
-// network or the access is not read yet.
-func lanAddress(status model.LANStatus, loaded bool) (host string, port string) {
-	if !loaded || len(status.Addresses) == 0 {
-		return "", ""
-	}
-	host, port, err := net.SplitHostPort(status.Addresses[0])
-	if err != nil {
-		return status.Addresses[0], ""
-	}
-	return host, port
-}
-
-// lanShareText is what the card's copy button puts on the clipboard: the
-// address, and once the proxy is on its port and, when an account is asked
-// for, the account and its password, so a device can be set up from it.
-func lanShareText(status model.LANStatus, host string, port string) string {
-	lines := []string{"IP: " + host}
-	if !status.Enabled {
-		return lines[0]
-	}
-	if port != "" {
-		lines = append(lines, locales.LanPort()+": "+port)
-	}
-	if account := status.Account; account != (model.LANCredential{}) {
-		lines = append(lines, locales.LanUsername()+": "+account.Username, locales.LanPassword()+": "+account.Password)
-	}
-	return strings.Join(lines, "\n")
-}
-
-// lanCard shows this computer's address on the network and the LAN proxy's
-// switch. Turning the proxy on opens a window with the account and password
-// (see lanDialog); the copy button takes everything a device needs.
-func (d *Dashboard) lanCard(c *ui.Context, t *ui.Theme) {
-	l := &d.lan
-	host, port := lanAddress(l.status, l.loaded)
-	locked := !l.loaded || l.busy || d.controlsLocked()
-	homeCard(c, t, "lanCard").Children(func() {
-		cardHeader(c, t, "lanTitle", iconLaptop, locales.LanIP(), func() {
-			if host != "" {
-				iconButton(c, locales.Copy(), iconCopy, mainSoftButton(t), func() {
-					c.WriteClipboard(lanShareText(l.status, host, port))
-					if l.status.Enabled {
-						c.Toast(locales.LanCopiedAll())
-						return
-					}
-					c.Toast(locales.Copied() + host)
-				})
-			}
-		})
-		if host == "" {
-			mutedText(c, t, lanMissing(l.loaded))
-		} else {
-			ui.Text(c, host).FontSize(fontExit).FontWeight(weightSemibold).FontFeatures("tnum").LetterSpacing(-0.4).NoWrap()
-		}
-		ui.Box(c).Grow(1)
-		// While the proxy is on, its row and its icon take the accent.
-		rowFill, badgeFill, badgeInk := t.Text.Alpha(neutralFillAlpha/2), t.Text.Alpha(neutralFillAlpha), t.TextMuted
-		if l.status.Enabled {
-			rowFill, badgeFill, badgeInk = t.Accent.Alpha(lanOnFill), t.Accent, t.AccentText
-		}
-		ui.Row(c).Key("lanSwitch").Gap(gapMedium).Padding(lanSwitchPad).Radius(radiusTile).AlignItems(ui.Center).
-			Background(rowFill).Children(func() {
-			ui.Box(c).Key("lanIcon").Width(serviceMarkTile).Height(serviceMarkTile).Radius(serviceMarkTile / 2).Center().
-				Background(badgeFill).Children(func() {
-				ui.Icon(c, iconWifi).Width(serviceMarkGlyph).Height(serviceMarkGlyph).TextColor(badgeInk)
-			})
-			ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(1).Children(func() {
-				ui.Text(c, locales.LanProxy()).FontSize(fontBody).FontWeight(weightSemibold).MaxLines(1)
-				captionText(c, t, lanState(l.status.Enabled, port)).MaxLines(1)
-			})
-			on := l.status.Enabled
-			ui.Box(c).Disabled(locked).Children(func() {
-				ui.Switch(c.Key("lan-home"), &on).Label(locales.LanProxy()).OnChange(func() {
-					if l.status.Enabled {
-						d.beginLAN(false, !d.settings.settings.LANNoPassword)
-						return
-					}
-					d.beginLANShowing(!d.settings.settings.LANNoPassword)
-				})
-			})
-		})
+// captureGroup is how traffic reaches Hop: the system proxy and TUN, each a
+// switch on a capsule, laid out in group.
+func (d *Dashboard) captureGroup(c *ui.Context, t *ui.Theme, group ui.Element) {
+	group.Key("captureGroup").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+		d.systemProxyToggle(c, t)
+		d.tunToggle(c, t)
 	})
 }
 
-// lanMissing says why there is no address to show.
-func lanMissing(loaded bool) string {
-	if !loaded {
-		return "—"
+// systemProxyToggle turns the system proxy on and off. While another app holds
+// the system proxy it cannot be turned on, and its tooltip says who holds it.
+func (d *Dashboard) systemProxyToggle(c *ui.Context, t *ui.Theme) {
+	s := &d.sysProxy
+	tip := locales.SystemProxyHint()
+	if holder := d.systemProxyHolder(); holder != "" {
+		tip = holder
 	}
-	return locales.LanNoNetwork()
+	captureToggle(c, t, pillSpec{
+		label: locales.SystemProxy(), on: s.on, busy: s.busy, hint: d.trafficHint(),
+		disabled: !s.loaded || (s.status.Owner == model.ProxyOwnerOther && !s.on),
+	}, tip, func() { d.beginSystemProxy(!s.on) })
 }
 
-// lanState is the LAN proxy's state in words, with its port while it is on.
-func lanState(enabled bool, port string) string {
-	if !enabled {
-		return locales.LanStateOff()
+// tunToggle turns TUN on and off. While another client's TUN holds the default
+// routes it cannot be turned on, and its tooltip says who holds them.
+func (d *Dashboard) tunToggle(c *ui.Context, t *ui.Theme) {
+	s := &d.tun
+	tip := locales.TunHint()
+	if holder := d.tunHolder(); holder != "" {
+		tip = holder
 	}
-	if port == "" {
-		return locales.LanStateOn()
+	captureToggle(c, t, pillSpec{
+		label: locales.Tun(), on: s.on, busy: s.busy,
+		disabled: !s.loaded || (d.controlsLocked() && !s.busy) || (s.taken && !s.on),
+	}, tip, func() { d.beginTun(!s.on) })
+}
+
+// captureToggle is a capsule as tall as a mode button, with a switch before
+// its name. It turns green while on, which is what marks a live proxy; a
+// spinner takes the switch's place while the change runs, and the hint ring
+// breathes around it while it is the one to turn on.
+func captureToggle(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onClick func()) {
+	b := ui.ButtonBase(c).Key(spec.label).Label(spec.label).Tooltip(tip).Height(modeButtonHeight).
+		Grow(1).Basis(captureToggleBasis).MinWidth(0).Padding(0, gapMedium).Gap(gapSmall).
+		Radius(modeButtonHeight / 2).AlignItems(ui.Center).Justify(ui.Center).Disabled(spec.disabled)
+	fill, line, weight := t.Text.Alpha(neutralFillAlpha), ui.Transparent, weightMedium
+	switch {
+	case spec.on:
+		fill, line, weight = t.Success.Alpha(statusOnFillAlpha), t.Success.Alpha(statusOnLineAlpha), weightSemibold
+	case b.Hovered() && !spec.disabled && !spec.busy:
+		fill = t.Text.Alpha(2 * neutralFillAlpha)
 	}
-	return locales.LanStateOnPort(port)
+	b.Background(b.AnimateColor("fill", fill, ui.Smooth)).Border(1, b.AnimateColor("line", line, ui.Smooth))
+	scale := float32(1)
+	if b.Pressed() && !spec.busy {
+		scale = pressedScale
+	}
+	b.AnimatePose(ui.Pose{Scale: scale}, ui.Snappy)
+	if spec.disabled {
+		b.Opacity(disabledOpacity)
+	}
+	if !spec.disabled && !spec.busy {
+		b.Cursor(ui.CursorPointer)
+	}
+	b.OnClick(func() {
+		if !spec.busy {
+			onClick()
+		}
+	})
+	b.Children(func() {
+		if spec.hint {
+			hintRing(c, t.Success, modeButtonHeight/2)
+		}
+		switchLead(c, t, spec)
+		ui.Text(c, spec.label).FontSize(fontBody).FontWeight(weight).NoWrap().Translate(0, -opticalLift)
+	})
 }
 
 // servicesCard is the services check at a glance: how many work, the check's
 // button, a way to the dialog that lists every service, and the first few
-// services with their time.
+// services with their time. In a wide pane it is one strip, the name, the
+// services and the buttons side by side, so it takes the height of a row of
+// tiles; in a narrow one the name and buttons sit over the tiles.
 func (d *Dashboard) servicesCard(c *ui.Context, t *ui.Theme) {
-	s := &d.unlock.services
 	homeCard(c, t, "servicesCard").Children(func() {
+		if nodesPaneWidth(c) >= servicesStripMinWidth {
+			ui.Row(c).Key("servicesStrip").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+				ui.Row(c).Key("servicesName").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+					cardTitle(c, t, iconShieldCheck, locales.ServicesTitle())
+					d.servicesPill(c, t)
+				})
+				d.serviceTiles(c, t, ui.Row(c).Grow(1).Basis(0).MinWidth(0))
+				d.servicesActions(c, t)
+			})
+			return
+		}
 		cardHeader(c, t, "servicesTitle", iconShieldCheck, locales.ServicesTitle(), func() {
 			d.servicesPill(c, t)
-			label, icon := locales.ServicesCheck(), iconBolt
-			if s.running {
-				label, icon = locales.UnlockStop(), iconClose
-			}
-			iconButton(c, label, icon, mainSoftButton(t), d.toggleServices)
-			iconButton(c, locales.ServicesAll(), iconChevronRight, mainSoftButton(t), func() { s.open = true })
+			d.servicesActions(c, t)
 		})
-		ui.Box(c).Grow(1)
-		ui.Grid(c).Key("serviceTiles").Columns(2).Gap(gapSmall).Children(func() {
-			for _, svc := range model.UnlockServices[:serviceTilesShown] {
-				r, checked := s.results[svc]
-				serviceTile(c, t, svc, r, checked, func() { s.open = true })
-			}
-		})
+		d.serviceTiles(c, t, ui.Row(c))
+	})
+}
+
+// servicesActions are the check's button and the way to the dialog that lists
+// every service.
+func (d *Dashboard) servicesActions(c *ui.Context, t *ui.Theme) {
+	s := &d.unlock.services
+	label, icon := locales.ServicesCheck(), iconBolt
+	if s.running {
+		label, icon = locales.UnlockStop(), iconClose
+	}
+	ui.Row(c).Key("servicesActions").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+		iconButton(c, label, icon, mainSoftButton(t), d.toggleServices)
+		iconButton(c, locales.ServicesAll(), iconChevronRight, mainSoftButton(t), func() { s.open = true })
+	})
+}
+
+// serviceTiles lays the first few services out in row, wrapping when the
+// tiles do not fit side by side.
+func (d *Dashboard) serviceTiles(c *ui.Context, t *ui.Theme, row ui.Element) {
+	s := &d.unlock.services
+	row.Key("serviceTiles").Wrap().Gap(gapSmall).GapY(gapSmall).Children(func() {
+		for _, svc := range model.UnlockServices[:serviceTilesShown] {
+			r, checked := s.results[svc]
+			serviceTile(c, t, svc, r, checked, func() { s.open = true })
+		}
 	})
 }
 
@@ -299,8 +332,8 @@ func (d *Dashboard) servicesPill(c *ui.Context, t *ui.Theme) {
 // and its time, or its state when it does not work. Its tooltip names the
 // region and the route.
 func serviceTile(c *ui.Context, t *ui.Theme, svc model.UnlockService, r model.UnlockResult, checked bool, open func()) {
-	tile := ui.Row(c).Key(string(svc)).Gap(gapSmall).Padding(gapSmall, gapSmall).Radius(radiusTile).AlignItems(ui.Center).
-		Background(t.Text.Alpha(neutralFillAlpha / 2)).Cursor(ui.CursorPointer).OnClick(open)
+	tile := ui.Row(c).Key(string(svc)).Grow(1).Basis(serviceTileBasis).MinWidth(0).Gap(gapSmall).Padding(gapSmall, gapSmall).
+		Radius(radiusTile).AlignItems(ui.Center).Background(t.Text.Alpha(neutralFillAlpha / 2)).Cursor(ui.CursorPointer).OnClick(open)
 	if checked {
 		tile.Tooltip(serviceTileTip(svc, r))
 	} else {
@@ -326,62 +359,6 @@ func serviceTile(c *ui.Context, t *ui.Theme, svc model.UnlockService, r model.Un
 		default:
 			captionText(c, t, "—")
 		}
-	})
-}
-
-// memoryCard is the physical memory Hop and its core hold now: the sum large,
-// and under it a bar split between the two with each one's amount.
-func (d *Dashboard) memoryCard(c *ui.Context, t *ui.Theme) {
-	m := d.memory
-	total := m.App + m.Core
-	homeCard(c, t, "memoryCard").Children(func() {
-		cardHeader(c, t, "memoryTitle", iconMemory, locales.StatsMemory(), nil)
-		if d.memoryKnown {
-			memoryAmount(c, t, total, fontExit)
-		} else {
-			mutedText(c, t, "—")
-		}
-		ui.Box(c).Grow(1)
-		share := float32(0)
-		if total > 0 {
-			share = float32(m.App) / float32(total)
-		}
-		ui.Box(c).Key("memoryBar").Height(statMemoryBar).Label(locales.StatsMemory()).Draw(func(p *ui.Painter, r ui.Rect) {
-			drawMemoryBar(p, r, share, t)
-		})
-		ui.Row(c).Key("memorySplit").Wrap().Gap(gapLarge).GapY(gapTight).Height(cardHeaderHeight - gapSmall).Children(func() {
-			if d.memoryKnown {
-				memorySplit(c, t, "Hop", m.App, t.Accent)
-				memorySplit(c, t, locales.StatsMemoryCore(), m.Core, t.TextMuted.Alpha(statsDirectAlpha))
-			}
-		})
-	})
-}
-
-// drawMemoryBar fills the bar with Hop's share in the accent and the core's
-// after it, with a small gap between the two.
-func drawMemoryBar(p *ui.Painter, r ui.Rect, share float32, t *ui.Theme) {
-	radius := r.H / 2
-	split := r.W * share
-	core := t.TextMuted.Alpha(statsDirectAlpha)
-	switch {
-	case split <= statMemoryGap:
-		p.Fill(r, core, radius)
-	case split >= r.W-statMemoryGap:
-		p.Fill(r, t.Accent, radius)
-	default:
-		p.Fill(ui.Rect{X: r.X, Y: r.Y, W: split - statMemoryGap/2, H: r.H}, t.Accent, radius)
-		p.Fill(ui.Rect{X: r.X + split + statMemoryGap/2, Y: r.Y, W: r.W - split - statMemoryGap/2, H: r.H}, core, radius)
-	}
-}
-
-// memoryAmount is an amount of memory with its unit. The figure changes every
-// second, so its digits do not roll as the statistics' do.
-func memoryAmount(c *ui.Context, t *ui.Theme, bytes uint64, size float32) {
-	r := formatBytes(int64(bytes))
-	ui.Row(c).Gap(4).AlignItems(ui.End).Children(func() {
-		ui.Text(c, r.value).FontSize(size).FontWeight(weightSemibold).FontFeatures("tnum")
-		captionText(c, t, r.unit)
 	})
 }
 

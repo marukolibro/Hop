@@ -16,6 +16,10 @@ const (
 	// gaugeGlyphScale sizes the flag, or the globe standing in for one, to
 	// sit inside the rings.
 	gaugeGlyphScale float32 = 0.32
+	// gaugeGlowScale widens the download arc into a soft stroke under it, at
+	// gaugeGlowAlpha.
+	gaugeGlowScale float32 = 2.2
+	gaugeGlowAlpha float32 = 0.16
 	// gaugeArcStep is the angle between the points a ring is drawn from,
 	// fine enough that the polyline reads as an arc.
 	gaugeArcStep float32 = 0.06
@@ -66,7 +70,9 @@ func drawGauge(p *ui.Painter, r ui.Rect, down float32, up float32, t *ui.Theme) 
 	p.StrokePath(gaugeArc(cx, cy, outer, gaugeStart, gaugeSweep), outerWidth, track)
 	p.StrokePath(gaugeArc(cx, cy, inner, gaugeStart, gaugeSweep), innerWidth, track)
 	if down > 0.001 {
-		p.StrokePath(gaugeArc(cx, cy, outer, gaugeStart, gaugeSweep*down), outerWidth, t.Accent)
+		arc := gaugeArc(cx, cy, outer, gaugeStart, gaugeSweep*down)
+		p.StrokePath(arc, outerWidth*gaugeGlowScale, t.Accent.Alpha(gaugeGlowAlpha))
+		p.StrokePath(arc, outerWidth, t.Accent)
 	}
 	if up > 0.001 {
 		p.StrokePath(gaugeArc(cx, cy, inner, gaugeStart, gaugeSweep*up), innerWidth, uploadColor(t))

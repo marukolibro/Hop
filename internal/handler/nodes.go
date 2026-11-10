@@ -212,7 +212,8 @@ func regionNodes(regions []model.RegionView, byDelay bool, delayOf func(model.No
 
 // splitRegionChips keeps the filters that fit one row: the groups and every
 // option always, then as many regions as slots allow, the largest first and
-// the chosen one for certain. The rest are more, in the subscription's order.
+// the chosen one for certain, even when no slot is left. The rest are more, in
+// the subscription's order.
 func splitRegionChips(chips []regionChip, current string, slots int) (shown []regionChip, more []regionChip) {
 	var fixed []regionChip
 	var regions []regionChip
@@ -223,6 +224,10 @@ func splitRegionChips(chips []regionChip, current string, slots int) (shown []re
 			fixed = append(fixed, chip)
 		}
 	}
+	chosen := slices.IndexFunc(regions, func(chip regionChip) bool { return chip.key == current })
+	if chosen >= 0 {
+		slots = max(slots, 1)
+	}
 	if len(regions) <= slots {
 		return chips, nil
 	}
@@ -232,7 +237,7 @@ func splitRegionChips(chips []regionChip, current string, slots int) (shown []re
 	}
 	slices.SortStableFunc(order, func(a int, b int) int { return cmp.Compare(regions[b].count, regions[a].count) })
 	picked := order[:slots]
-	if chosen := slices.IndexFunc(regions, func(chip regionChip) bool { return chip.key == current }); chosen >= 0 && !slices.Contains(picked, chosen) {
+	if chosen >= 0 && !slices.Contains(picked, chosen) {
 		picked[slots-1] = chosen
 	}
 	shown = fixed
@@ -248,15 +253,17 @@ func splitRegionChips(chips []regionChip, current string, slots int) (shown []re
 
 // regionFilter chooses which region's options the grid shows, in one row that
 // takes what the toolbar's controls leave; the regions that do not fit are in
-// a menu. A group with no regions to choose between leaves the room empty.
+// a menu, and when the filters still do not fit beside the controls the
+// controls wrap under them. A group with no regions to choose between leaves
+// the room empty.
 func (d *Dashboard) regionFilter(c *ui.Context, t *ui.Theme, group model.GroupView) {
 	chips := regionChips(group)
-	row := ui.Row(c).Key("regionFilter").Gap(gapTight).Grow(1).Basis(0).MinWidth(0)
+	row := ui.Row(c).Key("regionFilter").Gap(gapTight).Grow(1)
 	if len(chips) <= 2 {
 		row.Children(func() {})
 		return
 	}
-	slots := max(1, int((nodesPaneWidth(c)-nodeControlsWidth)/regionChipSlot))
+	slots := max(0, int((nodesPaneWidth(c)-nodeControlsWidth)/regionChipSlot))
 	current := activeFilter(group, d.nodeRegion)
 	shown, more := splitRegionChips(chips, current, slots)
 	row.Children(func() {

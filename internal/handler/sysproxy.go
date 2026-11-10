@@ -105,12 +105,21 @@ func (d *Dashboard) releaseSystemProxy() {
 	}()
 }
 
-// systemProxyHint says why the system proxy pill cannot be turned on, or
-// nothing when it can.
-func (d *Dashboard) systemProxyHint() string {
+// systemProxyHolder says which app holds the system proxy when that is why
+// the switch cannot be turned on, and nothing when it can.
+func (d *Dashboard) systemProxyHolder() string {
 	s := &d.sysProxy
 	if s.loaded && !s.on && s.status.Owner == model.ProxyOwnerOther {
 		return locales.SystemProxyTaken(s.status.Other)
 	}
 	return ""
+}
+
+// systemProxyHint is the flyout's line under its pills: the holder, unless the
+// notice above already says it.
+func (d *Dashboard) systemProxyHint() string {
+	if d.conditionActive(model.ConditionSystemProxyTaken) {
+		return ""
+	}
+	return d.systemProxyHolder()
 }

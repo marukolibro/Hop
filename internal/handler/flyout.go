@@ -31,8 +31,10 @@ const (
 	compactSpeedWidth = 88
 	// flyoutGaugeSize is the exit gauge, smaller than the window's.
 	flyoutGaugeSize float32 = 52
-	// flyoutPlotHeight is the traffic plot beside the speeds.
-	flyoutPlotHeight float32 = 28
+	// flyoutIdleOpacity is how much of the exit card shows while nothing sends
+	// traffic to Hop; flyoutLockedOpacity, the modes while they cannot change.
+	flyoutIdleOpacity   float32 = 0.5
+	flyoutLockedOpacity float32 = 0.5
 )
 
 // flyoutView is the menu bar panel: where traffic goes and how fast, the
@@ -82,30 +84,29 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 			}
 			statusDot(c, d.statusColor(t), d.proxying())
 			mutedText(c, t, d.statusText())
+			// What is rarely wanted is two small icons, not two buttons as wide
+			// as the routes: they say what they do on hover.
+			iconButton(c, locales.OpenMainWindow(), iconWindow, softButton(t), openWindow).Tooltip(locales.OpenMainWindow())
+			iconButton(c, locales.QuitHop(), iconPower, softButton(t), quit).Tooltip(locales.QuitHop())
 		})
 		d.notice(c, t)
 		// The exit and the traffic are one card, tinted with the theme's accent
 		// as the window's hero is.
-		entrance(ui.Column(c).Key("route"), 1).Gap(gapSmall).Padding(gapMedium).Radius(radiusPanel).
-			LinearGradient(heroFace(t, overlaySurface(t))).Border(1, t.Border).Children(func() {
-			d.flyoutRoute(c, t)
-			if len(d.view.Route) > 0 {
-				d.flyoutSpeeds(c, t)
-			}
+		d.flyoutCard(c, t, func() {
+			entrance(ui.Column(c).Key("route"), 1).Gap(gapSmall).Padding(gapMedium).Radius(radiusPanel).
+				LinearGradient(heroFace(t, overlaySurface(t))).Border(1, t.Border).Children(func() {
+				d.flyoutRoute(c, t)
+			})
 		})
 		entrance(ui.Column(c).Key("mode"), 3).Gap(gapSmall).Children(func() {
-			// The panel is too narrow for all five pills on one line, so the
-			// three modes, one of which is always on, fill the first, and the
-			// two traffic switches split the second.
-			ui.Row(c).Key("pills").Gap(gapTight).AlignItems(ui.Center).Children(func() {
-				for i := range modeLabels() {
-					d.modePill(c, t, i).Grow(1).Basis(0)
-				}
-			})
+			// In the order it happens, as the window's control bar has them: what
+			// sends traffic to Hop, then how it is handled. The two switches split
+			// the first line and the three modes are one segmented control.
 			ui.Row(c).Key("switches").Gap(gapTight).AlignItems(ui.Center).Children(func() {
 				d.systemProxyPill(c, t).Grow(1).Basis(0)
 				d.tunPill(c, t).Grow(1).Basis(0)
 			})
+			d.flyoutModes(c, t)
 			for _, note := range []string{d.systemProxyHint(), d.tunHint()} {
 				if note != "" {
 					mutedText(c, t, note).MaxLines(1)
@@ -116,39 +117,80 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 			Disabled(d.controlsLocked()).Children(func() {
 			d.quickRoutes(c, t, openWindow)
 		})
-		entrance(ui.Row(c).Key("footer"), 5).Gap(gapSmall).Children(func() {
-			button(c, buttonSpec{label: locales.OpenMainWindow(), icon: iconWindow, style: softButton(t)}, openWindow).Grow(1)
-			button(c, buttonSpec{label: locales.QuitHop(), icon: iconPower, style: softButton(t)}, quit)
+	})
+}
+
+// flyoutCard holds the exit card, which fades while the core is up but nothing
+// sends traffic to it: the panel then says plainly that Hop is doing nothing.
+func (d *Dashboard) flyoutCard(c *ui.Context, t *ui.Theme, card func()) {
+	wrap := ui.Column(c).Key("routeDim")
+	target := float32(1)
+	if d.status == statusConnected && !d.proxying() {
+		target = flyoutIdleOpacity
+	}
+	wrap.Opacity(wrap.AnimateTo("opacity", target, ui.Smooth)).Children(card)
+}
+
+// flyoutModes is the three outbound modes as one segmented control across the
+// panel; it gives way while the mode cannot change.
+func (d *Dashboard) flyoutModes(c *ui.Context, t *ui.Theme) {
+	width, _ := c.Size()
+	border := float32(0)
+	if !c.Vibrancy() {
+		border = 1 // the panel draws its own frame
+	}
+	segment := (width - 2*(flyoutPadding+border) - 2*switchInset) / float32(len(service.Modes))
+	locked := d.modeLocked()
+	holder := ui.Row(c).Key("modes").Disabled(locked)
+	if locked {
+		holder.Opacity(flyoutLockedOpacity)
+	}
+	holder.Children(func() {
+		slidingSwitch(c, "flyout-mode", &d.modeIndex, modeLabels(), flyoutModeStyle(t, segment), func(i int) {
+			d.setMode(service.Modes[i])
 		})
 	})
 }
 
+// flyoutModeStyle dresses the modes' control as the traffic switches above it
+// are dressed: the same backing and outline, and a thumb that takes the accent's
+// tint and outline as an "on" pill does.
+func flyoutModeStyle(t *ui.Theme, segmentWidth float32) switchStyle {
+	track, trackLine := t.Text.Alpha(softFillAlpha), ui.Transparent
+	thumb, thumbLine := t.Accent.Alpha(pillOnFillAlpha), t.Accent.Alpha(pillOnLineAlpha)
+	if onGlass(t) {
+		backing := controlBacking(t)
+		track, trackLine = backing, t.Text.Alpha(0.24)
+		thumb = t.Accent.Alpha(pillOnFillAlpha).Over(backing)
+	}
+	return switchStyle{track: track, trackLine: trackLine, thumb: thumb, thumbLine: thumbLine,
+		active: t.Text, inactive: t.TextMuted, segmentWidth: segmentWidth}
+}
+
+// flyoutRoute is the exit: the gauge with its flag, the exit's name and the
+// groups it passes, then the speeds with the exit's latency at the right end.
+// The window's hero carries the rest of its facts; here the name gets the room.
 func (d *Dashboard) flyoutRoute(c *ui.Context, t *ui.Theme) {
 	route := d.view.Route
 	if len(route) == 0 {
 		mutedText(c, t, locales.FlyoutNoSubscription())
 		return
 	}
+	hop := route[len(route)-1]
 	ui.Row(c).Key("exitRow").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-		routeGauge(c, t, route[len(route)-1], flyoutGaugeSize, d.last)
+		routeGauge(c, t, hop, flyoutGaugeSize, d.last)
 		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(gapTight).Children(func() {
-			exitNode(c, t, route)
+			ui.Text(c, heroExitName(hop)).FontSize(fontHeadline).FontWeight(weightSemibold).LetterSpacing(-0.2).MaxLines(1)
+			if via := heroVia(route, hop); via != "" {
+				mutedText(c, t, via).MaxLines(1)
+			}
 		})
 	})
-}
-
-// flyoutSpeeds shows both speeds on one line, rolling as they change, beside
-// the last two minutes of traffic.
-func (d *Dashboard) flyoutSpeeds(c *ui.Context, t *ui.Theme) {
-	history := d.history
-	down, up, base := t.Accent, uploadColor(t), t.Border
-	ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Key("speeds").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 		compactSpeed(c, t, "↓", formatRate(d.last.Down), accentInk(t))
-		compactSpeed(c, t, "↑", formatRate(d.last.Up), up)
-		ui.Box(c).Grow(1).Basis(0).Height(flyoutPlotHeight).Label("Traffic").Description("Download and upload speed over the last two minutes").Draw(func(p *ui.Painter, r ui.Rect) {
-			p.Line(r.X, r.Y+r.H-0.5, r.X+r.W, r.Y+r.H-0.5, 1, base)
-			sparkArea(p, r, history, down, up)
-		})
+		compactSpeed(c, t, "↑", formatRate(d.last.Up), uploadColor(t))
+		ui.Box(c).Grow(1)
+		heroDelay(c, t, hop.Node.Delay)
 	})
 }
 

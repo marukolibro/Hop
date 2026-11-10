@@ -144,6 +144,22 @@ func (d *Dashboard) coreRows(c *ui.Context, t *ui.Theme) []func() {
 	return rows
 }
 
+// memoryRow is the physical memory Hop and its core hold now, one amount each.
+func (d *Dashboard) memoryRow(c *ui.Context, t *ui.Theme) func() {
+	return func() {
+		settingRow(c, t, locales.StatsMemory(), "", func() {
+			if !d.memoryKnown {
+				mutedText(c, t, "—")
+				return
+			}
+			ui.Row(c).Gap(gapLarge).AlignItems(ui.Center).Children(func() {
+				memorySplit(c, t, "Hop", d.memory.App, t.Accent)
+				memorySplit(c, t, locales.StatsMemoryCore(), d.memory.Core, t.TextMuted.Alpha(statsDirectAlpha))
+			})
+		})
+	}
+}
+
 // coreTile is the core's icon on a soft square, in the accent.
 func coreTile(c *ui.Context, t *ui.Theme) {
 	ui.Box(c).Key("tile").Width(cardIconTile).Height(cardIconTile).Radius(radiusControl).Center().

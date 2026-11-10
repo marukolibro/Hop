@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/internal/service"
 	"hop/locales"
 )
 
@@ -15,30 +16,44 @@ const (
 	heroPadY      float32 = 20
 	heroPadX      float32 = 22
 	heroGap       float32 = 18
-	// heroLiveBasis is the width the speeds, the mode and the plot ask for
-	// before the card wraps them under the exit; heroPlotMinPane is the
-	// narrowest pane that still leaves the plot a useful width beside the
-	// exit.
+	// heroLiveBasis is the width the speeds ask for before the card wraps them
+	// under the exit; heroMapMinPane is the narrowest pane that still leaves the
+	// map room beside the exit, below which the card is the exit and the speeds.
 	heroLiveBasis   float32 = 300
-	heroPlotMinPane float32 = 700
-	heroPlotHeight  float32 = 64
+	heroMapMinPane  float32 = 700
 	heroDelayHeight float32 = 20
 	// heroDelayFill washes the latency pill in the accent.
 	heroDelayFill float32 = 0.14
+	// The light behind the gauge: its strength at rest, while the traffic
+	// runs (plus heroGlowFlow at full download) and while the core cannot be
+	// reached; where it is centred, as a share of the card's width, and how
+	// far it reaches.
+	heroGlowIdle    float32 = 0.06
+	heroGlowLive    float32 = 0.11
+	heroGlowFlow    float32 = 0.14
+	heroGlowFailed  float32 = 0.18
+	heroGlowCenterX float32 = 0.12
+	heroGlowRadius  float32 = 260
 )
 
 // routeBar is the nodes page's hero: one card tinted with the theme's
 // accent, with the ring gauge and the exit on the left (its name and latency,
 // the groups it passes, its public address and its facts) and on the right
-// the two speeds over the last two minutes of traffic. The gauge's arcs ease to the traffic and then rest. The right part
-// wraps under the exit in a narrow window.
+// the two speeds over the last two minutes of traffic. A light behind the
+// gauge, whose colour is the state and whose strength follows the download,
+// is the card's only extra. The gauge's arcs ease to the traffic and then
+// rest. The right part wraps under the exit in a narrow window.
 func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 	route := d.view.Route
-	width, _ := c.Size()
-	pane := width - sidebarWidthFor(width) - hairlineWidth - 2*pagePadding
+	pane := nodesPaneWidth(c)
 	ui.Row(c).Key("hero").Wrap().Gap(pagePadding).GapY(gapLarge).AlignItems(ui.Center).
 		Padding(heroPadY, heroPadX).Radius(heroRadius).LinearGradient(heroFace(t, glassPanel(t))).
 		Border(hairlineWidth, glassMaterialLine(t)).Shadow(0, 3, 12, 0, glassCardShadow(t)).Children(func() {
+		d.heroGlow(c, t)
+		mapped := pane >= heroMapMinPane
+		if mapped {
+			d.heroMapLayer(c, t)
+		}
 		ui.Row(c).Key("routeTop").Gap(heroGap).AlignItems(ui.Center).Children(func() {
 			if len(route) > 0 {
 				routeGauge(c, t, route[len(route)-1], heroGaugeSize, d.last)
@@ -46,12 +61,54 @@ func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 			d.heroExit(c, t, route)
 		})
 		ui.Column(c).Key("live").Grow(1).Basis(heroLiveBasis).MinWidth(0).Gap(gapMedium).Children(func() {
-			d.heroReadout(c, t)
-			if pane >= heroPlotMinPane {
-				d.sparkline(c, t, heroPlotHeight)
+			if mapped {
+				d.heroSpeeds(c, t)
+			} else {
+				d.heroReadout(c, t)
 			}
 		})
 	})
+}
+
+// heroGlow is the light behind the gauge. It eases to its colour and strength,
+// and only while it does is the card drawn again.
+func (d *Dashboard) heroGlow(c *ui.Context, t *ui.Theme) {
+	glow := ui.Box(c).Key("heroGlow").Absolute().Left(0).Top(0).Right(0).Bottom(0).Radius(heroRadius)
+	alpha := glow.AnimateTo("alpha", d.heroGlowAlpha(flowIntensity(d.last.Down)), ui.Smooth)
+	color := glow.AnimateColor("color", d.heroGlowColor(t), ui.Smooth)
+	glow.RadialGradient(ui.RadialGradient{
+		Stops:  []ui.GradientStop{{Color: color.Alpha(alpha), At: 0}, {Color: color.Alpha(0), At: 1}},
+		Center: ui.Point{X: heroGlowCenterX, Y: 0.5},
+		Radius: heroGlowRadius,
+	})
+}
+
+// heroGlowColor is the colour of the light behind the gauge: the accent while
+// Hop carries the traffic, red while the core cannot be reached, grey
+// otherwise.
+func (d *Dashboard) heroGlowColor(t *ui.Theme) ui.Color {
+	switch {
+	case d.proxying():
+		return t.Accent
+	case d.status == statusFailed:
+		return dangerFill(t)
+	default:
+		return t.TextMuted
+	}
+}
+
+// heroGlowAlpha is how strongly that light shines for a download at flow, from
+// 0 to 1: faintly at rest, brighter while Hop carries traffic and brighter still
+// with it.
+func (d *Dashboard) heroGlowAlpha(flow float32) float32 {
+	switch {
+	case d.proxying():
+		return heroGlowLive + heroGlowFlow*flow
+	case d.status == statusFailed:
+		return heroGlowFailed
+	default:
+		return heroGlowIdle
+	}
 }
 
 // heroExit names the exit, the groups it passes, its public address and its
@@ -138,6 +195,44 @@ func heroChips(c *ui.Context, t *ui.Theme, hop model.RouteHop) {
 		if node.Multiplier != "" {
 			nodeChip(c, t, node.Multiplier)
 		}
+	})
+}
+
+// heroMapLayer is the dot map behind the whole card, with the route drawn on
+// it. It is painted once and does not follow the traffic; hovering it says
+// where the exit is and how Hop knows.
+func (d *Dashboard) heroMapLayer(c *ui.Context, t *ui.Theme) {
+	exit := service.ExitPlace(d.view.Route, d.measuredExitCountry())
+	route := worldMapRoute{
+		home: d.home.point, homeKnown: d.home.known, exit: exit,
+		dot: t.TextMuted.Alpha(worldMapDotAlpha), ink: t.Text, accent: t.Accent,
+	}
+	ui.Box(c).Key("worldMap").Absolute().Left(0).Top(0).Right(0).Bottom(0).Radius(heroRadius).
+		Label(locales.HeroMapLabel()).Tooltip(heroMapTip(exit)).Draw(func(p *ui.Painter, r ui.Rect) {
+		drawWorldMap(p, r, heroRadius, route)
+	})
+}
+
+// heroMapTip says where the map puts the exit and how it knows.
+func heroMapTip(exit model.ExitPlace) string {
+	switch exit.Kind {
+	case model.ExitPlaceMeasured:
+		return locales.HeroMapMeasured(service.CountryName(exit.Country))
+	case model.ExitPlaceByName:
+		return locales.HeroMapByName(service.CountryName(exit.Country))
+	case model.ExitPlaceDirect:
+		return locales.HeroMapDirect()
+	default:
+		return locales.HeroMapUnknown()
+	}
+}
+
+// heroSpeeds is the two speeds one over the other at the card's right edge,
+// where the map has no plot to share the column with.
+func (d *Dashboard) heroSpeeds(c *ui.Context, t *ui.Theme) {
+	ui.Column(c).Key("speeds").Gap(gapSmall).AlignItems(ui.End).Children(func() {
+		heroSpeedLine(c, t, "↓", formatRate(d.last.Down), accentInk(t))
+		heroSpeedLine(c, t, "↑", formatRate(d.last.Up), uploadColor(t))
 	})
 }
 

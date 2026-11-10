@@ -68,6 +68,24 @@
   "columnRoute": "Route",
   "columnRule": "Matched rule",
   "columnUpload": "Upload",
+  "conditionSystemProxyTakenDetail": "{owner} holds it now, so your traffic no longer goes through Hop. Hop won't take it back from another app: switch it off there, then turn it on here.",
+  "@conditionSystemProxyTakenDetail": {
+    "placeholders": {
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "conditionSystemProxyTakenTitle": "Another app took the system proxy",
+  "conditionTunTakenDetail": "{owner} holds the default routes, so Hop's TUN can't run. Hop won't take them from another app: stop that TUN, then turn TUN on here.",
+  "@conditionTunTakenDetail": {
+    "placeholders": {
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "conditionTunTakenTitle": "Another app's TUN holds the routes",
   "connectionAddRule": "Add a rule for this connection",
   "connectionClose": "Close connection",
   "connectionsCloseAll": "Close all",
@@ -240,6 +258,25 @@
   "helperUninstall": "Uninstall",
   "heroDirectNote": "Direct, not through the proxy",
   "heroEmpty": "Import a subscription and the route your traffic takes will show here",
+  "heroMapByName": "{place}, read from the node's name",
+  "@heroMapByName": {
+    "placeholders": {
+      "place": {
+        "type": "String"
+      }
+    }
+  },
+  "heroMapDirect": "Direct: traffic leaves from where you are",
+  "heroMapLabel": "Route map",
+  "heroMapMeasured": "{place}, measured from the exit's address",
+  "@heroMapMeasured": {
+    "placeholders": {
+      "place": {
+        "type": "String"
+      }
+    }
+  },
+  "heroMapUnknown": "Where the exit is cannot be told",
   "hoursShort": "{count} h",
   "@hoursShort": {
     "placeholders": {
@@ -696,7 +733,7 @@
   },
   "subUpdatedNow": "Updated just now",
   "subUpdatedUnknown": "Update time unknown. Refresh once to show it",
-  "systemProxy": "System proxy",
+  "systemProxy": "Proxy",
   "systemProxyHint": "Browsers and most apps go through Hop",
   "systemProxyTaken": "Already in use by {owner}",
   "@systemProxyTaken": {
@@ -709,8 +746,6 @@
   "themeDusk": "Dusk",
   "themeOcean": "Ocean",
   "themePaper": "Paper",
-  "trafficLast2Min": "Last 2 minutes",
-  "trafficNone": "No traffic yet",
   "tun": "TUN",
   "tunDialogTitle": "Turn on TUN",
   "tunHint": "Takes over all traffic, including terminals and games",
@@ -797,18 +832,7 @@
   "actionWatchMemory": "Couldn't read the memory in use",
   "statsMemory": "Memory use",
   "statsMemoryCore": "Core",
-  "lanIP": "LAN address",
-  "lanProxy": "LAN proxy",
-  "lanStateOff": "Off",
-  "lanStateOn": "On",
-  "lanStateOnPort": "Port {port}",
   "servicesAll": "All services",
   "servicesAllWork": "All work",
-  "servicesIdle": "Not checked",
-  "lanPort": "Port",
-  "lanCopiedAll": "Copied the connection details",
-  "lanOpenSettings": "Open settings",
-  "lanHintAccount": "Devices connect with this account and password. You can turn them off, and see everything, in Settings under LAN.",
-  "lanOnTitle": "LAN proxy is on",
-  "lanGotIt": "Got it"
+  "servicesIdle": "Not checked"
 }

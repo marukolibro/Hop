@@ -52,18 +52,39 @@ type Traffic struct {
 	Down int64
 }
 
-// TrafficHistory is the most recent traffic samples, oldest first.
-type TrafficHistory struct {
-	Up   []float32
-	Down []float32
-}
-
 // ExitIP is the public address the default route leaves by, and the ISO 3166
 // alpha-2 country that address is registered in. It is the user's address:
 // keep it in memory only.
 type ExitIP struct {
 	Address netip.Addr
 	Country string
+}
+
+// GeoPoint is a place on the earth, in degrees east and north.
+type GeoPoint struct {
+	Lon float32
+	Lat float32
+}
+
+// ExitPlaceKind says how the map came to know where the exit is.
+type ExitPlaceKind uint8
+
+const (
+	// ExitPlaceUnknown is an exit the map cannot place: it draws no route.
+	ExitPlaceUnknown ExitPlaceKind = iota
+	// ExitPlaceDirect is traffic that leaves from where the user is.
+	ExitPlaceDirect
+	// ExitPlaceByName is a place read from the node's name, a guess.
+	ExitPlaceByName
+	// ExitPlaceMeasured is the country the exit's address is registered in.
+	ExitPlaceMeasured
+)
+
+// ExitPlace is where the route leaves, for the map.
+type ExitPlace struct {
+	Kind    ExitPlaceKind
+	Country string
+	Point   GeoPoint
 }
 
 // TrafficSplit is how much traffic Hop carried, through a proxy or direct,
@@ -688,4 +709,34 @@ const (
 type SystemProxyStatus struct {
 	Owner ProxyOwner
 	Other string
+}
+
+// ConditionKind names something that went wrong behind the user's back.
+type ConditionKind string
+
+const (
+	// ConditionSystemProxyTaken: the user wants the system proxy on Hop, and
+	// another app holds it now.
+	ConditionSystemProxyTaken ConditionKind = "system-proxy-taken"
+	// ConditionTunTaken: the user wants TUN, and another client's TUN holds the
+	// default routes.
+	ConditionTunTaken ConditionKind = "tun-taken"
+)
+
+// Condition is one such thing, with the app that holds what Hop was meant to.
+type Condition struct {
+	Kind   ConditionKind
+	Holder string
+}
+
+// ConditionInput is what the conditions are read from: what the user wants,
+// and what the system holds as last read. A Known flag is false while the
+// state is not read yet or a change to it is running.
+type ConditionInput struct {
+	WantSystemProxy  bool
+	SystemProxy      SystemProxyStatus
+	SystemProxyKnown bool
+	WantTun          bool
+	Tun              TunStatus
+	TunKnown         bool
 }

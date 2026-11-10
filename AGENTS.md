@@ -253,15 +253,26 @@ for font sizes, weights, gaps or radii in views.
   height: the subscription in use on a card at its top (picker, the `Hop 智能规则`
   tag only while the profile runs Hop's rules, usage, expiry, refresh and
   manage), the groups, and the core's state at its foot. The content column
-  scrolls as one: the hero card, the outbound mode as one bar across, the
-  three home cards (the LAN address with the LAN proxy's switch, which
-  widens to show the account and password once on, the services,
-  the memory Hop and its core hold; `homecards.go`: they wrap as the window
-  narrows and a card left alone on a row grows to fill it), one toolbar (the
+  scrolls as one: the hero card, the control bar (`homecards.go`: the system
+  proxy and TUN as two switches, then the outbound mode as three buttons, in
+  the order it happens, on one capsule; in a narrow window the mode wraps under
+  the switches), the services
+  card (one strip, name, tiles and buttons side by side, from
+  `servicesStripMinWidth` of content width, and two rows under it), one toolbar (the
   region filters on the left; the order and the speed test on the right, with
   no title: the sidebar and the hero already say which group and where
   traffic leaves) and one grid
-  of node tiles. Node tiles and the lists, charts and tables on the other pages
+  of node tiles. What is rarely used stays out of the home: the LAN proxy and
+  the memory Hop and its core hold are rows in the settings. Under the header
+  one strip (`notice`) shows what needs the user's eye and nothing while all is
+  well: the last failure, then each condition from `service.Conditions` (the
+  user wants the system proxy or TUN on and another app holds it). A condition
+  says what happened and what to do, has no button that takes the thing back
+  (Hop never takes the system proxy or the routes from another app) and ends
+  when the system does; the flyout's hint for that pill gives way to it. The
+  header holds no switch: on the right it says, read only, whether Hop carries
+  the traffic (the same dot and words as the flyout), so every page shows the
+  state while the switches live on the home page. Node tiles and the lists, charts and tables on the other pages
   are translucent cards, as the design shows. Dialogs, picker popups, tooltips,
   toasts and the menu-bar flyout stay opaque cards.
 - The hero is one card: the panel glass with the theme's own accent mixed in
@@ -269,12 +280,36 @@ for font sizes, weights, gaps or radii in views.
   colour), in the window's ink: the ring gauge with the exit's flag (outer arc
   download, inner upload, both easing to the traffic and then resting), the
   exit's name with its latency pill, the `经 …` line, its exit IP and its
-  facts as chips; on the right the speeds over
-  the sparkline with its `最近 2 分钟` caption and idle state. The right part
-  wraps under the exit in a narrow window and drops the plot below
-  `heroPlotMinPane`. It has no current-line caption. The flyout has the same
-  card (`heroFace`) around its own smaller gauge and plot, then the three modes as pills and
-  the two traffic switches as pills on the next line; above its routes, the
+  facts as chips; on the right the two speeds, over a dot map of the world that
+  fills the card. The only extra over a plain card is a faint light behind
+  the gauge (`heroGlow`) whose colour is the state (the accent while Hop
+  carries the traffic, red while the core cannot be reached, grey otherwise;
+  `dangerFill`, since the glass palette's Danger is a pale ink) and whose
+  strength follows the download; the download arc has a soft stroke under it.
+  The map (`worldmap.go`: 5-degree land cells baked once into a bitmap per size and colour, 16 rows
+  tall whatever the card's width, the land repeating past 180 degrees, fading
+  in from the left so the exit's name stays on a quiet ground; then the route as
+  a bowed line from the user to the exit, going the short way round the earth).
+  The user's end is the system's time zone (`repository/zoneinfo`, from the zone
+  table, offline: never an IP lookup, and nothing at all where the system names
+  no zone); the exit is placed by `service.ExitPlace`: the country the exit's
+  address was measured in, else the flag in the node's name, else not placed (no
+  line is drawn; nor when the exit is within 12.5 degrees of the user, where a
+  line shows nothing and only the exit is marked), and the map's tooltip says which. Countries are placed by
+  `service/country_point.go`, so add a code there before expecting it on the
+  map. The map never follows the traffic and never animates; the speeds stay at
+  the card's right edge over it.
+  Keep the card's size: it was made larger once and lost its refinement. All
+  of it eases and then rests; nothing animates on its own. The speeds wrap
+  under the exit in a narrow window, and the map is dropped below
+  `heroMapMinPane`. It has no current-line caption, and the window has no
+  traffic plot on the home (the stats page has the charts). The flyout has the same
+  card (`heroFace`) around its own smaller gauge, the exit's name and the groups
+  it passes, then the speeds with the latency at the right end (no plot, no
+  chips: the name gets the room); fading to half while the core is up but nothing sends traffic to it; then the
+  two traffic switches as pills and, below them, the three modes as one
+  segmented control (`flyoutModes`), in the order of the window's control bar; its header carries the status and, as two small icons, opening the window
+  and quitting; above its routes, the
   subscription in use shows eight characters of its name, a menu of the saved
   ones with the whole name and the one in use checked, so a profile can be
   switched without opening the window. The row names no group, as the window's
@@ -308,8 +343,7 @@ for font sizes, weights, gaps or radii in views.
   `uploadColor`. Success marks only the live proxy/TUN pill and the core
   dot; Warning and Danger mark only latency tiers, genuine warnings and
   errors. Node chips and bars are neutral. Brand gradient (`brand.go`) only
-  on the mark and wordmark, starting from the accent. Header switches use the
-  design's 38% button face, not a separate opaque backing.
+  on the mark and wordmark, starting from the accent.
 - Buttons: always `button(...)` / `iconButton(...)` from `buttons.go` with
   `primaryButton`, `mainSoftButton` or `mainDangerButton` on main pages;
   `softButton`/`dangerButton` remain for the flyout and dialogs. Never
@@ -317,10 +351,12 @@ for font sizes, weights, gaps or radii in views.
   is `pageTabs` (a translucent track with a solid light pill that slides to
   the chosen page); settings and mode
   choices are `slidingSwitch`, on/off settings `ui.Switch`. In the window, the
-  system proxy and TUN are the header's `statusToggle` buttons (a green dot
-  while on; every page shows them) and the outbound mode is three buttons on its
-  own bar (the chosen one filled with the accent); the flyout keeps all three as `togglePill`
-  (`pill.go`). Text actions are `textButton`.
+  system proxy and TUN are the control bar's `captureToggle`s (green while on,
+  a spinner in place of the switch while the change runs, a breathing ring
+  while neither is on and nothing else holds them; what each does, or who holds
+  it, is its tooltip) and the outbound mode is three buttons after them (the
+  chosen one filled with the accent); the flyout keeps all three as
+  `togglePill` (`pill.go`). Text actions are `textButton`.
 - Icons: 24-unit SVG strokes in `icons.go`, tinted by text colour.
 - CJK text in small controls sits ~1px low: apply `Translate(0, -opticalLift)`.
 - UI copy is sentence-short, in the user's terms, in both languages (see

@@ -17,10 +17,7 @@ import (
 )
 
 const (
-	historyLimit = 120
-	logLimit     = 1000
-	// minPeak keeps the sparkline readable while the link is idle.
-	minPeak = float32(1024)
+	logLimit = 1000
 
 	// headerHeight is the header's row, which is also the window's title
 	// bar; main centres the traffic lights on it.
@@ -61,6 +58,11 @@ type ProxyService interface {
 	TestDelay(ctx context.Context, group string, timeout time.Duration) error
 	TestAutoGroups(ctx context.Context, timeout time.Duration) error
 	WatchTraffic(ctx context.Context, handle func(model.Traffic)) error
+}
+
+// PlaceService says where the user is, for the home's map.
+type PlaceService interface {
+	Home() (model.GeoPoint, bool, error)
 }
 
 // ExitIPService reads the public address the default route leaves by.
@@ -222,6 +224,7 @@ type Services struct {
 	// LogDir is the folder Hop's log files are in.
 	LogDir string
 	ExitIP ExitIPService
+	Place  PlaceService
 	Unlock UnlockService
 	LAN    LANService
 	Port   PortService
@@ -380,6 +383,8 @@ type Dashboard struct {
 	// exitIP is the default route's public address, as the last lookup found
 	// it, and the lookup's state.
 	exitIP exitIPState
+	// home is where the system's time zone is, read once at the start.
+	home homeState
 	// markRun is the logo's run, played when the route's exit changes;
 	// hopExit is the exit it last saw, and onHop hears each change.
 	markRun markRun
@@ -405,7 +410,6 @@ type Dashboard struct {
 	// values; it is not kept between starts.
 	nodeRegion  string
 	last        model.Traffic
-	history     model.TrafficHistory
 	connections connectionsState
 	// memory is the last memory sample of Hop and its core; memoryKnown says
 	// one came since the core started.
@@ -503,6 +507,7 @@ func (d *Dashboard) OnTraffic(fn func(model.Traffic)) {
 // cancelled.
 func (d *Dashboard) Start(ctx context.Context, win Updater) {
 	d.opCtx, d.opWin = ctx, win
+	d.home = d.loadHome()
 	d.selectProxy = func(group string, proxy string) {
 		if d.controlsLocked() {
 			return
@@ -779,7 +784,6 @@ func (d *Dashboard) watchTraffic(ctx context.Context, win Updater) {
 	err := d.services.Proxies.WatchTraffic(ctx, func(sample model.Traffic) {
 		win.Update(func() {
 			d.last = sample
-			d.history = service.PushSample(d.history, sample, historyLimit)
 			if d.onTraffic != nil {
 				d.onTraffic(sample)
 			}
@@ -962,7 +966,6 @@ func (d *Dashboard) View(c *ui.Context) {
 	d.customRuleDialog(c, t)
 	d.fakeIPDialog(c, t)
 	d.servicesDialog(c, t)
-	d.lanDialog(c, t)
 }
 
 // header holds what applies to every page: the page switch, and how traffic
@@ -991,10 +994,11 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 			}
 			pageTabs(c, t, locales.PageSwitchLabel(), &d.page, pageLabels(), func(int) {})
 			ui.Box(c).Grow(1)
-			// The two switches belong together: a tight gap of their own, not the
-			// header's wide one between the brand, the tabs and this group.
-			ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-				d.trafficSwitches(c, t)
+			// Every page shows whether Hop carries the traffic; the switches
+			// themselves are on the home page's capture card.
+			ui.Row(c).Key("headerStatus").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+				statusDot(c, d.statusColor(t), d.proxying())
+				mutedText(c, t, d.statusText()).MaxLines(1)
 			})
 		})
 		horizontalHairline(c, t)
@@ -1034,24 +1038,72 @@ func (d *Dashboard) statusColor(t *ui.Theme) ui.Color {
 	}
 }
 
-// notice shows the last failure in plain words first and the technical
-// detail after.
+// notice shows what needs the user's eye: the last failure, then anything
+// another app took from Hop. Both say it in plain words first and the detail
+// after. It draws nothing while all is well.
 func (d *Dashboard) notice(c *ui.Context, t *ui.Theme) {
-	if d.failure == nil {
-		return
-	}
-	fill := t.Danger.Alpha(0.1)
-	if onGlass(t) {
-		// The failure is read over the page; give it a panel face so its
-		// text never meets the desktop.
-		fill = glassPanel(t).Mix(t.Danger, glassNoticeDanger)
-	}
-	ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Padding(10, pagePadding).Background(fill).Children(func() {
-		ui.Column(c).Grow(1).Gap(2).Children(func() {
-			ui.Text(c, d.failure.title).FontSize(fontBody).FontWeight(weightSemibold).TextColor(t.Danger)
-			mutedText(c, t, d.failure.detail)
+	if d.failure != nil {
+		noticeBar(c, t, "failure", d.failure.title, d.failure.detail, t.Danger, t.Danger, func() {
+			iconButton(c, locales.DismissNotice(), iconClose, dangerButton(t), func() { d.failure = nil })
 		})
-		iconButton(c, locales.DismissNotice(), iconClose, dangerButton(t), func() { d.failure = nil })
+	}
+	// A condition has no dismiss button: it ends when the system does.
+	for _, condition := range service.Conditions(d.conditionInput()) {
+		title, detail := conditionText(condition)
+		noticeBar(c, t, "condition-"+string(condition.Kind), title, detail, t.Warning, textOn(t, t.Warning), nil)
+	}
+}
+
+// conditionInput is what the system proxy and TUN pills hold, as the network
+// watch last read it. A pill whose change is running is not known yet.
+func (d *Dashboard) conditionInput() model.ConditionInput {
+	return model.ConditionInput{
+		WantSystemProxy:  d.settings.settings.SystemProxy,
+		SystemProxy:      d.sysProxy.status,
+		SystemProxyKnown: d.sysProxy.loaded && !d.sysProxy.busy,
+		WantTun:          d.settings.settings.Tun,
+		Tun:              model.TunStatus{Taken: d.tun.taken, TakenBy: d.tun.takenBy, CoreRunning: d.tun.on},
+		TunKnown:         d.tun.loaded && !d.tun.busy,
+	}
+}
+
+// conditionActive says whether the notice shows a condition of this kind.
+func (d *Dashboard) conditionActive(kind model.ConditionKind) bool {
+	for _, condition := range service.Conditions(d.conditionInput()) {
+		if condition.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// conditionText says a condition as a title and the detail under it.
+func conditionText(condition model.Condition) (string, string) {
+	if condition.Kind == model.ConditionTunTaken {
+		return locales.ConditionTunTakenTitle(), locales.ConditionTunTakenDetail(condition.Holder)
+	}
+	return locales.ConditionSystemProxyTakenTitle(), locales.ConditionSystemProxyTakenDetail(condition.Holder)
+}
+
+// noticeBar is one full-width strip under the header: a title in ink, a muted
+// detail, and what trails it, if anything. tone washes the strip.
+func noticeBar(c *ui.Context, t *ui.Theme, key string, title string, detail string, tone ui.Color, ink ui.Color, trailing func()) {
+	fill := tone.Alpha(0.1)
+	if onGlass(t) {
+		// The notice is read over the page; give it a panel face so its
+		// text never meets the desktop.
+		fill = glassPanel(t).Mix(tone, glassNoticeTint)
+	}
+	ui.Column(c).Key(key).Children(func() {
+		ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Padding(10, pagePadding).Background(fill).Children(func() {
+			ui.Column(c).Grow(1).Gap(2).Children(func() {
+				ui.Text(c, title).FontSize(fontBody).FontWeight(weightSemibold).TextColor(ink)
+				mutedText(c, t, detail)
+			})
+			if trailing != nil {
+				trailing()
+			}
+		})
+		horizontalHairline(c, t)
 	})
-	horizontalHairline(c, t)
 }

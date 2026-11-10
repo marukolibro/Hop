@@ -158,3 +158,32 @@ func (d *Dashboard) exitIPLine(c *ui.Context, t *ui.Theme) {
 		})
 	}
 }
+
+// measuredExitCountry is the country the route's exit address is registered
+// in, or "" while it is not known for the exit now shown.
+func (d *Dashboard) measuredExitCountry() string {
+	if d.exitIP.status != exitIPReady {
+		return ""
+	}
+	return d.exitIP.ip.Country
+}
+
+// homeState is where the user is, as the system's time zone says.
+type homeState struct {
+	point model.GeoPoint
+	known bool
+}
+
+// loadHome reads where the system's time zone is; a time zone the system does
+// not place leaves the map without the user's end.
+func (d *Dashboard) loadHome() homeState {
+	if d.services.Place == nil {
+		return homeState{}
+	}
+	point, known, err := d.services.Place.Home()
+	if err != nil {
+		slog.Warn("time zone place not read", "error", err)
+		return homeState{}
+	}
+	return homeState{point: point, known: known}
+}

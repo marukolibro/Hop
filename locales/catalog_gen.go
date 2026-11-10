@@ -646,6 +646,52 @@ func (msgs Messages) ColumnUpload() string {
 	return Catalog.Format(msgs.locale, "columnUpload", nil)
 }
 
+// ConditionSystemProxyTakenDetail says "{owner} holds it now, so your traffic no longer goes through Hop. Hop won't take it back from another app: switch it …"
+// in the language the app shows.
+func ConditionSystemProxyTakenDetail(owner string) string {
+	return In(i18n.Locale()).ConditionSystemProxyTakenDetail(owner)
+}
+
+// ConditionSystemProxyTakenDetail says "{owner} holds it now, so your traffic no longer goes through Hop. Hop won't take it back from another app: switch it …"
+// in the language of msgs.
+func (msgs Messages) ConditionSystemProxyTakenDetail(owner string) string {
+	return Catalog.Format(msgs.locale, "conditionSystemProxyTakenDetail", map[string]any{"owner": owner})
+}
+
+// ConditionSystemProxyTakenTitle says "Another app took the system proxy"
+// in the language the app shows.
+func ConditionSystemProxyTakenTitle() string {
+	return In(i18n.Locale()).ConditionSystemProxyTakenTitle()
+}
+
+// ConditionSystemProxyTakenTitle says "Another app took the system proxy"
+// in the language of msgs.
+func (msgs Messages) ConditionSystemProxyTakenTitle() string {
+	return Catalog.Format(msgs.locale, "conditionSystemProxyTakenTitle", nil)
+}
+
+// ConditionTunTakenDetail says "{owner} holds the default routes, so Hop's TUN can't run. Hop won't take them from another app: stop that TUN, then t…"
+// in the language the app shows.
+func ConditionTunTakenDetail(owner string) string {
+	return In(i18n.Locale()).ConditionTunTakenDetail(owner)
+}
+
+// ConditionTunTakenDetail says "{owner} holds the default routes, so Hop's TUN can't run. Hop won't take them from another app: stop that TUN, then t…"
+// in the language of msgs.
+func (msgs Messages) ConditionTunTakenDetail(owner string) string {
+	return Catalog.Format(msgs.locale, "conditionTunTakenDetail", map[string]any{"owner": owner})
+}
+
+// ConditionTunTakenTitle says "Another app's TUN holds the routes"
+// in the language the app shows.
+func ConditionTunTakenTitle() string { return In(i18n.Locale()).ConditionTunTakenTitle() }
+
+// ConditionTunTakenTitle says "Another app's TUN holds the routes"
+// in the language of msgs.
+func (msgs Messages) ConditionTunTakenTitle() string {
+	return Catalog.Format(msgs.locale, "conditionTunTakenTitle", nil)
+}
+
 // ConnectionAddRule says "Add a rule for this connection"
 // in the language the app shows.
 func ConnectionAddRule() string { return In(i18n.Locale()).ConnectionAddRule() }
@@ -1302,6 +1348,56 @@ func HeroEmpty() string { return In(i18n.Locale()).HeroEmpty() }
 // in the language of msgs.
 func (msgs Messages) HeroEmpty() string {
 	return Catalog.Format(msgs.locale, "heroEmpty", nil)
+}
+
+// HeroMapByName says "{place}, read from the node's name"
+// in the language the app shows.
+func HeroMapByName(place string) string { return In(i18n.Locale()).HeroMapByName(place) }
+
+// HeroMapByName says "{place}, read from the node's name"
+// in the language of msgs.
+func (msgs Messages) HeroMapByName(place string) string {
+	return Catalog.Format(msgs.locale, "heroMapByName", map[string]any{"place": place})
+}
+
+// HeroMapDirect says "Direct: traffic leaves from where you are"
+// in the language the app shows.
+func HeroMapDirect() string { return In(i18n.Locale()).HeroMapDirect() }
+
+// HeroMapDirect says "Direct: traffic leaves from where you are"
+// in the language of msgs.
+func (msgs Messages) HeroMapDirect() string {
+	return Catalog.Format(msgs.locale, "heroMapDirect", nil)
+}
+
+// HeroMapLabel says "Route map"
+// in the language the app shows.
+func HeroMapLabel() string { return In(i18n.Locale()).HeroMapLabel() }
+
+// HeroMapLabel says "Route map"
+// in the language of msgs.
+func (msgs Messages) HeroMapLabel() string {
+	return Catalog.Format(msgs.locale, "heroMapLabel", nil)
+}
+
+// HeroMapMeasured says "{place}, measured from the exit's address"
+// in the language the app shows.
+func HeroMapMeasured(place string) string { return In(i18n.Locale()).HeroMapMeasured(place) }
+
+// HeroMapMeasured says "{place}, measured from the exit's address"
+// in the language of msgs.
+func (msgs Messages) HeroMapMeasured(place string) string {
+	return Catalog.Format(msgs.locale, "heroMapMeasured", map[string]any{"place": place})
+}
+
+// HeroMapUnknown says "Where the exit is cannot be told"
+// in the language the app shows.
+func HeroMapUnknown() string { return In(i18n.Locale()).HeroMapUnknown() }
+
+// HeroMapUnknown says "Where the exit is cannot be told"
+// in the language of msgs.
+func (msgs Messages) HeroMapUnknown() string {
+	return Catalog.Format(msgs.locale, "heroMapUnknown", nil)
 }
 
 // HoursShort says "{count} h"
@@ -3638,11 +3734,11 @@ func (msgs Messages) SubUpdatedUnknown() string {
 	return Catalog.Format(msgs.locale, "subUpdatedUnknown", nil)
 }
 
-// SystemProxy says "System proxy"
+// SystemProxy says "Proxy"
 // in the language the app shows.
 func SystemProxy() string { return In(i18n.Locale()).SystemProxy() }
 
-// SystemProxy says "System proxy"
+// SystemProxy says "Proxy"
 // in the language of msgs.
 func (msgs Messages) SystemProxy() string {
 	return Catalog.Format(msgs.locale, "systemProxy", nil)
@@ -3696,26 +3792,6 @@ func ThemePaper() string { return In(i18n.Locale()).ThemePaper() }
 // in the language of msgs.
 func (msgs Messages) ThemePaper() string {
 	return Catalog.Format(msgs.locale, "themePaper", nil)
-}
-
-// TrafficLast2Min says "Last 2 minutes"
-// in the language the app shows.
-func TrafficLast2Min() string { return In(i18n.Locale()).TrafficLast2Min() }
-
-// TrafficLast2Min says "Last 2 minutes"
-// in the language of msgs.
-func (msgs Messages) TrafficLast2Min() string {
-	return Catalog.Format(msgs.locale, "trafficLast2Min", nil)
-}
-
-// TrafficNone says "No traffic yet"
-// in the language the app shows.
-func TrafficNone() string { return In(i18n.Locale()).TrafficNone() }
-
-// TrafficNone says "No traffic yet"
-// in the language of msgs.
-func (msgs Messages) TrafficNone() string {
-	return Catalog.Format(msgs.locale, "trafficNone", nil)
 }
 
 // Tun says "TUN"
@@ -4106,56 +4182,6 @@ func (msgs Messages) StatsMemoryCore() string {
 	return Catalog.Format(msgs.locale, "statsMemoryCore", nil)
 }
 
-// LanIP says "LAN address"
-// in the language the app shows.
-func LanIP() string { return In(i18n.Locale()).LanIP() }
-
-// LanIP says "LAN address"
-// in the language of msgs.
-func (msgs Messages) LanIP() string {
-	return Catalog.Format(msgs.locale, "lanIP", nil)
-}
-
-// LanProxy says "LAN proxy"
-// in the language the app shows.
-func LanProxy() string { return In(i18n.Locale()).LanProxy() }
-
-// LanProxy says "LAN proxy"
-// in the language of msgs.
-func (msgs Messages) LanProxy() string {
-	return Catalog.Format(msgs.locale, "lanProxy", nil)
-}
-
-// LanStateOff says "Off"
-// in the language the app shows.
-func LanStateOff() string { return In(i18n.Locale()).LanStateOff() }
-
-// LanStateOff says "Off"
-// in the language of msgs.
-func (msgs Messages) LanStateOff() string {
-	return Catalog.Format(msgs.locale, "lanStateOff", nil)
-}
-
-// LanStateOn says "On"
-// in the language the app shows.
-func LanStateOn() string { return In(i18n.Locale()).LanStateOn() }
-
-// LanStateOn says "On"
-// in the language of msgs.
-func (msgs Messages) LanStateOn() string {
-	return Catalog.Format(msgs.locale, "lanStateOn", nil)
-}
-
-// LanStateOnPort says "Port {port}"
-// in the language the app shows.
-func LanStateOnPort(port string) string { return In(i18n.Locale()).LanStateOnPort(port) }
-
-// LanStateOnPort says "Port {port}"
-// in the language of msgs.
-func (msgs Messages) LanStateOnPort(port string) string {
-	return Catalog.Format(msgs.locale, "lanStateOnPort", map[string]any{"port": port})
-}
-
 // ServicesAll says "All services"
 // in the language the app shows.
 func ServicesAll() string { return In(i18n.Locale()).ServicesAll() }
@@ -4184,64 +4210,4 @@ func ServicesIdle() string { return In(i18n.Locale()).ServicesIdle() }
 // in the language of msgs.
 func (msgs Messages) ServicesIdle() string {
 	return Catalog.Format(msgs.locale, "servicesIdle", nil)
-}
-
-// LanPort says "Port"
-// in the language the app shows.
-func LanPort() string { return In(i18n.Locale()).LanPort() }
-
-// LanPort says "Port"
-// in the language of msgs.
-func (msgs Messages) LanPort() string {
-	return Catalog.Format(msgs.locale, "lanPort", nil)
-}
-
-// LanCopiedAll says "Copied the connection details"
-// in the language the app shows.
-func LanCopiedAll() string { return In(i18n.Locale()).LanCopiedAll() }
-
-// LanCopiedAll says "Copied the connection details"
-// in the language of msgs.
-func (msgs Messages) LanCopiedAll() string {
-	return Catalog.Format(msgs.locale, "lanCopiedAll", nil)
-}
-
-// LanOpenSettings says "Open settings"
-// in the language the app shows.
-func LanOpenSettings() string { return In(i18n.Locale()).LanOpenSettings() }
-
-// LanOpenSettings says "Open settings"
-// in the language of msgs.
-func (msgs Messages) LanOpenSettings() string {
-	return Catalog.Format(msgs.locale, "lanOpenSettings", nil)
-}
-
-// LanHintAccount says "Devices connect with this account and password. You can turn them off, and see everything, in Settings under LAN."
-// in the language the app shows.
-func LanHintAccount() string { return In(i18n.Locale()).LanHintAccount() }
-
-// LanHintAccount says "Devices connect with this account and password. You can turn them off, and see everything, in Settings under LAN."
-// in the language of msgs.
-func (msgs Messages) LanHintAccount() string {
-	return Catalog.Format(msgs.locale, "lanHintAccount", nil)
-}
-
-// LanOnTitle says "LAN proxy is on"
-// in the language the app shows.
-func LanOnTitle() string { return In(i18n.Locale()).LanOnTitle() }
-
-// LanOnTitle says "LAN proxy is on"
-// in the language of msgs.
-func (msgs Messages) LanOnTitle() string {
-	return Catalog.Format(msgs.locale, "lanOnTitle", nil)
-}
-
-// LanGotIt says "Got it"
-// in the language the app shows.
-func LanGotIt() string { return In(i18n.Locale()).LanGotIt() }
-
-// LanGotIt says "Got it"
-// in the language of msgs.
-func (msgs Messages) LanGotIt() string {
-	return Catalog.Format(msgs.locale, "lanGotIt", nil)
 }

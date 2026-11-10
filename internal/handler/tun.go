@@ -164,13 +164,23 @@ func (d *Dashboard) beginUninstallHelper() {
 	}()
 }
 
-// tunHint says why the TUN pill cannot be turned on, or nothing when it can.
-func (d *Dashboard) tunHint() string {
+// tunHolder says which client's TUN holds the default routes when that is why
+// the switch cannot be turned on, and nothing when it can.
+func (d *Dashboard) tunHolder() string {
 	s := &d.tun
 	if s.loaded && !s.on && s.taken {
 		return locales.TunTaken(s.takenBy)
 	}
 	return ""
+}
+
+// tunHint is the flyout's line under its pills: the holder, unless the notice
+// above already says it.
+func (d *Dashboard) tunHint() string {
+	if d.conditionActive(model.ConditionTunTaken) {
+		return ""
+	}
+	return d.tunHolder()
 }
 
 // tunDialog explains, once, what turning TUN on without a helper installed

@@ -7,9 +7,7 @@ import (
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/plugins/loading"
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/chart"
 
-	"hop/internal/model"
 	"hop/locales"
 )
 
@@ -65,6 +63,10 @@ type switchStyle struct {
 	active        ui.Color
 	inactive      ui.Color
 	segmentWidth  float32
+	// trackLine and thumbLine outline the track and the thumb when they are
+	// not transparent; a thumb with an outline has no shadow.
+	trackLine ui.Color
+	thumbLine ui.Color
 }
 
 // Space kept on each side of a segment's label, so a longer translation widens
@@ -102,13 +104,21 @@ func slidingSwitch(c *ui.Context, key string, selected *int, labels []string, st
 	inner := switchHeight - 2*switchInset
 	track := ui.Box(c).Key(key).Label(key).Width(style.segmentWidth*float32(len(labels)) + 2*switchInset).Height(switchHeight).
 		Radius(switchHeight / 2).Background(style.track)
+	if style.trackLine.A > 0 {
+		track.Border(hairlineWidth, style.trackLine)
+	}
 	x := track.AnimateTo("thumb", float32(*selected)*style.segmentWidth, ui.Snappy)
 	track.Children(func() {
 		thumb := ui.Box(c).Absolute().Left(switchInset + x).Top(switchInset).Width(style.segmentWidth).Height(inner).Radius(inner / 2)
 		if style.thumbMaterial != nil {
 			thumb.Material(style.thumbMaterial)
 		} else {
-			thumb.Background(style.thumb).Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.12))
+			thumb.Background(style.thumb)
+			if style.thumbLine.A > 0 {
+				thumb.Border(hairlineWidth, style.thumbLine)
+			} else {
+				thumb.Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.12))
+			}
 		}
 		ui.Row(c).Absolute().Left(switchInset).Top(switchInset).Children(func() {
 			for i, label := range labels {
@@ -210,30 +220,6 @@ func statusDot(c *ui.Context, color ui.Color, live bool) {
 		}
 		p.Fill(circle(cx, cy, 3.5), color, 3.5)
 	})
-}
-
-// trafficSwitches are the header's buttons for how traffic reaches Hop, the
-// system proxy and TUN, each with a switch that turns green while on. The header holds
-// them so every page shows them. A switch another client holds says so
-// before them, and so does a core Hop cannot reach.
-func (d *Dashboard) trafficSwitches(c *ui.Context, t *ui.Theme) {
-	if d.status == statusFailed {
-		ui.Text(c, locales.CoreNotConnected()).FontSize(fontSecondary).TextColor(t.Danger).NoWrap()
-	}
-	for _, note := range []string{d.systemProxyHint(), d.tunHint()} {
-		if note != "" {
-			mutedText(c, t, note).MaxLines(1)
-		}
-	}
-	sp, tun := &d.sysProxy, &d.tun
-	statusToggle(c, t, pillSpec{
-		label: locales.SystemProxy(), on: sp.on, busy: sp.busy, hint: d.trafficHint(),
-		disabled: !sp.loaded || (sp.status.Owner == model.ProxyOwnerOther && !sp.on),
-	}, locales.SystemProxyHint(), func() { d.beginSystemProxy(!sp.on) })
-	statusToggle(c, t, pillSpec{
-		label: locales.Tun(), on: tun.on, busy: tun.busy,
-		disabled: !tun.loaded || (d.controlsLocked() && !tun.busy) || (tun.taken && !tun.on),
-	}, locales.TunHint(), func() { d.beginTun(!tun.on) })
 }
 
 // flowIntensity maps a throughput onto 0..1, by doublings of idleRate so a
@@ -354,64 +340,6 @@ func entrance(e ui.Element, step int) ui.Element {
 // inside a circle, drawn in color.
 func spinner(c *ui.Context, size float32, color ui.Color) {
 	loading.Atom(c, loading.Options{Size: size, Color: color}).Label(locales.Working())
-}
-
-// sparkArea draws history across r, download filled, upload as a line.
-func sparkArea(p *ui.Painter, r ui.Rect, history model.TrafficHistory, down ui.Color, up ui.Color) {
-	if len(history.Down) < 2 {
-		return
-	}
-	peak := peakOf(history)
-	xs, downYs := series(history.Down, peak)
-	_, upYs := series(history.Up, peak)
-	p.Clip(r, 0, func() {
-		p.FillPathGradient(chart.Area(r, xs, nil, downYs, chart.CurveMonotone), ui.LinearGradient{
-			From: down.Alpha(0.18), To: down.Alpha(0), Angle: 180,
-		})
-		p.StrokePath(chart.Line(r, xs, upYs, chart.CurveMonotone), 1.25, up)
-		p.StrokePath(chart.Line(r, xs, downYs, chart.CurveMonotone), 1.5, down)
-	})
-}
-
-// sparkAreaLive draws the main window's plot without smoothing: straight
-// segments keep a spike a spike. The window is right-aligned, so a young
-// history starts inside the plot; the area begins on the baseline one step
-// before its first sample, rising over a segment instead of closing with a
-// vertical edge, the "L" a startup spike used to draw.
-func sparkAreaLive(p *ui.Painter, r ui.Rect, history model.TrafficHistory, down ui.Color, up ui.Color) {
-	if len(history.Down) < 2 {
-		return
-	}
-	peak := peakOf(history)
-	xs, downYs := series(history.Down, peak)
-	_, upYs := series(history.Up, peak)
-	areaXs, areaYs := sparkLeadIn(xs, downYs)
-	p.Clip(r, 0, func() {
-		p.FillPathGradient(chart.Area(r, areaXs, nil, areaYs, chart.CurveLinear), ui.LinearGradient{
-			From: down.Alpha(0.18), To: down.Alpha(0), Angle: 180,
-		})
-		p.StrokePath(chart.Line(r, xs, upYs, chart.CurveLinear), 1.25, up)
-		p.StrokePath(chart.Line(r, xs, downYs, chart.CurveLinear), 1.5, down)
-	})
-}
-
-// sparkLeadIn returns the area's series with a zero at one sample before a
-// partial history, so its left boundary slopes up from the baseline. A full
-// window already starts at the plot's edge, where no lead-in fits.
-func sparkLeadIn(xs, ys []float32) ([]float32, []float32) {
-	if len(xs) == 0 || xs[0] <= 0 {
-		return xs, ys
-	}
-	lead := xs[0] - 1/float32(historyLimit-1)
-	if lead < 0 {
-		lead = 0
-	}
-	if lead == xs[0] {
-		return xs, ys
-	}
-	areaXs := make([]float32, 0, len(xs)+1)
-	areaYs := make([]float32, 0, len(ys)+1)
-	return append(append(areaXs, lead), xs...), append(append(areaYs, 0), ys...)
 }
 
 func circle(cx float32, cy float32, radius float32) ui.Rect {
