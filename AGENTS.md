@@ -419,8 +419,10 @@ for fills. One orchestrated entrance (the flyout), no scattered fade-ins.
 ## Verify every change
 
 1. `gofmt -l .` prints nothing, `go vet ./...` and `go tool mygo vet .` pass.
-2. `HOP_MIHOMO_BINARY="/Applications/Clash Verge.app/Contents/MacOS/verge-mihomo" go test ./...`
-   — the integration test starts a real core on 17891/19091.
+2. `HOP_MIHOMO_BINARY="$PWD/resources/darwin-arm64/bin/mihomo" go test ./...`
+   — the integration test starts a real core on 17891/19091. This is Hop's
+   own bundled core, which CI uses too (run `scripts/fetch-mihomo.sh` if it is
+   missing); never depend on another client being installed.
 3. For UI changes, render and look at the result before claiming it works:
    a temporary `internal/handler/preview_test.go` using `ui.NewTester`
    (`SetScale(2)`, `SetDark`, `SetTitleBar`, `Advance` past animations,
