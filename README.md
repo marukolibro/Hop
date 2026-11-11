@@ -145,8 +145,17 @@ running in a webview, and the same code runs on macOS and Windows.
   macOS and Windows 11 (Mica, Acrylic for the panel); a solid window with the
   same layout on Windows 10. Light, dark or follow the system, independently of
   the colour theme. On macOS a slider sets how translucent the window is.
+- **Hack.** One more theme, a terminal: phosphor green on black in a typeface
+  that comes with Hop, with scanlines and a glow, and its own home page of
+  boxes. It has one look only and no frosted glass, so macOS and Windows draw it
+  alike. Click a group in its routes to choose that group's node.
 - **Calm motion.** Motion shows what changes: a switch slides, a number rolls,
   a spinner turns while work runs.
+
+<p align="center">
+  <img src="docs/screenshots/en/hack-nodes-dark.png" width="420" alt="The nodes page in the Hack theme">
+  <img src="docs/screenshots/en/hack-picker-dark.png" width="420" alt="Choosing a group's node in the Hack theme">
+</p>
 
 <p align="center">
   <picture>

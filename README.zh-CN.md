@@ -73,8 +73,13 @@ macOS 和 Windows 上运行。
 
 ### 外观
 
-- **玻璃**:macOS 和 Windows 11 上是磨砂玻璃窗口,背景默认海蓝(或暮紫);Windows 11 的主窗口用 Mica,面板用 Acrylic;Windows 10 是同样布局的纯色版。浅色、深色或跟随系统,与主题互不影响。macOS 上可以用滑块调节窗口通透度。「Hack」主题例外:黑底荧光绿的终端风格,只有一种样子,不用毛玻璃,两个系统上画得一样。
+- **玻璃**:macOS 和 Windows 11 上是磨砂玻璃窗口,背景默认海蓝(或暮紫);Windows 11 的主窗口用 Mica,面板用 Acrylic;Windows 10 是同样布局的纯色版。浅色、深色或跟随系统,与主题互不影响。macOS 上可以用滑块调节窗口通透度。「Hack」主题例外:黑底荧光绿的终端风格,只有一种样子,不用毛玻璃,两个系统上画得一样。点一下线路里的分组,就能换它走的节点。
 - **克制的动效**:动效只表现变化:开关滑动、数字滚动、工作进行时转圈。
+
+<p align="center">
+  <img src="docs/screenshots/hack-nodes-dark.png" width="420" alt="Hack 主题的节点页">
+  <img src="docs/screenshots/hack-picker-dark.png" width="420" alt="Hack 主题里选一个分组的节点">
+</p>
 
 <p align="center">
   <picture>
