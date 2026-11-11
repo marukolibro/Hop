@@ -21,7 +21,7 @@ var Appearances = []model.Appearance{model.AppearanceSystem, model.AppearanceLig
 var Languages = []model.Language{model.LanguageSystem, model.LanguageChinese, model.LanguageEnglish}
 
 // ColorThemes are the material palettes in the order offered in settings.
-var ColorThemes = []model.ColorTheme{model.ThemeOcean, model.ThemeDusk, model.ThemePaper}
+var ColorThemes = []model.ColorTheme{model.ThemeOcean, model.ThemeDusk, model.ThemePaper, model.ThemeHack}
 
 // DelayTimeouts are the delay test timeouts the settings offer, in seconds.
 var DelayTimeouts = []int{2, 3, 5}

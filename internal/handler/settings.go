@@ -28,7 +28,7 @@ func languageLabels() []string {
 
 // colorThemeLabels name service.ColorThemes, index for index.
 func colorThemeLabels() []string {
-	return []string{locales.ThemeOcean(), locales.ThemeDusk(), locales.ThemePaper()}
+	return []string{locales.ThemeOcean(), locales.ThemeDusk(), locales.ThemePaper(), locales.ThemeHack()}
 }
 
 // timeoutLabels name service.DelayTimeouts, index for index.
@@ -92,8 +92,11 @@ func isDark(appearance model.Appearance, systemDark bool) bool {
 // appearance. Applying it makes the native materials, the main window's and
 // the menu bar panel's, follow the user's choice with the palette drawn over
 // them, rather than the system's.
-func AppearanceSource(appearance model.Appearance) mygo.ThemeSource {
-	switch appearance {
+func AppearanceSource(settings model.Settings) mygo.ThemeSource {
+	if settings.Theme == model.ThemeHack {
+		return mygo.ThemeDark
+	}
+	switch settings.Appearance {
 	case model.AppearanceDark:
 		return mygo.ThemeDark
 	case model.AppearanceLight:
@@ -120,7 +123,7 @@ func (d *Dashboard) saveSettings(next model.Settings) {
 		return
 	}
 	d.settings = newSettingsState(next)
-	mygo.Theme.SetSource(AppearanceSource(next.Appearance))
+	mygo.Theme.SetSource(AppearanceSource(next))
 	if next.Language != previous.Language {
 		mygo.App.SetLocale(string(next.Language))
 		// The view carries names the service words in the language shown.
@@ -233,9 +236,13 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 				// The groups go by what the user is doing, in the order a
 				// first run goes: how Hop looks, how it starts, how it
 				// reaches the network, then what its rules and its core are.
-				interfaceRows := []func(){themeRow, appearanceRow}
-				if runtime.GOOS == "darwin" && c.Vibrancy() {
-					interfaceRows = append(interfaceRows, clarityRow)
+				interfaceRows := []func(){themeRow}
+				// The Hack theme is one fixed look: no light or dark, no glass.
+				if s.settings.Theme != model.ThemeHack {
+					interfaceRows = append(interfaceRows, appearanceRow)
+					if runtime.GOOS == "darwin" && c.Vibrancy() {
+						interfaceRows = append(interfaceRows, clarityRow)
+					}
 				}
 				interfaceRows = append(interfaceRows, languageRow)
 				settingsGroup(c, t, locales.SettingsInterface(), interfaceRows...)

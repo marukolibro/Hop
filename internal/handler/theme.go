@@ -4,6 +4,8 @@ import (
 	"math"
 
 	"github.com/egoist/mygo/ui"
+
+	"hop/internal/model"
 )
 
 // dialogScrim dims the window under a dialog; dialogShadow lifts the dialog's
@@ -63,6 +65,9 @@ func accentInk(t *ui.Theme) ui.Color {
 
 // dangerFill is Danger where it fills a shape or lights a card.
 func dangerFill(t *ui.Theme) ui.Color {
+	if hackTheme(t) {
+		return hackDanger
+	}
 	if t.Dark {
 		return dangerFillDark
 	}
@@ -72,6 +77,9 @@ func dangerFill(t *ui.Theme) ui.Color {
 // uploadColor is the upload side's ink: the ring's inner arc, the plot's
 // upload line, the ↑ arrow.
 func uploadColor(t *ui.Theme) ui.Color {
+	if hackTheme(t) {
+		return hackUpload
+	}
 	if t.Dark {
 		return uploadDark
 	}
@@ -165,6 +173,10 @@ const glassControlAlpha float32 = 0.80
 // material, solid otherwise. The flyout uses the selected palette through
 // theme while keeping opaque control surfaces over its native panel.
 func (d *Dashboard) windowTheme(c *ui.Context) *ui.Theme {
+	if d.settings.settings.Theme == model.ThemeHack {
+		// Never the window's material: the look is the same everywhere.
+		return hopHackTheme()
+	}
 	dark := isDark(d.settings.settings.Appearance, c.Theme().Dark)
 	if c.Vibrancy() {
 		return hopWindowGlassTheme(dark, d.settings.settings.WindowClarity, d.settings.settings.Theme)

@@ -156,7 +156,7 @@ func (m *MenuBar) togglePanel() {
 		// The panel is its own window, not an NSPopover: its material
 		// follows the app's appearance, as the palette drawn over it does,
 		// where a popover takes the menu bar's.
-		Vibrancy:     flyoutVibrancy(),
+		Vibrancy:     flyoutVibrancy(m.d.settings.settings.Theme),
 		CornerRadius: flyoutCornerRadius,
 		Content: ui.View(func(c *ui.Context) {
 			m.d.flyoutView(c, m.showWindow, mygo.App.Quit, m.fitPanel)
@@ -182,9 +182,13 @@ func (m *MenuBar) fitPanel(height int) {
 }
 
 // flyoutVibrancy is the material behind the panel: the popover material on
-// macOS, which Windows 11 shows as Acrylic. Elsewhere the panel draws its
-// own background.
-func flyoutVibrancy() mygo.Vibrancy {
+// macOS, which Windows 11 shows as Acrylic. Elsewhere, and under the
+// cyberpunk theme, the panel draws its own background.
+func flyoutVibrancy(theme model.ColorTheme) mygo.Vibrancy {
+	if theme == model.ThemeHack {
+		// One opaque look on every platform.
+		return mygo.VibrancyNone
+	}
 	switch runtime.GOOS {
 	case "darwin", "windows":
 		return mygo.VibrancyPopover

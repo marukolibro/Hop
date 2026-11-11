@@ -342,6 +342,30 @@ for font sizes, weights, gaps or radii in views.
   it. 海蓝 is the default theme, with 68% clarity. 设置 → 通用 → 主题 changes
   the palette independently of appearance and persists it. 窗口通透度 changes
   the base veil live on macOS; existing saved clarity values are preserved.
+- The Hack theme (`theme_hack.go`, named Hack in both languages) is the
+  exception to all of that: one fixed dark palette, a terminal's phosphor
+  green on black in JetBrains Mono (`Theme.Font`; the four weights are
+  embedded in `fonts/`, SIL OFL, and registered by `RegisterFonts` at start,
+  so macOS and Windows draw the same glyphs, with Chinese falling back to the
+  system face), with no light or dark variant, and never the window's
+  material or the flyout's vibrancy. Its backdrop (the base with a faint green
+  light at the top left) sits under veils of the base that the header,
+  sidebar and node area carry; cards are opaque. `hackTheme(t)` tells it
+  apart; `AppearanceSource` forces the dark native chrome, `flyoutVibrancy`
+  returns none, and the settings hide 外观 and 窗口通透度. A new
+  theme-dependent colour needs a branch for it. The whole window carries a
+  CRT's look: a glow under every text (`hackTextGlow`, set on the root in
+  `View`) and `hackScanlines` over everything (scanlines and dark corners,
+  pointer passes through). It also has its own home (`hack_home.go`, from
+  `nodesPage`): a hero box (the exit's words, `hack_map.go`'s dot map of the
+  world from the land mask in `hack_land.go`, which `scripts/landmask`
+  writes from Natural Earth), then the capture box (the two switches, the mode
+  and the subscriptions), the routes tree (`service.ExitBranches`: each exit
+  with the groups that lead there; a click opens `hackPickerDialog`, the
+  group's nodes as rows) and the services. Under `hackStackWidth` the routes
+  move under the other two, and a short window scrolls. The header has no
+  rule under it. Bars are drawn (solid cells and a stippled bitmap), never
+  glyphs, so they look the same in any font.
 - Colours: theme tokens only, one hue family. Accent (sky blue) = route,
   download, rings, bars, selection; coloured text takes the deeper
   `accentInk`. Upload (ring inner arc, plot upload line, ↑) is a blue-slate

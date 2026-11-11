@@ -372,6 +372,15 @@ type RouteHop struct {
 	Group bool
 }
 
+// ExitBranch is one place traffic leaves by and the groups that send traffic
+// there now: Exit is the proxy they lead to, or, for groups that lead to no
+// proxy (DIRECT, REJECT), zero with Key naming their pick.
+type ExitBranch struct {
+	Key    string
+	Exit   NodeView
+	Groups []GroupView
+}
+
 // ProxyView is everything the dashboard shows about the profile.
 type ProxyView struct {
 	// Mode is the outbound mode the view was built for.
@@ -561,6 +570,9 @@ const (
 	ThemeOcean ColorTheme = "ocean"
 	ThemeDusk  ColorTheme = "dusk"
 	ThemePaper ColorTheme = "paper"
+	// ThemeHack is one fixed dark look, drawn the same on every platform:
+	// appearance and window clarity do not apply to it.
+	ThemeHack ColorTheme = "hack"
 )
 
 // DefaultSubscriptionUpdateHours is how often subscriptions refresh on their
@@ -587,7 +599,7 @@ type Settings struct {
 	// Language is the language of Hop's texts; the zero value follows the
 	// system's, so settings saved before this existed keep doing so.
 	Language Language
-	// Theme selects the ocean or dusk material palette.
+	// Theme selects the colour theme.
 	Theme ColorTheme
 	// DelayTimeoutSeconds is how long a delay test waits for one node.
 	DelayTimeoutSeconds int

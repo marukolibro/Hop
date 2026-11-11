@@ -1,6 +1,10 @@
 package service
 
-import "hop/internal/model"
+import (
+	"math"
+
+	"hop/internal/model"
+)
 
 // LocalPlace answers where the user is, for the home's map.
 type LocalPlace interface {
@@ -46,4 +50,16 @@ func ExitPlace(route []model.RouteHop, measuredCountry string) model.ExitPlace {
 		}
 	}
 	return model.ExitPlace{}
+}
+
+// earthRadiusKm is the earth's mean radius.
+const earthRadiusKm = 6371
+
+// DistanceKm is how far apart two places are over the earth's surface, in
+// kilometres.
+func DistanceKm(a model.GeoPoint, b model.GeoPoint) float64 {
+	rad := func(deg float32) float64 { return float64(deg) * math.Pi / 180 }
+	dLat, dLon := rad(b.Lat-a.Lat), rad(b.Lon-a.Lon)
+	h := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(rad(a.Lat))*math.Cos(rad(b.Lat))*math.Sin(dLon/2)*math.Sin(dLon/2)
+	return 2 * earthRadiusKm * math.Asin(math.Sqrt(h))
 }

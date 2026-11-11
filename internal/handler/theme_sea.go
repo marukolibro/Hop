@@ -244,16 +244,19 @@ var wallpaperCache struct {
 }
 
 // wallpaperBitmap is the wallpaper of palette as a bitmap for a window of w
-// by h points: the sea's, or the dusk atmosphere. The paper theme has no
+// by h points: the sea's, the dusk atmosphere or the Hack glow. The paper theme has no
 // bitmap of window size; drawPaper tiles a small grain instead.
 func wallpaperBitmap(w float32, h float32, palette windowMaterialPalette) *ui.Bitmap {
 	key := wallpaperKey{nx: int(math.Round(float64(w / seaCell))), ny: int(math.Round(float64(h / seaCell))), palette: palette}
 	wallpaperCache.Lock()
 	defer wallpaperCache.Unlock()
 	if wallpaperCache.bitmap == nil || wallpaperCache.key != key {
-		if palette.sea {
+		switch {
+		case palette.sea:
 			wallpaperCache.bitmap = ui.NewBitmap(seaImage(w, h, palette.dark))
-		} else {
+		case palette.hack:
+			wallpaperCache.bitmap = ui.NewBitmap(hackImage(w, h))
+		default:
 			wallpaperCache.bitmap = ui.NewBitmap(duskImage(w, h, palette))
 		}
 		wallpaperCache.key = key
@@ -265,6 +268,10 @@ func wallpaperBitmap(w float32, h float32, palette windowMaterialPalette) *ui.Bi
 func drawWallpaper(p *ui.Painter, r ui.Rect, palette windowMaterialPalette) {
 	if palette.paper {
 		drawPaper(p, r, palette)
+		return
+	}
+	if palette.hack {
+		drawHack(p, r, palette)
 		return
 	}
 	p.Image(wallpaperBitmap(r.W, r.H, palette), r, ui.FillBox)

@@ -78,6 +78,10 @@ func (d *Dashboard) nodesPage(c *ui.Context, t *ui.Theme) {
 		d.managePage(c, t)
 		return
 	}
+	if hackTheme(t) {
+		d.hackHome(c, t)
+		return
+	}
 	// The body is one surface: a fixed sidebar, a hairline, and the content.
 	// The content may shrink below its height, so it scrolls inside the
 	// window rather than pushing past it.

@@ -55,6 +55,9 @@ var (
 func shotDashboard(n shotNames, page int) *Dashboard {
 	settings := service.DefaultSettings()
 	settings.Theme = model.ThemePaper
+	if theme := os.Getenv("HOP_SHOTS_THEME"); theme != "" {
+		settings.Theme = model.ColorTheme(theme)
+	}
 	d := &Dashboard{services: Services{Port: shotPort{}}, status: statusConnected, settings: newSettingsState(settings), page: page}
 	d.core.loaded = true
 	d.tun = tunState{loaded: true}
@@ -206,6 +209,9 @@ func TestShots(t *testing.T) {
 	if root == "" {
 		t.Skip("HOP_SHOTS_DIR is not set")
 	}
+	if err := RegisterFonts(); err != nil {
+		t.Fatal(err)
+	}
 	names := shotZH
 	if os.Getenv("MYGO_LOCALE") == "en" {
 		names = shotEN
@@ -228,6 +234,10 @@ func TestShots(t *testing.T) {
 			shotRender(t, filepath.Join(dir, name+"-"+scheme+".png"), func(c *ui.Context) { d.View(c) }, dark, width, height, true)
 		}
 		window("nodes", pageNodes, nil)
+		// Only the Hack theme has a node list of its own.
+		if os.Getenv("HOP_SHOTS_THEME") == string(model.ThemeHack) {
+			window("picker", pageNodes, func(d *Dashboard) { d.hackPickerOpen = true })
+		}
 		window("connections", pageActivity, nil)
 		window("activity-log", pageActivity, func(d *Dashboard) { d.activity = activityLog })
 		window("stats", pageStats, nil)

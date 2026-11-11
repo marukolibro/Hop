@@ -198,7 +198,7 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
-	mygo.Theme.SetSource(handler.AppearanceSource(userSettings.Appearance))
+	mygo.Theme.SetSource(handler.AppearanceSource(userSettings))
 	// The LAN access the user left on is part of the first config the core
 	// starts with.
 	lanService := service.NewLANService(lanState, lan.NewCredentials(cfg.AppDir), lan.Source{}, profiles, portState)
@@ -353,6 +353,11 @@ func run() (err error) {
 		// The language is the user's choice, or the system's while none was
 		// made; mygo keeps it too, and this makes the settings the one truth.
 		mygo.App.SetLocale(string(userSettings.Language))
+		if err := handler.RegisterFonts(); err != nil {
+			readyErr = err
+			mygo.App.Quit()
+			return
+		}
 		// Started at login, Hop runs in the menu bar only: no window and no
 		// Dock icon until the user opens it.
 		atLogin := mygo.App.WasOpenedAtLogin()

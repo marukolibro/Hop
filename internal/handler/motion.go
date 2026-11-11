@@ -168,7 +168,9 @@ func pageTabs(c *ui.Context, t *ui.Theme, key string, selected *int, labels []st
 		trackFill = glassFill(t, glassTrackAlpha)
 	}
 	pill := ui.Hex("#E7EBF3")
-	if !t.Dark {
+	if hackTheme(t) {
+		pill = t.Accent
+	} else if !t.Dark {
 		pill = ui.RGB(255, 255, 255)
 	}
 	inner := tabHeight - 2*tabInset

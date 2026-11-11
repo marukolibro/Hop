@@ -154,13 +154,7 @@ func (d *Dashboard) modeButton(c *ui.Context, t *ui.Theme, index int, label stri
 		fill = t.Text.Alpha(2 * neutralFillAlpha)
 	}
 	b.Background(b.AnimateColor("fill", fill, ui.Smooth))
-	b.OnClick(func() {
-		if d.modeIndex == index || d.modeLocked() {
-			return
-		}
-		d.modeIndex = index
-		d.setMode(service.Modes[index])
-	})
+	b.OnClick(func() { d.chooseMode(index) })
 	b.Children(func() {
 		ui.Icon(c, icon).Width(cardHeaderIcon + 2).Height(cardHeaderIcon + 2).TextColor(ink)
 		weight := weightMedium
@@ -169,6 +163,16 @@ func (d *Dashboard) modeButton(c *ui.Context, t *ui.Theme, index int, label stri
 		}
 		ui.Text(c, label).FontSize(fontBody).FontWeight(weight).TextColor(ink).NoWrap().Translate(0, -opticalLift)
 	})
+}
+
+// chooseMode switches to the mode at index unless it is the one in use or the
+// mode cannot change yet.
+func (d *Dashboard) chooseMode(index int) {
+	if d.modeIndex == index || d.modeLocked() {
+		return
+	}
+	d.modeIndex = index
+	d.setMode(service.Modes[index])
 }
 
 // captureGroup is how traffic reaches Hop: the system proxy and TUN, each a
@@ -180,32 +184,45 @@ func (d *Dashboard) captureGroup(c *ui.Context, t *ui.Theme, group ui.Element) {
 	})
 }
 
-// systemProxyToggle turns the system proxy on and off. While another app holds
-// the system proxy it cannot be turned on, and its tooltip says who holds it.
+// systemProxyToggle turns the system proxy on and off.
 func (d *Dashboard) systemProxyToggle(c *ui.Context, t *ui.Theme) {
+	spec, tip := d.systemProxySpec()
+	captureToggle(c, t, spec, tip, func() { d.beginSystemProxy(!d.sysProxy.on) })
+}
+
+// systemProxySpec is the system proxy's switch and its tooltip. While another
+// app holds the system proxy it cannot be turned on, and the tooltip says who
+// holds it.
+func (d *Dashboard) systemProxySpec() (pillSpec, string) {
 	s := &d.sysProxy
 	tip := locales.SystemProxyHint()
 	if holder := d.systemProxyHolder(); holder != "" {
 		tip = holder
 	}
-	captureToggle(c, t, pillSpec{
+	return pillSpec{
 		label: locales.SystemProxy(), on: s.on, busy: s.busy, hint: d.trafficHint(),
 		disabled: !s.loaded || (s.status.Owner == model.ProxyOwnerOther && !s.on),
-	}, tip, func() { d.beginSystemProxy(!s.on) })
+	}, tip
 }
 
-// tunToggle turns TUN on and off. While another client's TUN holds the default
-// routes it cannot be turned on, and its tooltip says who holds them.
+// tunToggle turns TUN on and off.
 func (d *Dashboard) tunToggle(c *ui.Context, t *ui.Theme) {
+	spec, tip := d.tunSpec()
+	captureToggle(c, t, spec, tip, func() { d.beginTun(!d.tun.on) })
+}
+
+// tunSpec is TUN's switch and its tooltip. While another client's TUN holds the
+// default routes it cannot be turned on, and the tooltip says who holds them.
+func (d *Dashboard) tunSpec() (pillSpec, string) {
 	s := &d.tun
 	tip := locales.TunHint()
 	if holder := d.tunHolder(); holder != "" {
 		tip = holder
 	}
-	captureToggle(c, t, pillSpec{
+	return pillSpec{
 		label: locales.Tun(), on: s.on, busy: s.busy,
 		disabled: !s.loaded || (d.controlsLocked() && !s.busy) || (s.taken && !s.on),
-	}, tip, func() { d.beginTun(!s.on) })
+	}, tip
 }
 
 // captureToggle is a capsule as tall as a mode button, with a switch before
@@ -304,6 +321,18 @@ func (d *Dashboard) serviceTiles(c *ui.Context, t *ui.Theme, row ui.Element) {
 // servicesPill is the services card's state: that none was checked yet, how
 // far a check is, that every service works, or how many do.
 func (d *Dashboard) servicesPill(c *ui.Context, t *ui.Theme) {
+	text, fill, ink := d.servicesSummary(t)
+	ui.Box(c.Key("servicesPill")).Height(heroDelayHeight).Padding(0, gapSmall).Radius(heroDelayHeight / 2).Center().
+		Background(fill).Children(func() {
+		ui.Text(c, text).FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(ink).FontFeatures("tnum").NoWrap().
+			Translate(0, -opticalLift).ContentTransition(ui.ContentTransition{Numeric: true})
+	})
+}
+
+// servicesSummary is the services check in a few words, with the fill and ink
+// that mark it: that none was checked yet, how far a check is, that every
+// service works, or how many do.
+func (d *Dashboard) servicesSummary(t *ui.Theme) (string, ui.Color, ui.Color) {
 	s := &d.unlock.services
 	results := make([]model.UnlockResult, 0, len(s.results))
 	for _, r := range s.results {
@@ -321,11 +350,7 @@ func (d *Dashboard) servicesPill(c *ui.Context, t *ui.Theme) {
 	default:
 		text, fill, ink = fmt.Sprintf("%d/%d", working, total), t.Warning.Alpha(heroDelayFill), textOn(t, t.Warning)
 	}
-	ui.Box(c.Key("servicesPill")).Height(heroDelayHeight).Padding(0, gapSmall).Radius(heroDelayHeight / 2).Center().
-		Background(fill).Children(func() {
-		ui.Text(c, text).FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(ink).FontFeatures("tnum").NoWrap().
-			Translate(0, -opticalLift).ContentTransition(ui.ContentTransition{Numeric: true})
-	})
+	return text, fill, ink
 }
 
 // serviceTile is one service on the card: its mark with a dot for its state,

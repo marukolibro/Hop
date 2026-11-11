@@ -21,11 +21,20 @@ type windowMaterialPalette struct {
 	sea bool
 	// paper is the flat, grained paper theme: its backdrop is one plain sheet.
 	paper bool
-	dark  bool
+	// hack is the Hack theme: a baked backdrop of the base and a faint glow.
+	hack bool
+	dark bool
 }
 
 // materialPalette resolves one validated theme and appearance into colors.
 func materialPalette(dark bool, theme model.ColorTheme) windowMaterialPalette {
+	if theme == model.ThemeHack {
+		return windowMaterialPalette{
+			base: hackBase, ink: hackInk, muted: hackMuted, accent: hackAccent,
+			sky: hackSurface, fold: hackSurface, glow: hackSurface,
+			hack: true, dark: true,
+		}
+	}
 	if theme == model.ThemePaper {
 		// Neutral grey sheet, near-black ink and one blue accent. The greys carry
 		// no hue, so every region of the window reads as the same paper. sky is
@@ -71,6 +80,9 @@ func materialPalette(dark bool, theme model.ColorTheme) windowMaterialPalette {
 
 // hopColorTheme applies the named palette to opaque windows and flyouts.
 func hopColorTheme(dark bool, theme model.ColorTheme) *ui.Theme {
+	if theme == model.ThemeHack {
+		return hopHackTheme()
+	}
 	t := hopTheme(dark)
 	palette := materialPalette(dark, theme)
 	t.Background = palette.base.Mix(palette.sky, 0.10)

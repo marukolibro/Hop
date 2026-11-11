@@ -169,6 +169,9 @@ func glassTile(t *ui.Theme, hovered bool, selected bool) ui.Color {
 // The window's regions use the material's tonal veils on glass and the
 // opaque surface/background pair on solid windows.
 func headerFill(t *ui.Theme) ui.Color {
+	if hackTheme(t) {
+		return t.Background.Alpha(hackHeaderVeil)
+	}
 	if onGlass(t) {
 		return glassFill(t, glassHeaderAlpha)
 	}
@@ -185,6 +188,9 @@ func heroFill(t *ui.Theme) ui.Color {
 // heroFace is the hero card's face: panel with the theme's accent mixed in,
 // stronger at one corner, so the card follows every theme.
 func heroFace(t *ui.Theme, panel ui.Color) ui.LinearGradient {
+	if hackTheme(t) {
+		return ui.LinearGradient{Angle: heroFaceAngle, From: panel.Mix(hackAccent, hackHeroTint), To: panel.Mix(hackAccent, hackHeroTint)}
+	}
 	return ui.LinearGradient{Angle: heroFaceAngle, From: panel.Mix(t.Accent, heroTintNear), To: panel.Mix(t.Accent, heroTintFar)}
 }
 
@@ -199,6 +205,9 @@ func flyoutLine(t *ui.Theme) ui.Color {
 }
 
 func sidebarFill(t *ui.Theme) ui.Color {
+	if hackTheme(t) {
+		return t.Background.Alpha(hackSidebarVeil)
+	}
 	if onGlass(t) {
 		return glassFill(t, glassSidebarAlpha)
 	}
@@ -206,6 +215,9 @@ func sidebarFill(t *ui.Theme) ui.Color {
 }
 
 func nodeAreaFill(t *ui.Theme) ui.Color {
+	if hackTheme(t) {
+		return t.Background.Alpha(hackNodeVeil)
+	}
 	if onGlass(t) {
 		return glassFill(t, glassNodeAreaAlpha)
 	}

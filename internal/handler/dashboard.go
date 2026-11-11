@@ -398,6 +398,13 @@ type Dashboard struct {
 	delayCancel context.CancelFunc
 	// activeGroup is the group whose nodes the grid shows.
 	activeGroup string
+	// hackPickerOpen is whether the Hack theme's node list of activeGroup shows.
+	hackPickerOpen bool
+	// hackShown is whether the last frame was the Hack theme, hackShownKnown
+	// whether there was one; hackBooting and hackBootRun are the power-on that
+	// plays as the theme turns into Hack.
+	hackShown, hackShownKnown, hackBooting bool
+	hackBootRun                            uint64
 	// testing is the group whose delays are being measured, testingAll
 	// during the test at startup, "" for none.
 	testing string
@@ -935,7 +942,12 @@ func (d *Dashboard) View(c *ui.Context) {
 	// The material paints the themed backdrop and veil before any controls.
 	c.Root().Background(ui.Transparent)
 	root := ui.Column(c).Fill()
-	if onGlass(t) {
+	if hackTheme(t) {
+		// The backdrop shows through the regions' veils; there is no base veil.
+		// Every text glows a little, as on a phosphor screen.
+		root.Material(themedWindowMaterial{palette: materialPalette(true, d.settings.settings.Theme), veil: ui.Transparent}).
+			TextShadow(0, 0, hackTextGlow, t.Accent.Alpha(hackTextGlowAlpha))
+	} else if onGlass(t) {
 		root.Material(themedWindowMaterial{palette: materialPalette(t.Dark, d.settings.settings.Theme), veil: glassBaseColor(t)})
 	} else {
 		root.Background(t.Background)
@@ -957,6 +969,10 @@ func (d *Dashboard) View(c *ui.Context) {
 				d.nodesPage(c, t)
 			}
 		})
+		if hackTheme(t) {
+			hackScanlines(c)
+		}
+		d.hackBoot(c, t)
 	})
 	// The subscription and settings dialogs sit over whatever page shows.
 	d.editorDialog(c, t)
@@ -965,6 +981,7 @@ func (d *Dashboard) View(c *ui.Context) {
 	d.customRuleDialog(c, t)
 	d.fakeIPDialog(c, t)
 	d.servicesDialog(c, t)
+	d.hackPickerDialog(c, t)
 }
 
 // header holds what applies to every page: the page switch, and how traffic
@@ -986,6 +1003,10 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 			right = pagePadding
 		}
 		ui.Row(c).Gap(headerGap).AlignItems(ui.Center).Height(headerHeight).Padding(0, right, 0, left).DragWindow().Children(func() {
+			if hackTheme(t) {
+				d.hackHeader(c, t)
+				return
+			}
 			if width >= 760 {
 				brandLockup(c, t, 28, d.markRun)
 			} else {
@@ -1001,7 +1022,10 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 				d.headerPort(c, t)
 			})
 		})
-		horizontalHairline(c, t)
+		// The Hack theme's boxes are framed, so the header has no rule of its own.
+		if !hackTheme(t) {
+			horizontalHairline(c, t)
+		}
 	})
 }
 

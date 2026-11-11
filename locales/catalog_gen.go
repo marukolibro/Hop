@@ -1250,6 +1250,136 @@ func (msgs Messages) GeodataUpdatedAt(date string) string {
 	return Catalog.Format(msgs.locale, "geodataUpdatedAt", map[string]any{"date": date})
 }
 
+// HackBootDisplay says "> Starting display"
+// in the language the app shows.
+func HackBootDisplay() string { return In(i18n.Locale()).HackBootDisplay() }
+
+// HackBootDisplay says "> Starting display"
+// in the language of msgs.
+func (msgs Messages) HackBootDisplay() string {
+	return Catalog.Format(msgs.locale, "hackBootDisplay", nil)
+}
+
+// HackBootReady says "> Ready"
+// in the language the app shows.
+func HackBootReady() string { return In(i18n.Locale()).HackBootReady() }
+
+// HackBootReady says "> Ready"
+// in the language of msgs.
+func (msgs Messages) HackBootReady() string {
+	return Catalog.Format(msgs.locale, "hackBootReady", nil)
+}
+
+// HackBootTheme says "> Loading Hack theme"
+// in the language the app shows.
+func HackBootTheme() string { return In(i18n.Locale()).HackBootTheme() }
+
+// HackBootTheme says "> Loading Hack theme"
+// in the language of msgs.
+func (msgs Messages) HackBootTheme() string {
+	return Catalog.Format(msgs.locale, "hackBootTheme", nil)
+}
+
+// HackCaptureTitle says "Traffic"
+// in the language the app shows.
+func HackCaptureTitle() string { return In(i18n.Locale()).HackCaptureTitle() }
+
+// HackCaptureTitle says "Traffic"
+// in the language of msgs.
+func (msgs Messages) HackCaptureTitle() string {
+	return Catalog.Format(msgs.locale, "hackCaptureTitle", nil)
+}
+
+// HackDistance says "{km} km"
+// in the language the app shows.
+func HackDistance(km string) string { return In(i18n.Locale()).HackDistance(km) }
+
+// HackDistance says "{km} km"
+// in the language of msgs.
+func (msgs Messages) HackDistance(km string) string {
+	return Catalog.Format(msgs.locale, "hackDistance", map[string]any{"km": km})
+}
+
+// HackExitPrompt says "> traffic leaves here"
+// in the language the app shows.
+func HackExitPrompt() string { return In(i18n.Locale()).HackExitPrompt() }
+
+// HackExitPrompt says "> traffic leaves here"
+// in the language of msgs.
+func (msgs Messages) HackExitPrompt() string {
+	return Catalog.Format(msgs.locale, "hackExitPrompt", nil)
+}
+
+// HackExitTitle says "Exit"
+// in the language the app shows.
+func HackExitTitle() string { return In(i18n.Locale()).HackExitTitle() }
+
+// HackExitTitle says "Exit"
+// in the language of msgs.
+func (msgs Messages) HackExitTitle() string {
+	return Catalog.Format(msgs.locale, "hackExitTitle", nil)
+}
+
+// HackLocal says "Local"
+// in the language the app shows.
+func HackLocal() string { return In(i18n.Locale()).HackLocal() }
+
+// HackLocal says "Local"
+// in the language of msgs.
+func (msgs Messages) HackLocal() string {
+	return Catalog.Format(msgs.locale, "hackLocal", nil)
+}
+
+// HackOff says "OFF"
+// in the language the app shows.
+func HackOff() string { return In(i18n.Locale()).HackOff() }
+
+// HackOff says "OFF"
+// in the language of msgs.
+func (msgs Messages) HackOff() string {
+	return Catalog.Format(msgs.locale, "hackOff", nil)
+}
+
+// HackOn says "ON"
+// in the language the app shows.
+func HackOn() string { return In(i18n.Locale()).HackOn() }
+
+// HackOn says "ON"
+// in the language of msgs.
+func (msgs Messages) HackOn() string {
+	return Catalog.Format(msgs.locale, "hackOn", nil)
+}
+
+// HackRoutesHint says "Pick a line to change its node"
+// in the language the app shows.
+func HackRoutesHint() string { return In(i18n.Locale()).HackRoutesHint() }
+
+// HackRoutesHint says "Pick a line to change its node"
+// in the language of msgs.
+func (msgs Messages) HackRoutesHint() string {
+	return Catalog.Format(msgs.locale, "hackRoutesHint", nil)
+}
+
+// HackRoutesTitle says "Routes"
+// in the language the app shows.
+func HackRoutesTitle() string { return In(i18n.Locale()).HackRoutesTitle() }
+
+// HackRoutesTitle says "Routes"
+// in the language of msgs.
+func (msgs Messages) HackRoutesTitle() string {
+	return Catalog.Format(msgs.locale, "hackRoutesTitle", nil)
+}
+
+// HackYou says "You"
+// in the language the app shows.
+func HackYou() string { return In(i18n.Locale()).HackYou() }
+
+// HackYou says "You"
+// in the language of msgs.
+func (msgs Messages) HackYou() string {
+	return Catalog.Format(msgs.locale, "hackYou", nil)
+}
+
 // HelperInstalled says "Installed. With TUN on, it runs the core with system privileges."
 // in the language the app shows.
 func HelperInstalled() string { return In(i18n.Locale()).HelperInstalled() }
@@ -2582,11 +2712,11 @@ func (msgs Messages) SettingsTheme() string {
 	return Catalog.Format(msgs.locale, "settingsTheme", nil)
 }
 
-// SettingsThemeNote says "Glass background colors. Takes effect immediately."
+// SettingsThemeNote says "Color palette. Takes effect immediately."
 // in the language the app shows.
 func SettingsThemeNote() string { return In(i18n.Locale()).SettingsThemeNote() }
 
-// SettingsThemeNote says "Glass background colors. Takes effect immediately."
+// SettingsThemeNote says "Color palette. Takes effect immediately."
 // in the language of msgs.
 func (msgs Messages) SettingsThemeNote() string {
 	return Catalog.Format(msgs.locale, "settingsThemeNote", nil)
@@ -3752,6 +3882,16 @@ func ThemeDusk() string { return In(i18n.Locale()).ThemeDusk() }
 // in the language of msgs.
 func (msgs Messages) ThemeDusk() string {
 	return Catalog.Format(msgs.locale, "themeDusk", nil)
+}
+
+// ThemeHack says "Hack"
+// in the language the app shows.
+func ThemeHack() string { return In(i18n.Locale()).ThemeHack() }
+
+// ThemeHack says "Hack"
+// in the language of msgs.
+func (msgs Messages) ThemeHack() string {
+	return Catalog.Format(msgs.locale, "themeHack", nil)
 }
 
 // ThemeOcean says "Ocean"
