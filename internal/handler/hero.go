@@ -259,19 +259,3 @@ func heroSpeedLine(c *ui.Context, t *ui.Theme, arrow string, r readout, color ui
 		captionText(c, t, r.unit)
 	})
 }
-
-// coreStatus is the core's state: a dot and a few words.
-func (d *Dashboard) coreStatus(c *ui.Context, t *ui.Theme) {
-	dotColor, title := t.Success, locales.CoreRunning()
-	switch d.status {
-	case statusFailed:
-		dotColor, title = t.Danger, locales.CoreNotConnected()
-	case statusConnected:
-	default:
-		dotColor, title = t.TextMuted, locales.CoreConnecting()
-	}
-	ui.Row(c.Key("coreStatus")).Gap(gapTight).AlignItems(ui.Center).Children(func() {
-		ui.Box(c).Width(5).Height(5).Radius(2.5).Background(dotColor)
-		captionText(c, t, title).NoWrap()
-	})
-}

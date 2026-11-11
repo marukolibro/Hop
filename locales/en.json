@@ -120,7 +120,6 @@
   "copied": "Copied",
   "copy": "Copy",
   "coreChecking": "Checking that the new core runs",
-  "coreConnecting": "Core connecting",
   "coreDownloading": "Downloading the new core",
   "coreDownloadingProgress": "Downloading the new core {done} / {total}",
   "@coreDownloadingProgress": {
@@ -150,7 +149,6 @@
       }
     }
   },
-  "coreNotConnected": "Core not connected",
   "corePreparing": "Preparing",
   "coreQuitRepeatedly": "Quit {count} times in a row: {reason}",
   "@coreQuitRepeatedly": {
@@ -165,7 +163,6 @@
   },
   "coreRestarting": "Restarting the core",
   "coreRestoreBundled": "Restore bundled version",
-  "coreRunning": "Core running",
   "coreSourceBundled": "Core bundled with Hop",
   "coreSourceDev": "Development core (from HOP_MIHOMO_BINARY)",
   "coreSourceUpgraded": "Upgraded core",

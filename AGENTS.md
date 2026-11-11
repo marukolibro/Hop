@@ -252,7 +252,7 @@ for font sizes, weights, gaps or radii in views.
   the sidebar | one vertical hairline | content. The sidebar runs the window's
   height: the subscription in use on a card at its top (picker, the `Hop 智能规则`
   tag only while the profile runs Hop's rules, usage, expiry, refresh and
-  manage), the groups, and the core's state at its foot. The content column
+  manage) and the groups. The content column
   scrolls as one: the hero card, the control bar (`homecards.go`: the system
   proxy and TUN as two switches, then the outbound mode as three buttons, in
   the order it happens, on one capsule; in a narrow window the mode wraps under
@@ -271,7 +271,8 @@ for font sizes, weights, gaps or radii in views.
   (Hop never takes the system proxy or the routes from another app) and ends
   when the system does; the flyout's hint for that pill gives way to it. The
   header holds no switch: on the right it says, read only, whether Hop carries
-  the traffic (the same dot and words as the flyout), so every page shows the
+  the traffic (the same dot and words as the flyout) and, while the core
+  answers, the port it listens on (tooltip: the address), so every page shows the
   state while the switches live on the home page. The pages are 节点, 活动,
   统计 and 设置: 活动 is what is happening now, the connections or the core's
   log under one switch in its heading (`activity.go`; the log is rarely read,

@@ -56,8 +56,8 @@ type sidebarRow struct {
 }
 
 // groupSidebar is the window's left column: the subscription in use, every
-// group by what it is for with where each sends traffic now, and the core's
-// state at the foot. The highlight springs to the group chosen.
+// group by what it is for with where each sends traffic now. The highlight
+// springs to the group chosen.
 func (d *Dashboard) groupSidebar(c *ui.Context, t *ui.Theme) {
 	width, _ := c.Size()
 	sidebarWidth := sidebarWidthFor(width)
@@ -106,13 +106,6 @@ func (d *Dashboard) groupSidebar(c *ui.Context, t *ui.Theme) {
 					}
 				})
 			})
-		})
-		horizontalHairline(c, t)
-		ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Padding(0, gapSmall).Children(func() {
-			d.coreStatus(c, t)
-			ui.Box(c).Grow(1)
-			captionText(c, t, proxyPort(d.proxyAddress())).FontFeatures("tnum").NoWrap().
-				Tooltip(locales.SidebarProxyAddress(d.proxyAddress()))
 		})
 	})
 }

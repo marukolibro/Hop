@@ -826,16 +826,6 @@ func (msgs Messages) CoreChecking() string {
 	return Catalog.Format(msgs.locale, "coreChecking", nil)
 }
 
-// CoreConnecting says "Core connecting"
-// in the language the app shows.
-func CoreConnecting() string { return In(i18n.Locale()).CoreConnecting() }
-
-// CoreConnecting says "Core connecting"
-// in the language of msgs.
-func (msgs Messages) CoreConnecting() string {
-	return Catalog.Format(msgs.locale, "coreConnecting", nil)
-}
-
 // CoreDownloading says "Downloading the new core"
 // in the language the app shows.
 func CoreDownloading() string { return In(i18n.Locale()).CoreDownloading() }
@@ -888,16 +878,6 @@ func (msgs Messages) CoreNewUpgrade(version string) string {
 	return Catalog.Format(msgs.locale, "coreNewUpgrade", map[string]any{"version": version})
 }
 
-// CoreNotConnected says "Core not connected"
-// in the language the app shows.
-func CoreNotConnected() string { return In(i18n.Locale()).CoreNotConnected() }
-
-// CoreNotConnected says "Core not connected"
-// in the language of msgs.
-func (msgs Messages) CoreNotConnected() string {
-	return Catalog.Format(msgs.locale, "coreNotConnected", nil)
-}
-
 // CorePreparing says "Preparing"
 // in the language the app shows.
 func CorePreparing() string { return In(i18n.Locale()).CorePreparing() }
@@ -938,16 +918,6 @@ func CoreRestoreBundled() string { return In(i18n.Locale()).CoreRestoreBundled()
 // in the language of msgs.
 func (msgs Messages) CoreRestoreBundled() string {
 	return Catalog.Format(msgs.locale, "coreRestoreBundled", nil)
-}
-
-// CoreRunning says "Core running"
-// in the language the app shows.
-func CoreRunning() string { return In(i18n.Locale()).CoreRunning() }
-
-// CoreRunning says "Core running"
-// in the language of msgs.
-func (msgs Messages) CoreRunning() string {
-	return Catalog.Format(msgs.locale, "coreRunning", nil)
 }
 
 // CoreSourceBundled says "Core bundled with Hop"

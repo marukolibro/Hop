@@ -998,10 +998,22 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 			ui.Row(c.Key("headerStatus")).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 				statusDot(c, d.statusColor(t), d.proxying())
 				mutedText(c, t, d.statusText()).MaxLines(1)
+				d.headerPort(c, t)
 			})
 		})
 		horizontalHairline(c, t)
 	})
+}
+
+// headerPort is the port the core listens on, after the status: a hairline and
+// the number, while the core answers.
+func (d *Dashboard) headerPort(c *ui.Context, t *ui.Theme) {
+	if d.status != statusConnected {
+		return
+	}
+	ui.Box(c).Width(hairlineWidth).Height(fontBody).Background(t.Border)
+	captionText(c, t, proxyPort(d.proxyAddress())).FontFeatures("tnum").NoWrap().
+		Tooltip(locales.SidebarProxyAddress(d.proxyAddress()))
 }
 
 // proxying says whether traffic is handed to Hop now: its core runs and the
