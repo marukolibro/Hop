@@ -945,7 +945,7 @@ func (d *Dashboard) View(c *ui.Context) {
 		d.notice(c, t)
 		// One surface per page, keyed by the page, so landing on another page is a
 		// new element that enters.
-		ui.Column(c).Key("page-" + strconv.Itoa(d.page)).Grow(1).Basis(0).MinHeight(0).Transition(pageTransition).Children(func() {
+		ui.Column(c.Key("page-" + strconv.Itoa(d.page))).Grow(1).Basis(0).MinHeight(0).Transition(pageTransition).Children(func() {
 			switch d.page {
 			case pageActivity:
 				d.activityPage(c, t)
@@ -995,7 +995,7 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 			ui.Box(c).Grow(1)
 			// Every page shows whether Hop carries the traffic; the switches
 			// themselves are on the home page's capture card.
-			ui.Row(c).Key("headerStatus").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+			ui.Row(c.Key("headerStatus")).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 				statusDot(c, d.statusColor(t), d.proxying())
 				mutedText(c, t, d.statusText()).MaxLines(1)
 			})
@@ -1093,7 +1093,7 @@ func noticeBar(c *ui.Context, t *ui.Theme, key string, title string, detail stri
 		// text never meets the desktop.
 		fill = glassPanel(t).Mix(tone, glassNoticeTint)
 	}
-	ui.Column(c).Key(key).Children(func() {
+	ui.Column(c.Key(key)).Children(func() {
 		ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Padding(10, pagePadding).Background(fill).Children(func() {
 			ui.Column(c).Grow(1).Gap(2).Children(func() {
 				ui.Text(c, title).FontSize(fontBody).FontWeight(weightSemibold).TextColor(ink)

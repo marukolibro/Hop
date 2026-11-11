@@ -355,7 +355,7 @@ func (d *Dashboard) sidebarSubscription(c *ui.Context, t *ui.Theme) {
 	if !s.loaded {
 		return
 	}
-	card := ui.Column(c).Key("sidebarSubscription").Gap(gapMedium).Padding(gapMedium).Radius(radiusPanel).
+	card := ui.Column(c.Key("sidebarSubscription")).Gap(gapMedium).Padding(gapMedium).Radius(radiusPanel).
 		Background(glassPanel(t)).Border(hairlineWidth, glassMaterialLine(t)).Shadow(0, 3, 12, 0, glassCardShadow(t))
 	active, ok := s.active()
 	if !ok {
@@ -435,7 +435,7 @@ func subscriptionUsage(c *ui.Context, t *ui.Theme, usage model.Usage, now time.T
 		value += " / " + total.value + " " + total.unit
 		ratio = min(1, float32(used)/float32(usage.Total))
 	}
-	ui.Column(c).Key("usage").Gap(gapTight).Children(func() {
+	ui.Column(c.Key("usage")).Gap(gapTight).Children(func() {
 		ui.Text(c, value).FontSize(fontSecondary).TextColor(t.TextMuted).FontFeatures("tnum").MaxLines(1)
 		if usage.Total > 0 {
 			stripUsageBar(c, t, ratio, barWidth)
@@ -599,7 +599,7 @@ func (d *Dashboard) managePage(c *ui.Context, t *ui.Theme) {
 
 // manageEmpty says what the page wants first: one subscription, used at once.
 func (d *Dashboard) manageEmpty(c *ui.Context, t *ui.Theme) {
-	ui.Column(c).Key("空").Grow(1).Center().Gap(gapMedium).Padding(emptyPadY, pagePadding).Children(func() {
+	ui.Column(c.Key("空")).Grow(1).Center().Gap(gapMedium).Padding(emptyPadY, pagePadding).Children(func() {
 		ui.Icon(c, iconLink).Width(iconEmpty).Height(iconEmpty).TextColor(t.TextMuted)
 		ui.Text(c, locales.SubEmptyTitle()).FontSize(fontEmphasis).FontWeight(weightSemibold)
 		mutedText(c, t, locales.SubEmptyNote())
@@ -672,7 +672,7 @@ func subscriptionOrigin(item model.SubscriptionSummary) string {
 // cardSource is the source tile: a globe for a link, a file for a local
 // config, on a soft square in the accent when the profile is the one in use.
 func cardSource(c *ui.Context, t *ui.Theme, isActive bool, source model.SubscriptionSource) {
-	tile := ui.Box(c).Key("来源").Width(cardIconTile).Height(cardIconTile).Radius(radiusControl).Center()
+	tile := ui.Box(c.Key("来源")).Width(cardIconTile).Height(cardIconTile).Radius(radiusControl).Center()
 	ink, wash := t.TextMuted, t.Text.Alpha(0.08)
 	if isActive {
 		ink, wash = t.Accent, t.Accent.Alpha(0.09)
@@ -689,7 +689,7 @@ func cardSource(c *ui.Context, t *ui.Theme, isActive bool, source model.Subscrip
 
 // activeBadge marks the subscription in use.
 func activeBadge(c *ui.Context, t *ui.Theme) {
-	ui.Row(c).Key("使用中").Gap(gapLine).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("使用中")).Gap(gapLine).AlignItems(ui.Center).Children(func() {
 		ui.Icon(c, iconCheck).Width(iconInline).Height(iconInline).TextColor(t.Accent)
 		ui.Text(c, locales.BadgeInUse()).FontSize(fontCaption).FontWeight(weightMedium).TextColor(accentInk(t)).NoWrap()
 	})
@@ -720,7 +720,7 @@ func (d *Dashboard) cardMenu(c *ui.Context, t *ui.Theme, item model.Subscription
 // cardMetrics 显示机场上报的用量，没有用量头时显示本月本机代理流量。/ cardMetrics shows provider usage, or local proxy traffic when no usage header exists. A local profile never refreshes, so it shows the traffic only.
 func (d *Dashboard) cardMetrics(c *ui.Context, t *ui.Theme, item model.SubscriptionSummary) {
 	hasExpiry := item.HasUsage && !item.Usage.Expire.IsZero()
-	ui.Column(c).Key("指标").Gap(gapMedium).Children(func() {
+	ui.Column(c.Key("指标")).Gap(gapMedium).Children(func() {
 		horizontalHairline(c, t)
 		ui.Row(c).Gap(gapSection).GapY(gapMedium).Wrap().AlignItems(ui.Start).Children(func() {
 			if item.HasUsage {
@@ -740,7 +740,7 @@ func (d *Dashboard) cardMetrics(c *ui.Context, t *ui.Theme, item model.Subscript
 
 func usageMetric(c *ui.Context, t *ui.Theme, usage model.Usage, label string) {
 	used := usage.Upload + usage.Download
-	ui.Column(c).Key("已用流量").Grow(1.4).Basis(0).MinWidth(cardUsageBarWidth).Gap(gapTight).Children(func() {
+	ui.Column(c.Key("已用流量")).Grow(1.4).Basis(0).MinWidth(cardUsageBarWidth).Gap(gapTight).Children(func() {
 		metricLabel(c, t, label)
 		ui.Row(c).Gap(gapTight).AlignItems(ui.End).Children(func() {
 			usedReadout := formatBytes(used)
@@ -768,7 +768,7 @@ func expiryMetric(c *ui.Context, t *ui.Theme, expire time.Time) {
 	if left < expiryWarning {
 		color = t.Warning
 	}
-	ui.Column(c).Key("到期时间").Grow(1).Basis(0).MinWidth(cardExpiryMinWidth).Gap(gapTight).Children(func() {
+	ui.Column(c.Key("到期时间")).Grow(1).Basis(0).MinWidth(cardExpiryMinWidth).Gap(gapTight).Children(func() {
 		metricLabel(c, t, locales.SubMetricExpires())
 		ui.Row(c).Gap(gapTight).AlignItems(ui.End).Children(func() {
 			ui.Text(c, expire.Format(usageDateStyle)).FontSize(fontSecondary).FontWeight(weightSemibold).
@@ -779,7 +779,7 @@ func expiryMetric(c *ui.Context, t *ui.Theme, expire time.Time) {
 }
 
 func updatedMetric(c *ui.Context, t *ui.Theme, at time.Time) {
-	ui.Column(c).Key("最近成功更新").Grow(0.8).Basis(0).MinWidth(cardUpdateMinWidth).Gap(gapTight).Children(func() {
+	ui.Column(c.Key("最近成功更新")).Grow(0.8).Basis(0).MinWidth(cardUpdateMinWidth).Gap(gapTight).Children(func() {
 		metricLabel(c, t, locales.SubMetricUpdated())
 		ui.Text(c, updatedText(at, time.Now())).FontSize(fontSecondary).FontWeight(weightSemibold).NoWrap()
 	})
@@ -808,7 +808,7 @@ func progressBar(c *ui.Context, t *ui.Theme, ratio float32, fill ui.Color) {
 // warningLine is a row's last refresh failure, kept beside the subscription's
 // last good download.
 func warningLine(c *ui.Context, t *ui.Theme, message string) {
-	ui.Row(c).Key("刷新失败").Gap(gapTight).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("刷新失败")).Gap(gapTight).AlignItems(ui.Center).Children(func() {
 		ui.Icon(c, iconWarn).Width(iconInline).Height(iconInline).TextColor(t.Warning)
 		ui.Text(c, message).FontSize(fontCaption).TextColor(t.Warning)
 	})
@@ -1067,7 +1067,7 @@ func (d *Dashboard) deleteForm(c *ui.Context, t *ui.Theme) {
 			mutedText(c, t, description)
 		})
 		if needReplacement {
-			ui.Column(c).Key("替代").Gap(gapSmall).Children(func() {
+			ui.Column(c.Key("替代")).Gap(gapSmall).Children(func() {
 				fieldLabel(c, t, locales.SubSwitchTo(), "")
 				subscriptionPicker(c, t, others, &dlg.replacement)
 				captionText(c, t, locales.SubDeleteAfterSwitch())
@@ -1127,7 +1127,7 @@ const ruleSegmentWidth float32 = 104
 
 // fieldLabel names a form field, its optional note in the muted colour.
 func fieldLabel(c *ui.Context, t *ui.Theme, text string, note string) {
-	ui.Row(c).Key(text).Gap(gapTight).AlignItems(ui.End).Children(func() {
+	ui.Row(c.Key(text)).Gap(gapTight).AlignItems(ui.End).Children(func() {
 		ui.Text(c, text).FontSize(fontSecondary).FontWeight(weightSemibold)
 		if note != "" {
 			captionText(c, t, note)
@@ -1236,7 +1236,7 @@ func remainingText(left time.Duration) string {
 }
 
 func planNote(c *ui.Context, t *ui.Theme, label string, value string) {
-	ui.Row(c).Key(label).Gap(5).AlignItems(ui.End).Children(func() {
+	ui.Row(c.Key(label)).Gap(5).AlignItems(ui.End).Children(func() {
 		if label != "" {
 			mutedText(c, t, label).NoWrap()
 		}

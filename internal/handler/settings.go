@@ -258,14 +258,14 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 
 // settingsGroup is a titled card of rows, as the design's setting-list.
 func settingsGroup(c *ui.Context, t *ui.Theme, title string, rows ...func()) ui.Element {
-	return ui.Column(c).Key(title).Gap(10).Children(func() {
+	return ui.Column(c.Key(title)).Gap(10).Children(func() {
 		mutedText(c, t, title).FontWeight(weightMedium).Padding(0, 14)
 		panelCard(c, t).Padding(0, 16).Children(func() {
 			for i, row := range rows {
 				if i > 0 {
 					horizontalHairline(c, t)
 				}
-				ui.Box(c).Key(i).Padding(16, 0).Children(row)
+				ui.Box(c.Key(i)).Padding(16, 0).Children(row)
 			}
 		})
 	})
@@ -274,7 +274,7 @@ func settingsGroup(c *ui.Context, t *ui.Theme, title string, rows ...func()) ui.
 // settingRow names a setting, with a short note under it when it needs one,
 // and its control on the right.
 func settingRow(c *ui.Context, t *ui.Theme, label string, note string, control func()) {
-	ui.Row(c).Key(label).Gap(gapLarge).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
+	ui.Row(c.Key(label)).Gap(gapLarge).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
 		ui.Column(c).Grow(1).Basis(0).Gap(gapLine).Children(func() {
 			ui.Text(c, label).FontSize(fontBody).FontWeight(weightMedium)
 			if note != "" {

@@ -46,7 +46,7 @@ const (
 func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 	route := d.view.Route
 	pane := nodesPaneWidth(c)
-	ui.Row(c).Key("hero").Wrap().Gap(pagePadding).GapY(gapLarge).AlignItems(ui.Center).
+	ui.Row(c.Key("hero")).Wrap().Gap(pagePadding).GapY(gapLarge).AlignItems(ui.Center).
 		Padding(heroPadY, heroPadX).Radius(heroRadius).LinearGradient(heroFace(t, glassPanel(t))).
 		Border(hairlineWidth, glassMaterialLine(t)).Shadow(0, 3, 12, 0, glassCardShadow(t)).Children(func() {
 		d.heroGlow(c, t)
@@ -54,13 +54,13 @@ func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 		if mapped {
 			d.heroMapLayer(c, t)
 		}
-		ui.Row(c).Key("routeTop").Gap(heroGap).AlignItems(ui.Center).Children(func() {
+		ui.Row(c.Key("routeTop")).Gap(heroGap).AlignItems(ui.Center).Children(func() {
 			if len(route) > 0 {
 				routeGauge(c, t, route[len(route)-1], heroGaugeSize, d.last)
 			}
 			d.heroExit(c, t, route)
 		})
-		ui.Column(c).Key("live").Grow(1).Basis(heroLiveBasis).MinWidth(0).Gap(gapMedium).Children(func() {
+		ui.Column(c.Key("live")).Grow(1).Basis(heroLiveBasis).MinWidth(0).Gap(gapMedium).Children(func() {
 			if mapped {
 				d.heroSpeeds(c, t)
 			} else {
@@ -73,7 +73,7 @@ func (d *Dashboard) routeBar(c *ui.Context, t *ui.Theme) {
 // heroGlow is the light behind the gauge. It eases to its colour and strength,
 // and only while it does is the card drawn again.
 func (d *Dashboard) heroGlow(c *ui.Context, t *ui.Theme) {
-	glow := ui.Box(c).Key("heroGlow").Absolute().Left(0).Top(0).Right(0).Bottom(0).Radius(heroRadius)
+	glow := ui.Box(c.Key("heroGlow")).Absolute().Left(0).Top(0).Right(0).Bottom(0).Radius(heroRadius)
 	alpha := glow.AnimateTo("alpha", d.heroGlowAlpha(flowIntensity(d.last.Down)), ui.Smooth)
 	color := glow.AnimateColor("color", d.heroGlowColor(t), ui.Smooth)
 	glow.RadialGradient(ui.RadialGradient{
@@ -114,14 +114,14 @@ func (d *Dashboard) heroGlowAlpha(flow float32) float32 {
 // heroExit names the exit, the groups it passes, its public address and its
 // facts.
 func (d *Dashboard) heroExit(c *ui.Context, t *ui.Theme, route []model.RouteHop) {
-	exit := ui.Column(c).Key("exit").Gap(gapTight).Width(exitWidth)
+	exit := ui.Column(c.Key("exit")).Gap(gapTight).Width(exitWidth)
 	exit.Children(func() {
 		if len(route) == 0 {
 			mutedText(c, t, locales.HeroEmpty())
 			return
 		}
 		hop := route[len(route)-1]
-		ui.Row(c).Key("routeTitle").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+		ui.Row(c.Key("routeTitle")).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 			// The row stays as wide as its content, so the delay follows the
 			// name; a long name shrinks and truncates instead of pushing it
 			// to the column's edge.
@@ -139,7 +139,7 @@ func (d *Dashboard) heroExit(c *ui.Context, t *ui.Theme, route []model.RouteHop)
 
 // heroDelay is the exit's latency on a pill washed in the accent.
 func heroDelay(c *ui.Context, t *ui.Theme, delay model.Delay) {
-	ui.Box(c).Key("delay").Height(heroDelayHeight).Padding(0, gapSmall).Radius(heroDelayHeight / 2).Center().
+	ui.Box(c.Key("delay")).Height(heroDelayHeight).Padding(0, gapSmall).Radius(heroDelayHeight / 2).Center().
 		Background(t.Accent.Alpha(heroDelayFill)).Children(func() {
 		ui.Text(c, delayText(delay)).FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(delayColor(t, delay)).
 			FontFeatures("tnum").NoWrap().Translate(0, -opticalLift).ContentTransition(ui.ContentTransition{Numeric: true})
@@ -188,7 +188,7 @@ func heroChips(c *ui.Context, t *ui.Theme, hop model.RouteHop) {
 	if len(labels) == 0 && node.Multiplier == "" {
 		return
 	}
-	ui.Row(c).Key("routeFacts").Gap(gapTight).Wrap().Children(func() {
+	ui.Row(c.Key("routeFacts")).Gap(gapTight).Wrap().Children(func() {
 		for _, label := range labels {
 			nodeChip(c, t, label)
 		}
@@ -207,7 +207,7 @@ func (d *Dashboard) heroMapLayer(c *ui.Context, t *ui.Theme) {
 		home: d.home.point, homeKnown: d.home.known, exit: exit,
 		dot: t.TextMuted.Alpha(worldMapDotAlpha), ink: t.Text, accent: t.Accent,
 	}
-	ui.Box(c).Key("worldMap").Absolute().Left(0).Top(0).Right(0).Bottom(0).Radius(heroRadius).
+	ui.Box(c.Key("worldMap")).Absolute().Left(0).Top(0).Right(0).Bottom(0).Radius(heroRadius).
 		Label(locales.HeroMapLabel()).Tooltip(heroMapTip(exit)).Draw(func(p *ui.Painter, r ui.Rect) {
 		drawWorldMap(p, r, heroRadius, route)
 	})
@@ -230,7 +230,7 @@ func heroMapTip(exit model.ExitPlace) string {
 // heroSpeeds is the two speeds one over the other at the card's right edge,
 // where the map has no plot to share the column with.
 func (d *Dashboard) heroSpeeds(c *ui.Context, t *ui.Theme) {
-	ui.Column(c).Key("speeds").Gap(gapSmall).AlignItems(ui.End).Children(func() {
+	ui.Column(c.Key("speeds")).Gap(gapSmall).AlignItems(ui.End).Children(func() {
 		heroSpeedLine(c, t, "↓", formatRate(d.last.Down), accentInk(t))
 		heroSpeedLine(c, t, "↑", formatRate(d.last.Up), uploadColor(t))
 	})
@@ -238,7 +238,7 @@ func (d *Dashboard) heroSpeeds(c *ui.Context, t *ui.Theme) {
 
 // heroReadout is the download and upload speeds.
 func (d *Dashboard) heroReadout(c *ui.Context, t *ui.Theme) {
-	ui.Row(c).Key("speeds").Gap(gapLarge).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("speeds")).Gap(gapLarge).AlignItems(ui.Center).Children(func() {
 		heroSpeedLine(c, t, "↓", formatRate(d.last.Down), accentInk(t))
 		heroSpeedLine(c, t, "↑", formatRate(d.last.Up), uploadColor(t))
 	})
@@ -252,7 +252,7 @@ func (d *Dashboard) modeLocked() bool {
 }
 
 func heroSpeedLine(c *ui.Context, t *ui.Theme, arrow string, r readout, color ui.Color) {
-	ui.Row(c).Key(arrow).Gap(gapTight).AlignItems(ui.End).Children(func() {
+	ui.Row(c.Key(arrow)).Gap(gapTight).AlignItems(ui.End).Children(func() {
 		ui.Text(c, arrow).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(color)
 		ui.Text(c, r.value).FontSize(fontHeadline).FontWeight(weightMedium).LetterSpacing(-0.4).
 			FontFeatures("tnum").ContentTransition(ui.ContentTransition{Numeric: true})
@@ -270,7 +270,7 @@ func (d *Dashboard) coreStatus(c *ui.Context, t *ui.Theme) {
 	default:
 		dotColor, title = t.TextMuted, locales.CoreConnecting()
 	}
-	ui.Row(c).Key("coreStatus").Gap(gapTight).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("coreStatus")).Gap(gapTight).AlignItems(ui.Center).Children(func() {
 		ui.Box(c).Width(5).Height(5).Radius(2.5).Background(dotColor)
 		captionText(c, t, title).NoWrap()
 	})

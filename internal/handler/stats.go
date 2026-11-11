@@ -64,7 +64,7 @@ func (d *Dashboard) trafficSource() model.TrafficSource {
 
 // statsTotals is today and this month, each with its proxy and direct split.
 func statsTotals(c *ui.Context, t *ui.Theme, view model.TrafficView) {
-	ui.Row(c).Key("totals").Gap(24).Children(func() {
+	ui.Row(c.Key("totals")).Gap(24).Children(func() {
 		statsTotalsColumn(c, t, locales.StatsToday(), view.Today)
 		statsTotalsColumn(c, t, locales.StatsThisMonth(), view.Month)
 	})
@@ -72,7 +72,7 @@ func statsTotals(c *ui.Context, t *ui.Theme, view model.TrafficView) {
 
 func statsTotalsColumn(c *ui.Context, t *ui.Theme, label string, split model.TrafficSplit) {
 	proxy, direct, total := trafficSplitTotals(split)
-	ui.Column(c).Key(label).Grow(1).Basis(0).Gap(gapSmall).Children(func() {
+	ui.Column(c.Key(label)).Grow(1).Basis(0).Gap(gapSmall).Children(func() {
 		mutedText(c, t, label)
 		statsAmount(c, t, total, fontStat)
 		ui.Row(c).Gap(gapLarge).Children(func() {
@@ -85,7 +85,7 @@ func statsTotalsColumn(c *ui.Context, t *ui.Theme, label string, split model.Tra
 // statsSplit is one line of a split: a dot, its name and its amount.
 func statsSplit(c *ui.Context, t *ui.Theme, label string, bytes int64, color ui.Color) {
 	r := formatBytes(bytes)
-	ui.Row(c).Key(label).Gap(gapTight).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key(label)).Gap(gapTight).AlignItems(ui.Center).Children(func() {
 		statsDot(c, color)
 		mutedText(c, t, label)
 		ui.Text(c, r.value).FontSize(fontSecondary).FontFeatures("tnum").ContentTransition(ui.ContentTransition{Numeric: true})
@@ -131,7 +131,7 @@ func statsLegend(c *ui.Context, t *ui.Theme) {
 }
 
 func statsLegendItem(c *ui.Context, t *ui.Theme, label string, color ui.Color) {
-	ui.Row(c).Key(label).Gap(gapTight).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key(label)).Gap(gapTight).AlignItems(ui.Center).Children(func() {
 		statsDot(c, color)
 		captionText(c, t, label)
 	})
@@ -244,7 +244,7 @@ func drawTrafficTooltip(p *ui.Painter, r ui.Rect, day model.TrafficDayView, toda
 // statsSources lists this month's proxy traffic per subscription; the one in
 // use is marked.
 func statsSources(c *ui.Context, t *ui.Theme, sources []model.TrafficSourceView, activeID string) {
-	ui.Column(c).Key("sources").Gap(gapSmall).Children(func() {
+	ui.Column(c.Key("sources")).Gap(gapSmall).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, locales.StatsBySubscription()).FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(t.TextMuted)
 			ui.Box(c).Grow(1)
@@ -263,7 +263,7 @@ func statsSources(c *ui.Context, t *ui.Theme, sources []model.TrafficSourceView,
 
 func statsSourceRow(c *ui.Context, t *ui.Theme, source model.TrafficSourceView, active bool) {
 	proxy, _, _ := trafficSplitTotals(source.Split)
-	ui.Row(c).Key(source.ID).Gap(gapMedium).AlignItems(ui.Center).MinHeight(switchHeight).
+	ui.Row(c.Key(source.ID)).Gap(gapMedium).AlignItems(ui.Center).MinHeight(switchHeight).
 		Padding(gapMedium, 0).Children(func() {
 		ui.Text(c, statsSourceName(source)).FontSize(fontBody).MaxLines(1)
 		if active {

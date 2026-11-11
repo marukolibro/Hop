@@ -92,7 +92,7 @@ func (d *Dashboard) nodesPage(c *ui.Context, t *ui.Theme) {
 				ui.Column(c).Gap(gapLarge).Padding(paneTopPadding, pagePadding, 30, pagePadding).Children(func() {
 					d.routeBar(c, t)
 					d.homeCards(c, t)
-					ui.Column(c).Key("options").Gap(gapMedium).Disabled(d.controlsLocked()).Children(func() {
+					ui.Column(c.Key("options")).Gap(gapMedium).Disabled(d.controlsLocked()).Children(func() {
 						d.nodesToolbar(c, t)
 						d.nodeGrid(c, t)
 					})
@@ -112,9 +112,9 @@ func (d *Dashboard) nodesToolbar(c *ui.Context, t *ui.Theme) {
 	if !ok {
 		return
 	}
-	ui.Row(c).Key("nodesToolbar").Gap(gapMedium).GapY(gapSmall).Wrap().AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("nodesToolbar")).Gap(gapMedium).GapY(gapSmall).Wrap().AlignItems(ui.Center).Children(func() {
 		d.regionFilter(c, t, group)
-		ui.Row(c).Key("nodeControls").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+		ui.Row(c.Key("nodeControls")).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 			slidingSwitch(c, locales.NodesOrder(), &d.nodeOrder, nodeOrderLabels(), pageSwitchStyle(t, nodeOrderSegmentWidth), func(int) {})
 			d.testButton(c, t, group.Name)
 		})
@@ -258,7 +258,7 @@ func splitRegionChips(chips []regionChip, current string, slots int) (shown []re
 // the room empty.
 func (d *Dashboard) regionFilter(c *ui.Context, t *ui.Theme, group model.GroupView) {
 	chips := regionChips(group)
-	row := ui.Row(c).Key("regionFilter").Gap(gapTight).Grow(1)
+	row := ui.Row(c.Key("regionFilter")).Gap(gapTight).Grow(1)
 	if len(chips) <= 2 {
 		row.Children(func() {})
 		return
@@ -285,7 +285,7 @@ func (d *Dashboard) regionFilter(c *ui.Context, t *ui.Theme, group model.GroupVi
 
 // regionChipButton is a filter capsule: the text ink filled when chosen.
 func (d *Dashboard) regionChipButton(c *ui.Context, t *ui.Theme, chip regionChip, chosen bool) ui.Element {
-	b := ui.ButtonBase(c).Key(chip.key).Label(chip.label).Height(regionChipHeight).Padding(0, gapMedium).Gap(gapTight).
+	b := ui.ButtonBase(c.Key(chip.key)).Label(chip.label).Height(regionChipHeight).Padding(0, gapMedium).Gap(gapTight).
 		Radius(regionChipHeight / 2).Cursor(ui.CursorPointer)
 	ink, sub := t.Text, t.TextMuted
 	fill := glassPanel(t)
@@ -323,7 +323,7 @@ func (d *Dashboard) nodeGrid(c *ui.Context, t *ui.Theme) {
 	paneWidth := width - sidebarWidthFor(width) - hairlineWidth - 2*pagePadding
 	columns := tileColumns(paneWidth)
 	sections := visibleSections(group, activeFilter(group, d.nodeRegion), d.nodeOrder == nodeOrderDelay, d.orderDelay)
-	ui.Column(c).Key("nodeGrid").Gap(gapSection).Children(func() {
+	ui.Column(c.Key("nodeGrid")).Gap(gapSection).Children(func() {
 		for _, section := range sections {
 			d.nodeSection(c, t, group, section, columns)
 		}
@@ -332,7 +332,7 @@ func (d *Dashboard) nodeGrid(c *ui.Context, t *ui.Theme) {
 
 // nodeSection is one titled run of tiles.
 func (d *Dashboard) nodeSection(c *ui.Context, t *ui.Theme, group model.GroupView, section nodeSection, columns int) {
-	ui.Column(c).Key("section:" + section.title).Gap(10).Children(func() {
+	ui.Column(c.Key("section:" + section.title)).Gap(10).Children(func() {
 		if section.title != "" {
 			ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, section.title).FontSize(fontSecondary).FontWeight(weightMedium).MaxLines(1)
@@ -364,7 +364,7 @@ func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, 
 	if isActive {
 		ink = onAccentTheme(t)
 	}
-	tile := ui.Column(c).Key(node.Name).Gap(7).Padding(10, 11).Radius(radiusTile)
+	tile := ui.Column(c.Key(node.Name)).Gap(7).Padding(10, 11).Radius(radiusTile)
 	hovered := group.Selectable && tile.Hovered()
 	if isActive {
 		tile.Background(t.Accent).Border(hairlineWidth, t.Accent)
@@ -380,7 +380,7 @@ func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, 
 		})
 	}
 	tile.Children(func() {
-		ui.Row(c).Key("top").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+		ui.Row(c.Key("top")).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 			if flag := shownFlag(node.Flag); flag != "" && node.Via == "" {
 				ui.Text(c, flag).FontSize(tileTitleSize)
 			}
@@ -391,10 +391,10 @@ func (d *Dashboard) nodeTile(c *ui.Context, t *ui.Theme, group model.GroupView, 
 				title.FontWeight(weightMedium)
 			}
 			if isActive {
-				ui.Icon(c, iconCheck).Key("check").Width(nodeCheckIcon).Height(nodeCheckIcon).TextColor(ink.Text)
+				ui.Icon(c.Key("check"), iconCheck).Width(nodeCheckIcon).Height(nodeCheckIcon).TextColor(ink.Text)
 			}
 		})
-		ui.Row(c).Key("meta").Gap(7).AlignItems(ui.Center).Children(func() {
+		ui.Row(c.Key("meta")).Gap(7).AlignItems(ui.Center).Children(func() {
 			ui.Row(c).Gap(gapTight).Height(chipHeight).Clip().Grow(1).Basis(0).Children(func() {
 				if node.Via != "" {
 					captionText(c, ink, node.Via).MaxLines(1)

@@ -58,7 +58,7 @@ func nodesPaneWidth(c *ui.Context) float32 {
 // memory Hop holds are rarely used, so they live in the settings.
 func (d *Dashboard) homeCards(c *ui.Context, t *ui.Theme) {
 	d.controlBar(c, t)
-	ui.Row(c).Key("homeCards").Wrap().Gap(gapMedium).GapY(gapMedium).AlignItems(ui.Stretch).Children(func() {
+	ui.Row(c.Key("homeCards")).Wrap().Gap(gapMedium).GapY(gapMedium).AlignItems(ui.Stretch).Children(func() {
 		d.servicesCard(c, t)
 	})
 }
@@ -79,7 +79,7 @@ func cardTitle(c *ui.Context, t *ui.Theme, icon *ui.SVG, title string) {
 
 // cardHeader is a card's title row: its icon, its name, and what trails it.
 func cardHeader(c *ui.Context, t *ui.Theme, key string, icon *ui.SVG, title string, trailing func()) {
-	ui.Row(c).Key(key).Gap(gapSmall).Height(cardHeaderHeight).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key(key)).Gap(gapSmall).Height(cardHeaderHeight).AlignItems(ui.Center).Children(func() {
 		cardTitle(c, t, icon, title)
 		ui.Box(c).Grow(1)
 		if trailing != nil {
@@ -98,7 +98,7 @@ func (d *Dashboard) controlBar(c *ui.Context, t *ui.Theme) {
 	if single {
 		radius = (modeButtonHeight + 2*controlBarPad) / 2
 	}
-	bar := ui.Row(c).Key("controlBar").Wrap().Gap(gapMedium).GapY(gapSmall).AlignItems(ui.Center).
+	bar := ui.Row(c.Key("controlBar")).Wrap().Gap(gapMedium).GapY(gapSmall).AlignItems(ui.Center).
 		Padding(controlBarPad).Radius(radius).
 		Border(hairlineWidth, glassMaterialLine(t)).Shadow(0, 3, 12, 0, glassCardShadow(t))
 	if onGlass(t) {
@@ -114,7 +114,7 @@ func (d *Dashboard) controlBar(c *ui.Context, t *ui.Theme) {
 		}
 		d.captureGroup(c, t, group)
 		if single {
-			ui.Box(c).Key("divider").Width(hairlineWidth).Height(controlDividerHeight).Background(glassStrongLine(t))
+			ui.Box(c.Key("divider")).Width(hairlineWidth).Height(controlDividerHeight).Background(glassStrongLine(t))
 		}
 		d.modeGroup(c, t)
 	})
@@ -124,7 +124,7 @@ func (d *Dashboard) controlBar(c *ui.Context, t *ui.Theme) {
 // button's tooltip says what the mode does.
 func (d *Dashboard) modeGroup(c *ui.Context, t *ui.Theme) {
 	disabled := d.modeLocked()
-	group := ui.Row(c).Key("modeGroup").Grow(1).Basis(modeGroupBasis).MinWidth(0).Gap(gapMedium).AlignItems(ui.Center).
+	group := ui.Row(c.Key("modeGroup")).Grow(1).Basis(modeGroupBasis).MinWidth(0).Gap(gapMedium).AlignItems(ui.Center).
 		Disabled(disabled)
 	if disabled {
 		group.Opacity(disabledOpacity)
@@ -143,7 +143,7 @@ func (d *Dashboard) modeGroup(c *ui.Context, t *ui.Theme) {
 // modeButton is one mode on the bar.
 func (d *Dashboard) modeButton(c *ui.Context, t *ui.Theme, index int, label string, icon *ui.SVG) {
 	chosen := d.modeIndex == index
-	b := ui.ButtonBase(c).Key("mode-" + strconv.Itoa(index)).Label(label).Grow(1).Basis(0).MinWidth(0).
+	b := ui.ButtonBase(c.Key("mode-" + strconv.Itoa(index))).Label(label).Grow(1).Basis(0).MinWidth(0).
 		Height(modeButtonHeight).Radius(modeButtonHeight / 2).Gap(gapSmall).Cursor(ui.CursorPointer).
 		Tooltip(modeHints()[index])
 	fill, ink := t.Text.Alpha(neutralFillAlpha), t.Text
@@ -213,7 +213,7 @@ func (d *Dashboard) tunToggle(c *ui.Context, t *ui.Theme) {
 // spinner takes the switch's place while the change runs, and the hint ring
 // breathes around it while it is the one to turn on.
 func captureToggle(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onClick func()) {
-	b := ui.ButtonBase(c).Key(spec.label).Label(spec.label).Tooltip(tip).Height(modeButtonHeight).
+	b := ui.ButtonBase(c.Key(spec.label)).Label(spec.label).Tooltip(tip).Height(modeButtonHeight).
 		Grow(1).Basis(captureToggleBasis).MinWidth(0).Padding(0, gapMedium).Gap(gapSmall).
 		Radius(modeButtonHeight / 2).AlignItems(ui.Center).Justify(ui.Center).Disabled(spec.disabled)
 	fill, line, weight := t.Text.Alpha(neutralFillAlpha), ui.Transparent, weightMedium
@@ -257,8 +257,8 @@ func captureToggle(c *ui.Context, t *ui.Theme, spec pillSpec, tip string, onClic
 func (d *Dashboard) servicesCard(c *ui.Context, t *ui.Theme) {
 	homeCard(c, t, "servicesCard").Children(func() {
 		if nodesPaneWidth(c) >= servicesStripMinWidth {
-			ui.Row(c).Key("servicesStrip").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-				ui.Row(c).Key("servicesName").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+			ui.Row(c.Key("servicesStrip")).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+				ui.Row(c.Key("servicesName")).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 					cardTitle(c, t, iconShieldCheck, locales.ServicesTitle())
 					d.servicesPill(c, t)
 				})
@@ -283,7 +283,7 @@ func (d *Dashboard) servicesActions(c *ui.Context, t *ui.Theme) {
 	if s.running {
 		label, icon = locales.UnlockStop(), iconClose
 	}
-	ui.Row(c).Key("servicesActions").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("servicesActions")).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 		iconButton(c, label, icon, mainSoftButton(t), d.toggleServices)
 		iconButton(c, locales.ServicesAll(), iconChevronRight, mainSoftButton(t), func() { s.open = true })
 	})
@@ -321,7 +321,7 @@ func (d *Dashboard) servicesPill(c *ui.Context, t *ui.Theme) {
 	default:
 		text, fill, ink = fmt.Sprintf("%d/%d", working, total), t.Warning.Alpha(heroDelayFill), textOn(t, t.Warning)
 	}
-	ui.Box(c).Key("servicesPill").Height(heroDelayHeight).Padding(0, gapSmall).Radius(heroDelayHeight / 2).Center().
+	ui.Box(c.Key("servicesPill")).Height(heroDelayHeight).Padding(0, gapSmall).Radius(heroDelayHeight / 2).Center().
 		Background(fill).Children(func() {
 		ui.Text(c, text).FontSize(fontSecondary).FontWeight(weightSemibold).TextColor(ink).FontFeatures("tnum").NoWrap().
 			Translate(0, -opticalLift).ContentTransition(ui.ContentTransition{Numeric: true})
@@ -332,7 +332,7 @@ func (d *Dashboard) servicesPill(c *ui.Context, t *ui.Theme) {
 // and its time, or its state when it does not work. Its tooltip names the
 // region and the route.
 func serviceTile(c *ui.Context, t *ui.Theme, svc model.UnlockService, r model.UnlockResult, checked bool, open func()) {
-	tile := ui.Row(c).Key(string(svc)).Grow(1).Basis(serviceTileBasis).MinWidth(0).Gap(gapSmall).Padding(gapSmall, gapSmall).
+	tile := ui.Row(c.Key(string(svc))).Grow(1).Basis(serviceTileBasis).MinWidth(0).Gap(gapSmall).Padding(gapSmall, gapSmall).
 		Radius(radiusTile).AlignItems(ui.Center).Background(t.Text.Alpha(neutralFillAlpha / 2)).Cursor(ui.CursorPointer).OnClick(open)
 	if checked {
 		tile.Tooltip(serviceTileTip(svc, r))
@@ -340,13 +340,13 @@ func serviceTile(c *ui.Context, t *ui.Theme, svc model.UnlockService, r model.Un
 		tile.Tooltip(serviceNames[svc])
 	}
 	tile.Children(func() {
-		ui.Box(c).Key("markHolder").Children(func() {
+		ui.Box(c.Key("markHolder")).Children(func() {
 			unlockMarkSized(c, t, svc, serviceTileMark)
 			dot := t.TextMuted.Alpha(statsDirectAlpha)
 			if checked {
 				dot = serviceStateColor(t, r)
 			}
-			ui.Box(c).Key("dot").Absolute().Right(-2).Bottom(-2).Width(serviceDot).Height(serviceDot).
+			ui.Box(c.Key("dot")).Absolute().Right(-2).Bottom(-2).Width(serviceDot).Height(serviceDot).
 				Radius(serviceDot/2).Background(dot).Border(1.5, overlaySurface(t))
 		})
 		switch {
@@ -365,7 +365,7 @@ func serviceTile(c *ui.Context, t *ui.Theme, svc model.UnlockService, r model.Un
 // memorySplit is one line of the legend: a dot, its name and its amount.
 func memorySplit(c *ui.Context, t *ui.Theme, label string, bytes uint64, color ui.Color) {
 	r := formatBytes(int64(bytes))
-	ui.Row(c).Key(label).Gap(gapTight).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key(label)).Gap(gapTight).AlignItems(ui.Center).Children(func() {
 		statsDot(c, color)
 		mutedText(c, t, label)
 		ui.Text(c, r.value).FontSize(fontSecondary).FontFeatures("tnum")

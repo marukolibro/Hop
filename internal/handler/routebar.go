@@ -45,7 +45,7 @@ func modeHints() []string {
 // traffic and then rest. The exit's flag sits in the middle, or a globe when
 // it has none: a group, DIRECT, or one of a provider's plan notes.
 func routeGauge(c *ui.Context, t *ui.Theme, hop model.RouteHop, size float32, traffic model.Traffic) ui.Element {
-	gauge := ui.Box(c).Key("gauge").Width(size).Height(size).Center()
+	gauge := ui.Box(c.Key("gauge")).Width(size).Height(size).Center()
 	down := gauge.AnimateTo("down", flowIntensity(traffic.Down), ui.Smooth)
 	up := gauge.AnimateTo("up", flowIntensity(traffic.Up), ui.Smooth)
 	gauge.Draw(func(p *ui.Painter, r ui.Rect) {

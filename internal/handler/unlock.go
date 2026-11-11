@@ -309,7 +309,7 @@ func (d *Dashboard) servicesDialog(c *ui.Context, t *ui.Theme) {
 // serviceRow is one service: its mark and name, the route it took, and on
 // the right the region, the latency and whether it works.
 func serviceRow(c *ui.Context, t *ui.Theme, svc model.UnlockService, r model.UnlockResult, checked bool, running bool) {
-	ui.Row(c).Key(string(svc)).Gap(gapMedium).Padding(gapSmall, gapSmall).Radius(radiusControl).AlignItems(ui.Center).
+	ui.Row(c.Key(string(svc))).Gap(gapMedium).Padding(gapSmall, gapSmall).Radius(radiusControl).AlignItems(ui.Center).
 		Background(t.Text.Alpha(neutralFillAlpha / 2)).Children(func() {
 		unlockMark(c, t, svc)
 		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(2).Children(func() {
@@ -355,7 +355,7 @@ func unlockMark(c *ui.Context, t *ui.Theme, svc model.UnlockService) {
 
 // unlockMarkSized is unlockMark on a tile of size.
 func unlockMarkSized(c *ui.Context, t *ui.Theme, svc model.UnlockService, size float32) {
-	ui.Box(c).Key("mark").Width(size).Height(size).Radius(radiusControl).Center().
+	ui.Box(c.Key("mark")).Width(size).Height(size).Radius(radiusControl).Center().
 		Background(t.Text.Alpha(neutralFillAlpha)).Children(func() {
 		if mark, ok := serviceMarks[svc]; ok {
 			glyph := size * serviceMarkRatio

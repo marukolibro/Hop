@@ -168,7 +168,7 @@ func (d *Dashboard) lanAddressList(c *ui.Context, t *ui.Theme) {
 	}
 	ui.Column(c).Gap(gapSmall).AlignItems(ui.End).Children(func() {
 		for _, address := range addresses {
-			ui.Row(c).Key(address).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+			ui.Row(c.Key(address)).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 				d.lanCopyValue(c, t, locales.LanAddress(), address)
 			})
 		}
@@ -177,7 +177,7 @@ func (d *Dashboard) lanAddressList(c *ui.Context, t *ui.Theme) {
 
 // lanCopyValue shows value in the monospace face, with a button that copies it.
 func (d *Dashboard) lanCopyValue(c *ui.Context, t *ui.Theme, what string, value string) {
-	ui.Row(c).Key(what + value).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key(what + value)).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, value).Font("monospace").FontSize(fontSecondary).FontWeight(weightMedium).NoWrap()
 		button(c, buttonSpec{label: locales.Copy(), style: mainSoftButton(t)}, func() {
 			c.WriteClipboard(value)

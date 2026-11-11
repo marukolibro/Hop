@@ -102,7 +102,7 @@ func pageSwitchStyle(t *ui.Theme, segmentWidth float32) switchStyle {
 func slidingSwitch(c *ui.Context, key string, selected *int, labels []string, style switchStyle, onChange func(int)) {
 	style.segmentWidth = fitSegment(c, labels, style.segmentWidth, fontSecondary, weightMedium, switchLabelPadding)
 	inner := switchHeight - 2*switchInset
-	track := ui.Box(c).Key(key).Label(key).Width(style.segmentWidth*float32(len(labels)) + 2*switchInset).Height(switchHeight).
+	track := ui.Box(c.Key(key)).Label(key).Width(style.segmentWidth*float32(len(labels)) + 2*switchInset).Height(switchHeight).
 		Radius(switchHeight / 2).Background(style.track)
 	if style.trackLine.A > 0 {
 		track.Border(hairlineWidth, style.trackLine)
@@ -122,7 +122,7 @@ func slidingSwitch(c *ui.Context, key string, selected *int, labels []string, st
 		}
 		ui.Row(c).Absolute().Left(switchInset).Top(switchInset).Children(func() {
 			for i, label := range labels {
-				segment := ui.Box(c).Key(label).Width(style.segmentWidth).Height(inner).Center().Cursor(ui.CursorPointer)
+				segment := ui.Box(c.Key(label)).Width(style.segmentWidth).Height(inner).Center().Cursor(ui.CursorPointer)
 				ink := style.inactive
 				if i == *selected {
 					ink = style.active
@@ -172,7 +172,7 @@ func pageTabs(c *ui.Context, t *ui.Theme, key string, selected *int, labels []st
 		pill = ui.RGB(255, 255, 255)
 	}
 	inner := tabHeight - 2*tabInset
-	track := ui.Box(c).Key(key).Label(key).Width(total + 2*tabInset).
+	track := ui.Box(c.Key(key)).Label(key).Width(total + 2*tabInset).
 		Height(tabHeight).Radius(tabHeight / 2).Background(trackFill)
 	x := track.AnimateTo("thumb", offsets[*selected], ui.Snappy)
 	thumbWidth := track.AnimateTo("thumb-width", widths[*selected], ui.Snappy)
@@ -181,7 +181,7 @@ func pageTabs(c *ui.Context, t *ui.Theme, key string, selected *int, labels []st
 			Radius(inner/2).Background(pill).Shadow(0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.12))
 		ui.Row(c).Absolute().Left(tabInset).Top(tabInset).Children(func() {
 			for i, label := range labels {
-				tab := ui.Box(c).Key(label).Width(widths[i]).Height(inner).Center().Cursor(ui.CursorPointer)
+				tab := ui.Box(c.Key(label)).Width(widths[i]).Height(inner).Center().Cursor(ui.CursorPointer)
 				ink, weight := t.TextMuted, weightMedium
 				if i == *selected {
 					ink, weight = tabPillInk, weightSemibold
@@ -205,7 +205,7 @@ func pageTabs(c *ui.Context, t *ui.Theme, key string, selected *int, labels []st
 // of it, as a heartbeat of the core, and the dot then rests without asking
 // for another frame.
 func statusDot(c *ui.Context, color ui.Color, live bool) {
-	dot := ui.Box(c).Key("statusDot").Width(16).Height(16)
+	dot := ui.Box(c.Key("statusDot")).Width(16).Height(16)
 	ripple := float32(0)
 	if live {
 		ripple = dot.AnimateTo("ripple", 1, ui.Animation{Duration: statusRipple, Ease: ui.EaseOut})
@@ -315,7 +315,7 @@ func animatedDialog(c *ui.Context, key string, open *bool, fn func(backdrop ui.E
 	if *open {
 		target = 1
 	}
-	presence := ui.Box(c).Key("presence-"+key).AnimateTo("presence", target, ui.Animation{Duration: overlayTime, Ease: ui.EaseOut})
+	presence := ui.Box(c.Key("presence-"+key)).AnimateTo("presence", target, ui.Animation{Duration: overlayTime, Ease: ui.EaseOut})
 	shown := *open || presence > 0
 	ui.DialogBase(c, &shown, func(backdrop ui.Element, panel ui.Element) {
 		fn(backdrop, panel)

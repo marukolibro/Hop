@@ -68,7 +68,7 @@ func (d *Dashboard) geodataRow(c *ui.Context, t *ui.Theme) func() {
 	s := &d.geodata
 	return func() {
 		settingRow(c, t, locales.GeodataTitle(), locales.GeodataNote(), func() {
-			ui.Row(c).Key("geodata").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+			ui.Row(c.Key("geodata")).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 				text := locales.Reading()
 				switch {
 				case s.busy:

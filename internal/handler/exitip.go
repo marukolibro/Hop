@@ -133,17 +133,17 @@ func (d *Dashboard) startWantedExitIP() {
 func (d *Dashboard) exitIPLine(c *ui.Context, t *ui.Theme) {
 	switch d.exitIP.status {
 	case exitIPLoading:
-		ui.Box(c).Key("exitIP").Label(locales.ExitIpLabel()).Children(func() {
+		ui.Box(c.Key("exitIP")).Label(locales.ExitIpLabel()).Children(func() {
 			captionText(c, t, locales.ExitIpChecking())
 		})
 	case exitIPFailed:
-		ui.Box(c).Key("exitIP").Label(locales.ExitIpLabel()).Tooltip(locales.ExitIpRetry()).Cursor(ui.CursorPointer).
+		ui.Box(c.Key("exitIP")).Label(locales.ExitIpLabel()).Tooltip(locales.ExitIpRetry()).Cursor(ui.CursorPointer).
 			OnClick(func() { d.retryExitIP() }).Children(func() {
 			captionText(c, t, locales.ExitIpNone())
 		})
 	case exitIPReady:
 		ip := d.exitIP.ip
-		line := ui.Row(c).Key("exitIP").Label(locales.ExitIpLabel()).MaxWidth(exitWidth).Clip().
+		line := ui.Row(c.Key("exitIP")).Label(locales.ExitIpLabel()).MaxWidth(exitWidth).Clip().
 			AlignItems(ui.End).Cursor(ui.CursorPointer).Tooltip(locales.ExitIpTip())
 		line.OnClick(func() {
 			c.WriteClipboard(ip.Address.String())

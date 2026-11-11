@@ -54,7 +54,7 @@ type buttonSpec struct {
 // focus and accessibility.
 func button(c *ui.Context, spec buttonSpec, onClick func()) ui.Element {
 	t := c.Theme()
-	b := ui.ButtonBase(c).Key(spec.label).Label(spec.label).Height(switchHeight).Padding(0, 12).Gap(5).
+	b := ui.ButtonBase(c.Key(spec.label)).Label(spec.label).Height(switchHeight).Padding(0, 12).Gap(5).
 		Radius(switchHeight / 2).Disabled(spec.disabled || spec.busy)
 	// A disabled button keeps its shape and takes a neutral face with the
 	// secondary ink: legible, plainly inactive, with no accent and no
@@ -95,7 +95,7 @@ func button(c *ui.Context, spec buttonSpec, onClick func()) ui.Element {
 // textButton is the design's quiet text action, with an optional icon. It
 // has no capsule or fill; the ink turns accent under the pointer.
 func textButton(c *ui.Context, t *ui.Theme, label string, icon *ui.SVG, disabled bool, busy bool, onClick func()) ui.Element {
-	b := ui.ButtonBase(c).Key(label).Label(label).Height(switchHeight).Padding(0).Gap(6).MinWidth(0).Shrink(1).
+	b := ui.ButtonBase(c.Key(label)).Label(label).Height(switchHeight).Padding(0).Gap(6).MinWidth(0).Shrink(1).
 		Radius(0).Background(ui.Transparent).Disabled(disabled || busy)
 	ink := t.TextMuted
 	if b.Hovered() && !disabled {
@@ -122,7 +122,7 @@ func textButton(c *ui.Context, t *ui.Theme, label string, icon *ui.SVG, disabled
 // every row; label names it for assistive technology.
 func iconButton(c *ui.Context, label string, icon *ui.SVG, style buttonStyle, onClick func()) ui.Element {
 	const size float32 = 24
-	b := ui.ButtonBase(c).Key(label).Label(label).Width(size).Height(size).Radius(size / 2).Cursor(ui.CursorPointer)
+	b := ui.ButtonBase(c.Key(label)).Label(label).Width(size).Height(size).Radius(size / 2).Cursor(ui.CursorPointer)
 	fill := ui.Transparent
 	if b.Hovered() {
 		fill = style.fill
@@ -140,7 +140,7 @@ func iconButton(c *ui.Context, label string, icon *ui.SVG, style buttonStyle, on
 // disabled keeps the menu from opening.
 func iconMenuButton(c *ui.Context, label string, icon *ui.SVG, style buttonStyle, disabled bool, build func(m *ui.Menu)) ui.Element {
 	const size float32 = 24
-	b := ui.ButtonBase(c).Key(label).Label(label).Width(size).Height(size).Radius(size / 2).Disabled(disabled)
+	b := ui.ButtonBase(c.Key(label)).Label(label).Width(size).Height(size).Radius(size / 2).Disabled(disabled)
 	fill := ui.Transparent
 	if b.Hovered() && !disabled {
 		fill = style.fill

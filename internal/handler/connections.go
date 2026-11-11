@@ -41,7 +41,7 @@ func (d *Dashboard) connectionsView(c *ui.Context, t *ui.Theme) {
 	visible := d.visibleConnections()
 	width, _ := c.Size()
 	columns, order := connectionLayout(width < 760)
-	ui.Column(c).Key("connections").Grow(1).Basis(0).MinHeight(0).Children(func() {
+	ui.Column(c.Key("connections")).Grow(1).Basis(0).MinHeight(0).Children(func() {
 		toolbar(c, func() {
 			ui.TextInput(c, &d.connections.filter).Placeholder(locales.ConnectionsFilter()).Width(270)
 			mutedText(c, t, locales.ConnectionsCount(len(conns.Active))).FontFeatures("tnum")

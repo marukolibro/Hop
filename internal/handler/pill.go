@@ -54,7 +54,7 @@ type pillSpec struct {
 // always on, and the traffic switches, which are on or off. Its fill and
 // outline ease between the two.
 func togglePill(c *ui.Context, t *ui.Theme, spec pillSpec, lead func(), onClick func()) ui.Element {
-	b := ui.ButtonBase(c).Key(spec.label).Label(spec.label).Height(switchHeight).Padding(0, 12).Gap(gapTight).
+	b := ui.ButtonBase(c.Key(spec.label)).Label(spec.label).Height(switchHeight).Padding(0, 12).Gap(gapTight).
 		Radius(switchHeight / 2).AlignItems(ui.Center).Justify(ui.Center).Disabled(spec.disabled || spec.busy)
 	// Off, a pill is only a faint fill; on, it takes the accent's tint and
 	// outline, so the choices that are on stand out of the row. On glass
@@ -111,7 +111,7 @@ func miniSwitch(c *ui.Context, t *ui.Theme, on bool, onColor ui.Color) {
 	if on {
 		track, target = onColor, 1
 	}
-	box := ui.Box(c).Key("miniSwitch").Width(miniTrackW).Height(miniTrackH)
+	box := ui.Box(c.Key("miniSwitch")).Width(miniTrackW).Height(miniTrackH)
 	trackColor := box.AnimateColor("track", track, ui.Smooth)
 	pos := box.AnimateTo("knob", target, ui.Snappy)
 	knob := ui.RGBA(255, 255, 255, 1)
@@ -130,7 +130,7 @@ func miniSwitch(c *ui.Context, t *ui.Theme, on bool, onColor ui.Color) {
 // rests. The box reaches hintSpread past the pill on every side, where the
 // glow is drawn.
 func hintRing(c *ui.Context, color ui.Color, radius float32) {
-	ring := ui.Box(c).Key("hint").Absolute().Left(-hintSpread).Top(-hintSpread).Right(-hintSpread).Bottom(-hintSpread)
+	ring := ui.Box(c.Key("hint")).Absolute().Left(-hintSpread).Top(-hintSpread).Right(-hintSpread).Bottom(-hintSpread)
 	ring.Draw(func(p *ui.Painter, r ui.Rect) {
 		at := time.Duration(p.Now().UnixMilli()%hintCycle.Milliseconds()) * time.Millisecond
 		if at >= hintBreath {
@@ -161,8 +161,8 @@ func switchLead(c *ui.Context, t *ui.Theme, spec pillSpec) {
 	if spec.busy {
 		face = 0
 	}
-	ui.Box(c).Key("lead").Width(miniTrackW).Height(16).Center().Children(func() {
-		ui.Box(c).Key("face").Opacity(face).Children(func() {
+	ui.Box(c.Key("lead")).Width(miniTrackW).Height(16).Center().Children(func() {
+		ui.Box(c.Key("face")).Opacity(face).Children(func() {
 			miniSwitch(c, t, spec.on, t.Success)
 		})
 		if spec.busy {

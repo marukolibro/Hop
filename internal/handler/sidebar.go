@@ -147,7 +147,7 @@ func sidebarHeader(c *ui.Context, t *ui.Theme, title string, isTop bool) {
 	if isTop {
 		top = 4
 	}
-	ui.Box(c).Key("section:"+title).Height(sidebarHeaderH).Padding(top, 10, 0, 10).Children(func() {
+	ui.Box(c.Key("section:"+title)).Height(sidebarHeaderH).Padding(top, 10, 0, 10).Children(func() {
 		ui.Text(c, title).FontSize(fontCaption).FontWeight(weightSemibold).TextColor(t.TextMuted)
 	})
 }
@@ -156,7 +156,7 @@ func sidebarHeader(c *ui.Context, t *ui.Theme, title string, isTop bool) {
 func (d *Dashboard) sidebarItem(c *ui.Context, t *ui.Theme, group model.GroupView) {
 	isActive := group.Name == d.activeGroup
 	name := group.Name
-	item := ui.Row(c).Key(name).Height(sidebarItemH).Gap(10).AlignItems(ui.Center).Padding(0, 10).Radius(radiusControl).Cursor(ui.CursorPointer)
+	item := ui.Row(c.Key(name)).Height(sidebarItemH).Gap(10).AlignItems(ui.Center).Padding(0, 10).Radius(radiusControl).Cursor(ui.CursorPointer)
 	fill := ui.Transparent
 	if item.Hovered() && !isActive {
 		fill = glassFill(t, glassSidebarHover)

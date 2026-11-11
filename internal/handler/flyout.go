@@ -61,7 +61,7 @@ func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func(), fi
 		panel.Background(t.Background).Radius(radiusPanel).Border(border, t.Border)
 	}
 	panel.Children(func() {
-		content := ui.Column(c).Key("content").Gap(14).Shrink(0)
+		content := ui.Column(c.Key("content")).Gap(14).Shrink(0)
 		if h := content.LayoutBounds().H; h > 0 {
 			fit(int(math.Ceil(float64(h + 2*(flyoutPadding+border)))))
 		}
@@ -72,7 +72,7 @@ func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func(), fi
 // flyoutContent is the panel's sections, top to bottom, inside content.
 func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element, openWindow func(), quit func()) {
 	content.Children(func() {
-		entrance(ui.Row(c).Key("top").Gap(gapSmall).AlignItems(ui.Center), 0).Children(func() {
+		entrance(ui.Row(c.Key("top")).Gap(gapSmall).AlignItems(ui.Center), 0).Children(func() {
 			brandLockup(c, t, 20, d.markRun)
 			ui.Box(c).Grow(1)
 			if d.appUpdate.update.Available && d.appUpdate.enabled {
@@ -93,16 +93,16 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 		// The exit and the traffic are one card, tinted with the theme's accent
 		// as the window's hero is.
 		d.flyoutCard(c, t, func() {
-			entrance(ui.Column(c).Key("route"), 1).Gap(gapSmall).Padding(gapMedium).Radius(radiusPanel).
+			entrance(ui.Column(c.Key("route")), 1).Gap(gapSmall).Padding(gapMedium).Radius(radiusPanel).
 				LinearGradient(heroFace(t, overlaySurface(t))).Border(1, t.Border).Children(func() {
 				d.flyoutRoute(c, t)
 			})
 		})
-		entrance(ui.Column(c).Key("mode"), 3).Gap(gapSmall).Children(func() {
+		entrance(ui.Column(c.Key("mode")), 3).Gap(gapSmall).Children(func() {
 			// In the order it happens, as the window's control bar has them: what
 			// sends traffic to Hop, then how it is handled. The two switches split
 			// the first line and the three modes are one segmented control.
-			ui.Row(c).Key("switches").Gap(gapTight).AlignItems(ui.Center).Children(func() {
+			ui.Row(c.Key("switches")).Gap(gapTight).AlignItems(ui.Center).Children(func() {
 				d.systemProxyPill(c, t).Grow(1).Basis(0)
 				d.tunPill(c, t).Grow(1).Basis(0)
 			})
@@ -113,7 +113,7 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 				}
 			}
 		})
-		entrance(ui.Column(c).Key("routes"), 4).Gap(gapSmall).
+		entrance(ui.Column(c.Key("routes")), 4).Gap(gapSmall).
 			Disabled(d.controlsLocked()).Children(func() {
 			d.quickRoutes(c, t, openWindow)
 		})
@@ -123,7 +123,7 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 // flyoutCard holds the exit card, which fades while the core is up but nothing
 // sends traffic to it: the panel then says plainly that Hop is doing nothing.
 func (d *Dashboard) flyoutCard(c *ui.Context, t *ui.Theme, card func()) {
-	wrap := ui.Column(c).Key("routeDim")
+	wrap := ui.Column(c.Key("routeDim"))
 	target := float32(1)
 	if d.status == statusConnected && !d.proxying() {
 		target = flyoutIdleOpacity
@@ -141,7 +141,7 @@ func (d *Dashboard) flyoutModes(c *ui.Context, t *ui.Theme) {
 	}
 	segment := (width - 2*(flyoutPadding+border) - 2*switchInset) / float32(len(service.Modes))
 	locked := d.modeLocked()
-	holder := ui.Row(c).Key("modes").Disabled(locked)
+	holder := ui.Row(c.Key("modes")).Disabled(locked)
 	if locked {
 		holder.Opacity(flyoutLockedOpacity)
 	}
@@ -177,7 +177,7 @@ func (d *Dashboard) flyoutRoute(c *ui.Context, t *ui.Theme) {
 		return
 	}
 	hop := route[len(route)-1]
-	ui.Row(c).Key("exitRow").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("exitRow")).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 		routeGauge(c, t, hop, flyoutGaugeSize, d.last)
 		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(gapTight).Children(func() {
 			ui.Text(c, heroExitName(hop)).FontSize(fontHeadline).FontWeight(weightSemibold).LetterSpacing(-0.2).MaxLines(1)
@@ -186,7 +186,7 @@ func (d *Dashboard) flyoutRoute(c *ui.Context, t *ui.Theme) {
 			}
 		})
 	})
-	ui.Row(c).Key("speeds").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("speeds")).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 		compactSpeed(c, t, "↓", formatRate(d.last.Down), accentInk(t))
 		compactSpeed(c, t, "↑", formatRate(d.last.Up), uploadColor(t))
 		ui.Box(c).Grow(1)
@@ -197,7 +197,7 @@ func (d *Dashboard) flyoutRoute(c *ui.Context, t *ui.Theme) {
 // compactSpeed is one speed: the arrow in its line's colour, the number
 // rolling as it changes, and its unit.
 func compactSpeed(c *ui.Context, t *ui.Theme, arrow string, r readout, color ui.Color) {
-	ui.Row(c).Key(arrow).Width(compactSpeedWidth).Gap(4).AlignItems(ui.End).Children(func() {
+	ui.Row(c.Key(arrow)).Width(compactSpeedWidth).Gap(4).AlignItems(ui.End).Children(func() {
 		ui.Text(c, arrow).FontSize(fontBody).FontWeight(weightBold).TextColor(color)
 		ui.Text(c, r.value).FontSize(17).FontWeight(weightSemibold).LetterSpacing(-0.3).FontFeatures("tnum").
 			ContentTransition(ui.ContentTransition{Numeric: true})
@@ -231,7 +231,7 @@ func (d *Dashboard) flyoutSubscription(c *ui.Context, t *ui.Theme, openWindow fu
 		return
 	}
 	locked := d.controlsLocked()
-	row := ui.ButtonBase(c).Key("flyoutSubscription").Label(locales.SubSelect()).
+	row := ui.ButtonBase(c.Key("flyoutSubscription")).Label(locales.SubSelect()).
 		Value(pickerLabel(s.view.Items, active.ID)).
 		Height(switchHeight).Padding(0).Radius(radiusControl).Gap(gapTight).
 		Justify(ui.Start).Background(ui.Transparent).Disabled(locked)
@@ -314,7 +314,7 @@ func (d *Dashboard) quickRoutes(c *ui.Context, t *ui.Theme, openWindow func()) {
 		return
 	}
 	group, ok := d.quickGroup()
-	ui.Row(c).Key("routeHead").Gap(gapSmall).AlignItems(ui.Center).Height(26).Children(func() {
+	ui.Row(c.Key("routeHead")).Gap(gapSmall).AlignItems(ui.Center).Height(26).Children(func() {
 		d.flyoutSubscription(c, t, openWindow)
 		ui.Box(c).Grow(1)
 		if ok {
@@ -342,7 +342,7 @@ func (d *Dashboard) quickRoutes(c *ui.Context, t *ui.Theme, openWindow func()) {
 func (d *Dashboard) quickRow(c *ui.Context, t *ui.Theme, group model.GroupView, node model.NodeView) {
 	isActive := node.Name == group.Selected
 	groupName, nodeName := group.Name, node.Name
-	row := ui.Row(c).Key(node.Name).Height(quickRowH).Gap(10).AlignItems(ui.Center).Padding(0, 10).Radius(radiusControl).Cursor(ui.CursorPointer)
+	row := ui.Row(c.Key(node.Name)).Height(quickRowH).Gap(10).AlignItems(ui.Center).Padding(0, 10).Radius(radiusControl).Cursor(ui.CursorPointer)
 	fill := ui.Transparent
 	switch {
 	case isActive:

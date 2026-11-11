@@ -106,7 +106,7 @@ func (d *Dashboard) appVersionRow(c *ui.Context, t *ui.Theme) func() {
 			note = locales.CoreUpToDate()
 		}
 		settingRow(c, t, locales.AppVersion(), note, func() {
-			ui.Column(c).Key("app-version").Gap(gapSmall).AlignItems(ui.End).Children(func() {
+			ui.Column(c.Key("app-version")).Gap(gapSmall).AlignItems(ui.End).Children(func() {
 				ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 					version := d.appVersion
 					if version == "" {

@@ -176,7 +176,7 @@ func (d *Dashboard) customRulesRows(c *ui.Context, t *ui.Theme) []func() {
 		rows = append(rows, d.customRuleRow(c, t, i, rule))
 	}
 	rows = append(rows, func() {
-		ui.Row(c).Key("rules-add").Gap(gapLarge).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
+		ui.Row(c.Key("rules-add")).Gap(gapLarge).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
 			note := locales.RulesOrderNote()
 			switch {
 			case r.failed:
@@ -198,7 +198,7 @@ func (d *Dashboard) customRulesRows(c *ui.Context, t *ui.Theme) []func() {
 // sends traffic, and its delete button.
 func (d *Dashboard) customRuleRow(c *ui.Context, t *ui.Theme, index int, rule model.CustomRule) func() {
 	return func() {
-		ui.Row(c).Key("rule:" + strconv.Itoa(index)).Gap(gapLarge).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
+		ui.Row(c.Key("rule:" + strconv.Itoa(index))).Gap(gapLarge).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
 			ui.Column(c).Grow(1).Basis(0).Gap(gapLine).Children(func() {
 				captionText(c, t, ruleTypeLabel(rule.Type))
 				ui.Text(c, rule.Value).FontSize(fontBody).FontWeight(weightMedium).MaxLines(1)

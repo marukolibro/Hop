@@ -108,7 +108,7 @@ func (d *Dashboard) beginRestoreCore() {
 func (d *Dashboard) coreRows(c *ui.Context, t *ui.Theme) []func() {
 	s := &d.core
 	rows := []func(){func() {
-		ui.Row(c).Key("core").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+		ui.Row(c.Key("core")).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 			coreTile(c, t)
 			ui.Column(c).Grow(1).Basis(0).Gap(gapLine).Children(func() {
 				ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
@@ -162,7 +162,7 @@ func (d *Dashboard) memoryRow(c *ui.Context, t *ui.Theme) func() {
 
 // coreTile is the core's icon on a soft square, in the accent.
 func coreTile(c *ui.Context, t *ui.Theme) {
-	ui.Box(c).Key("tile").Width(cardIconTile).Height(cardIconTile).Radius(radiusControl).Center().
+	ui.Box(c.Key("tile")).Width(cardIconTile).Height(cardIconTile).Radius(radiusControl).Center().
 		Background(t.Accent.Alpha(0.09)).Children(func() {
 		ui.Icon(c, iconCore).Width(cardIconGlyph).Height(cardIconGlyph).TextColor(t.Accent)
 	})
@@ -185,7 +185,7 @@ func originText(origin model.CoreOrigin) string {
 func (d *Dashboard) coreActions(c *ui.Context, t *ui.Theme) {
 	s := &d.core
 	canChange := s.info.Origin != model.CoreOverride && !d.controlsLocked() && !d.tun.on
-	ui.Row(c).Key("actions").Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+	ui.Row(c.Key("actions")).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 		if s.info.Origin == model.CoreInstalled {
 			button(c, buttonSpec{label: locales.CoreRestoreBundled(), style: mainSoftButton(t), disabled: !canChange}, d.beginRestoreCore)
 		}
@@ -199,7 +199,7 @@ func (d *Dashboard) coreActions(c *ui.Context, t *ui.Theme) {
 // coreProgress says which step of the change is running, with a bar while
 // the download has a size to measure by.
 func coreProgress(c *ui.Context, t *ui.Theme, p model.CoreProgress) {
-	ui.Column(c).Key("progress").Gap(gapSmall).Children(func() {
+	ui.Column(c.Key("progress")).Gap(gapSmall).Children(func() {
 		ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 			spinner(c, iconInline, t.Accent)
 			ui.Text(c, stageText(p)).FontSize(fontSecondary).FontWeight(weightMedium).FontFeatures("tnum")

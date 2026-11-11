@@ -236,8 +236,8 @@ func (d *Dashboard) helperRows(c *ui.Context, t *ui.Theme) []func() {
 		note = locales.HelperInstalled()
 	}
 	return []func(){func() {
-		ui.Row(c).Key("helper").Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-			ui.Box(c).Key("tile").Width(cardIconTile).Height(cardIconTile).Radius(radiusControl).Center().
+		ui.Row(c.Key("helper")).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
+			ui.Box(c.Key("tile")).Width(cardIconTile).Height(cardIconTile).Radius(radiusControl).Center().
 				Background(t.Accent.Alpha(0.09)).Children(func() {
 				ui.Icon(c, iconShieldCheck).Width(cardIconGlyph).Height(cardIconGlyph).TextColor(t.Accent)
 			})

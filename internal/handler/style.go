@@ -163,7 +163,7 @@ func chip(c *ui.Context, t *ui.Theme, text string, color ui.Color) {
 	if windowGlass(t) {
 		fill = ui.Transparent
 	}
-	ui.Box(c).Key(text).Padding(1, 6).Radius(radiusChip).Background(fill).Children(func() {
+	ui.Box(c.Key(text)).Padding(1, 6).Radius(radiusChip).Background(fill).Children(func() {
 		label := ui.Text(c, text).FontSize(fontCaption).FontWeight(weightMedium).TextColor(color).NoWrap()
 		if strings.ContainsFunc(text, func(r rune) bool { return unicode.Is(unicode.Han, r) }) {
 			label.Translate(0, -opticalLift)
@@ -186,7 +186,7 @@ func pageGutter(c *ui.Context) float32 {
 
 // pageHeading names a page and says what it holds.
 func pageHeading(c *ui.Context, t *ui.Theme, title string, subtitle string) ui.Element {
-	return ui.Column(c).Key("heading").Gap(5).Children(func() {
+	return ui.Column(c.Key("heading")).Gap(5).Children(func() {
 		ui.Text(c, title).FontSize(fontHeadline).FontWeight(weightSemibold).LetterSpacing(-0.3)
 		if subtitle != "" {
 			mutedText(c, t, subtitle)
@@ -210,7 +210,7 @@ func badge(c *ui.Context, t *ui.Theme, text string) {
 	if onGlass(t) {
 		fill = glassPanel(t).Mix(t.Accent, glassBadgeTint)
 	}
-	ui.Box(c).Key("badge").Padding(3, 7).Radius(5).Background(fill).Children(func() {
+	ui.Box(c.Key("badge")).Padding(3, 7).Radius(5).Background(fill).Children(func() {
 		ui.Text(c, text).FontSize(fontCaption).TextColor(accentInk(t)).NoWrap()
 	})
 }

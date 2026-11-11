@@ -35,7 +35,7 @@ func (d *Dashboard) logsView(c *ui.Context, t *ui.Theme) {
 	for i, f := range logFilters() {
 		labels[i] = f.label
 	}
-	ui.Column(c).Key("log").Grow(1).Basis(0).MinHeight(0).Children(func() {
+	ui.Column(c.Key("log")).Grow(1).Basis(0).MinHeight(0).Children(func() {
 		toolbar(c, func() {
 			slidingSwitch(c, locales.LogsLevel(), &d.logs.level, labels, pageSwitchStyle(t, 52), func(int) {})
 			mutedText(c, t, locales.LogsLines(len(visible))).FontFeatures("tnum")

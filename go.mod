@@ -6,7 +6,7 @@ tool github.com/egoist/mygo/cmd/mygo
 
 require (
 	github.com/coder/websocket v1.8.15
-	github.com/egoist/mygo v0.7.4
+	github.com/egoist/mygo v0.8.3
 	github.com/metacubex/mihomo v1.19.33
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/sys v0.49.0
