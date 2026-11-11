@@ -22,6 +22,17 @@ import (
 	"hop/internal/service"
 )
 
+// skipWhenRateLimited skips the test when GitHub refused an unauthenticated
+// request for its rate limit, which a CI runner's shared address often hits:
+// that says nothing about the helper, and the rest of the test does not need
+// GitHub.
+func skipWhenRateLimited(t *testing.T, err error) {
+	t.Helper()
+	if err != nil && strings.Contains(err.Error(), "API rate limit exceeded") {
+		t.Skipf("GitHub's rate limit stopped the test: %v", err)
+	}
+}
+
 // bundledTag is the core release mihomo.version pins, what the build script
 // stamps into the helper.
 func bundledTag(t *testing.T, repoRoot string) string {
@@ -178,7 +189,9 @@ func TestHelperServesItsCore(t *testing.T) {
 		"an archive behind a symbolic link":    {model.CoreArchive{Tag: tag, Path: linked}, ""},
 		"a proxy that is not on the loopback":  {model.CoreArchive{Tag: tag, Path: fake}, "http://192.0.2.1:7890"},
 	} {
-		if err := client.InstallCore(ctx, req.archive, req.proxy); !errors.As(err, &apiErr) || apiErr.Status != http.StatusBadRequest {
+		err := client.InstallCore(ctx, req.archive, req.proxy)
+		skipWhenRateLimited(t, err)
+		if !errors.As(err, &apiErr) || apiErr.Status != http.StatusBadRequest {
 			t.Errorf("install with %s = %v, want a 400", name, err)
 		}
 	}
@@ -190,6 +203,7 @@ func TestHelperServesItsCore(t *testing.T) {
 	// installed: the helper checks it against the digest GitHub publishes.
 	releases := corerelease.NewSource(&http.Client{}, corerelease.ReleasesAPI)
 	release, err := releases.Release(ctx, tag)
+	skipWhenRateLimited(t, err)
 	if err != nil {
 		t.Fatalf("ask GitHub for release %s: %v", tag, err)
 	}
