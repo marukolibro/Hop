@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
@@ -146,7 +148,7 @@ func (d *Dashboard) lanRows(c *ui.Context, t *ui.Theme) []func() {
 		}, func() {
 			settingRow(c, t, locales.LanPassword(), "", func() {
 				ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-					d.lanCopyValue(c, t, locales.LanPassword(), account.Password)
+					d.lanCopySecret(c, t, locales.LanPassword(), account.Password)
 					ui.Box(c).Disabled(locked).Children(func() {
 						button(c, buttonSpec{label: locales.LanResetPassword(), icon: iconRefresh, style: mainSoftButton(t)}, d.beginLANReset)
 					})
@@ -177,11 +179,29 @@ func (d *Dashboard) lanAddressList(c *ui.Context, t *ui.Theme) {
 
 // lanCopyValue shows value in the monospace face, with a button that copies it.
 func (d *Dashboard) lanCopyValue(c *ui.Context, t *ui.Theme, what string, value string) {
+	lanValueRow(c, t, what, value, func() {
+		c.WriteClipboard(value)
+		c.Toast(locales.Copied() + what)
+	})
+}
+
+// lanCopySecret is lanCopyValue for the password: the copy is marked
+// confidential, so clipboard managers and the system's clipboard history
+// leave it out and it stays off the user's other devices.
+func (d *Dashboard) lanCopySecret(c *ui.Context, t *ui.Theme, what string, value string) {
+	lanValueRow(c, t, what, value, func() {
+		if err := mygo.Clipboard.Write(transfer.TextData(value), mygo.ClipboardOptions{Concealed: true}); err != nil {
+			d.fail(actionCopyLANPassword, err)
+			return
+		}
+		c.Toast(locales.Copied() + what)
+	})
+}
+
+// lanValueRow shows value in the monospace face, with a button that runs onCopy.
+func lanValueRow(c *ui.Context, t *ui.Theme, what string, value string, onCopy func()) {
 	ui.Row(c.Key(what + value)).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, value).Font("monospace").FontSize(fontSecondary).FontWeight(weightMedium).NoWrap()
-		button(c, buttonSpec{label: locales.Copy(), style: mainSoftButton(t)}, func() {
-			c.WriteClipboard(value)
-			c.Toast(locales.Copied() + what)
-		})
+		button(c, buttonSpec{label: locales.Copy(), style: mainSoftButton(t)}, onCopy)
 	})
 }

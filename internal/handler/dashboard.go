@@ -921,6 +921,7 @@ var (
 	actionTunOn               = action{"tun-on", locales.ActionTunOn}
 	actionTunOff              = action{"tun-off", locales.ActionTunOff}
 	actionUninstallHelper     = action{"uninstall-helper", locales.ActionUninstallHelper}
+	actionCopyLANPassword     = action{"copy-lan-password", locales.ActionCopyLanPassword}
 )
 
 // fail shows what went wrong without touching the connection status.

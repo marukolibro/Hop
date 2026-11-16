@@ -5,6 +5,7 @@
   "actionCheckCore": "Couldn't check for core updates",
   "actionCheckUnlock": "Unlock check failed",
   "actionCloseConnection": "Couldn't close the connection",
+  "actionCopyLanPassword": "Couldn't copy the password",
   "actionCoreGaveUp": "The core keeps quitting, so Hop stopped restarting it",
   "actionCoreRestarted": "The core quit unexpectedly and was restarted",
   "actionDeleteSubscription": "Couldn't delete the subscription",

@@ -84,6 +84,16 @@ func (msgs Messages) ActionCloseConnection() string {
 	return Catalog.Format(msgs.locale, "actionCloseConnection", nil)
 }
 
+// ActionCopyLanPassword says "Couldn't copy the password"
+// in the language the app shows.
+func ActionCopyLanPassword() string { return In(i18n.Locale()).ActionCopyLanPassword() }
+
+// ActionCopyLanPassword says "Couldn't copy the password"
+// in the language of msgs.
+func (msgs Messages) ActionCopyLanPassword() string {
+	return Catalog.Format(msgs.locale, "actionCopyLanPassword", nil)
+}
+
 // ActionCoreGaveUp says "The core keeps quitting, so Hop stopped restarting it"
 // in the language the app shows.
 func ActionCoreGaveUp() string { return In(i18n.Locale()).ActionCoreGaveUp() }

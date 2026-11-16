@@ -5,6 +5,7 @@
   "actionCheckCore": "检查内核更新失败",
   "actionCheckUnlock": "解锁检测失败",
   "actionCloseConnection": "断开连接失败",
+  "actionCopyLanPassword": "复制密码失败",
   "actionCoreGaveUp": "内核反复退出,已停止自动重启",
   "actionCoreRestarted": "内核意外退出,已自动重启",
   "actionDeleteSubscription": "删除订阅失败",
