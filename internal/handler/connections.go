@@ -38,7 +38,6 @@ func connectionColumns() []ui.TableColumn {
 // views, below its heading.
 func (d *Dashboard) connectionsView(c *ui.Context, t *ui.Theme) {
 	conns := d.connections.data
-	visible := d.visibleConnections()
 	width, _ := c.Size()
 	columns, order := connectionLayout(width < 760)
 	ui.Column(c.Key("connections")).Grow(1).Basis(0).MinHeight(0).Children(func() {
@@ -48,6 +47,11 @@ func (d *Dashboard) connectionsView(c *ui.Context, t *ui.Theme) {
 			ui.Box(c).Grow(1)
 			button(c, buttonSpec{label: locales.ConnectionsCloseAll(), icon: iconClose, style: mainDangerButton(t), disabled: len(conns.Active) == 0}, d.closeAll)
 		})
+		// The text input takes its edit as its constructor returns, inside
+		// this build, so the rows are read after it: the empty state, the
+		// cells and the list's keys all come from this one slice.
+		visible := d.visibleConnections()
+		d.connections.list.Key = func(row int) any { return visible[row].ID }
 		switch {
 		case len(conns.Active) == 0:
 			emptyState(c, t, locales.ConnectionsEmpty(),

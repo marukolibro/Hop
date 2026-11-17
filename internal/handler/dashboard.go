@@ -477,7 +477,6 @@ func NewDashboard(services Services, proxyHost string, settings model.Settings, 
 		d.appUpdate.disabledReason = services.AppUpdate.DisabledReason()
 	}
 	d.logs.list.FollowEnd = true
-	d.connections.list.Key = func(row int) any { return d.visibleConnections()[row].ID }
 	d.stats = services.Traffic.Summary(time.Now())
 	return d
 }
