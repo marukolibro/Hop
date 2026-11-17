@@ -51,7 +51,7 @@ func (d *Dashboard) connectionsView(c *ui.Context, t *ui.Theme) {
 		// this build, so the rows are read after it: the empty state, the
 		// cells and the list's keys all come from this one slice.
 		visible := d.visibleConnections()
-		d.connections.visible = visible
+		d.connections.list.Key = func(row int) any { return visible[row].ID }
 		switch {
 		case len(conns.Active) == 0:
 			emptyState(c, t, locales.ConnectionsEmpty(),

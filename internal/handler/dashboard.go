@@ -317,14 +317,9 @@ type subscriptionsState struct {
 
 // connectionsState is what the connections page shows and edits.
 type connectionsState struct {
-	data model.Connections
-	list ui.ListState
-	// visible is the rows the page last passed to the table, in the order
-	// it did: the list's keys index it, and the filter may change while the
-	// view builds (the text input takes its edit as its constructor
-	// returns), so a lookup through the filter would read another slice.
-	visible []model.Connection
-	filter  string
+	data   model.Connections
+	list   ui.ListState
+	filter string
 }
 
 // logsState is what the log page shows and edits.
@@ -482,7 +477,6 @@ func NewDashboard(services Services, proxyHost string, settings model.Settings, 
 		d.appUpdate.disabledReason = services.AppUpdate.DisabledReason()
 	}
 	d.logs.list.FollowEnd = true
-	d.connections.list.Key = func(row int) any { return d.connections.visible[row].ID }
 	d.stats = services.Traffic.Summary(time.Now())
 	return d
 }
