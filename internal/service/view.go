@@ -227,12 +227,18 @@ func describeNode(name string, snapshot model.Snapshot) model.NodeView {
 }
 
 // ParseNode takes a proxy name apart, as "🇯🇵日本高速01|CTCU|0.5x" into the
-// title "高速01", the tag "CTCU" and the multiplier "0.5x".
+// title "高速01", the tag "CTCU" and the multiplier "0.5x". A name without a
+// leading flag keeps its text whole: the region word is only taken off a name
+// that starts with a flag.
 func ParseNode(name string, delays map[string]int) model.NodeView {
 	flag, isRegional := LeadingFlag(name)
 	rest := strings.TrimSpace(strings.TrimPrefix(name, flag))
 	parts := strings.Split(rest, "|")
-	title, region := splitRegion(strings.TrimSpace(parts[0]))
+	title := strings.TrimSpace(parts[0])
+	region := ""
+	if isRegional {
+		title, region = splitRegion(title)
+	}
 	node := model.NodeView{Name: name, Title: title, PlanNote: isPlanNote(name)}
 	if isRegional {
 		node.Flag = flag
