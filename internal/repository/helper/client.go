@@ -34,8 +34,12 @@ type Client struct {
 	// coreMu protects the callback and the last observed core identity.
 	coreMu       sync.Mutex
 	onCoreChange func(bool, bool)
+	// coreKnown and restartKnown say the last Status left a baseline to compare
+	// against. A core whose pid the helper could not read reports 0, which
+	// leaves the pid baseline as it was: unknown is not a replacement.
 	coreKnown    bool
 	corePid      int
+	restartKnown bool
 	coreRestart  model.CoreRestart
 }
 
@@ -85,7 +89,8 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 }
 
 // Status reports whether the helper's core runs, its pid and its last
-// supervised restart.
+// supervised restart. A replacement it observes against the previous reply
+// tells OnCoreChange.
 func (c *Client) Status(ctx context.Context) (Status, error) {
 	var body Status
 	if err := c.call(ctx, http.MethodGet, "/status", nil, &body); err != nil {
@@ -96,9 +101,17 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	if body.LastRestart != nil {
 		restart = *body.LastRestart
 	}
-	changed := c.coreKnown && c.corePid != body.Pid || body.LastRestart != nil && restart != c.coreRestart
-	c.coreKnown, c.corePid = true, body.Pid
-	c.coreRestart = restart
+	// A pid the helper reports against the one seen before, or a restart against
+	// the last one reported, is a replacement. The first Status only takes the
+	// baseline, and a pid of 0 (the helper could not read the core's pid file)
+	// stays unknown.
+	moved := c.coreKnown && body.Pid != 0 && c.corePid != body.Pid
+	restarted := c.restartKnown && restart != c.coreRestart
+	changed := moved || restarted
+	if body.Pid != 0 {
+		c.coreKnown, c.corePid = true, body.Pid
+	}
+	c.restartKnown, c.coreRestart = true, restart
 	fn := c.onCoreChange
 	c.coreMu.Unlock()
 	if changed && fn != nil {

@@ -131,7 +131,9 @@ func TestDefaultRouteFollowsCore(t *testing.T) {
 	h := newHarness(t, t.TempDir())
 	counter := &ruleCounter{RoundTripper: http.DefaultTransport.(*http.Transport).Clone()}
 	h.client = mihomo.NewClient(testController, testSecret, mihomo.ConfigPath(h.cfg.HomeDir), &http.Client{Transport: counter}, 5*time.Second)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	// A lost reply waits out the re-read interval and the last scenario loads
+	// 60k rules, so the budget is wider than the slowest run needs.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	settings := service.RuntimeSettings{
 		MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
@@ -382,7 +384,8 @@ func TestDefaultRouteFollowsCore(t *testing.T) {
 		}
 		// Browsing alone must eventually see the delayed target, without an
 		// additional apply or restart, while repeated refreshes reuse the cache.
-		deadline := time.Now().Add(7 * time.Second)
+		// The wait has to outlast the interval the doubt caches for.
+		deadline := time.Now().Add(25 * time.Second)
 		for {
 			target, err := h.client.CatchAll(ctx)
 			if err != nil {
@@ -416,12 +419,15 @@ func TestDefaultRouteFollowsCore(t *testing.T) {
 		if target, err := h.client.CatchAll(ctx); err != nil || target != "DIRECT" {
 			t.Fatalf("target after core replacement = %q (error %v), want DIRECT", target, err)
 		}
-		time.Sleep(5100 * time.Millisecond)
+		// A replacement ends the doubt, so the read is kept rather than read
+		// again after the interval. Whether it stays kept past that interval is
+		// TestCatchAllDoubtIsBounded's check: waiting it out here would add the
+		// whole interval to this suite.
 		if target, err := h.client.CatchAll(ctx); err != nil || target != "DIRECT" {
 			t.Fatalf("cached target after core replacement = %q (error %v), want DIRECT", target, err)
 		}
 		if got := counter.reads.Load() - before; got != 1 {
-			t.Errorf("/rules requests after core replacement and short expiry = %d, want 1", got)
+			t.Errorf("/rules requests after core replacement = %d, want 1", got)
 		}
 	})
 

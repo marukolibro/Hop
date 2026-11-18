@@ -34,9 +34,19 @@ const (
 	// the app's helper call timeout, so a reload the helper runs fails with
 	// the helper's own error, not the app's.
 	reloadTimeout = 50 * time.Second
-	// uncertainRulesTTL limits repeated reads after a lost reload reply while
-	// still detecting a config the core finishes applying after that timeout.
-	uncertainRulesTTL = 5 * time.Second
+	// uncertainRulesTTL is how long a target read stays cached while a reload
+	// Hop gave up on may still be applying: short enough to notice a config the
+	// core finishes late, long enough not to read again for every refresh.
+	uncertainRulesTTL = 15 * time.Second
+	// uncertainRulesWindow bounds that doubt: a reload request can finish after
+	// its own timeout, since the core fetches each provider it lacks for 20 s
+	// and, on the platforms Hop ships, loads a kind at once, so a reload settles
+	// within some 40 s; a reload the helper runs stays under its 60 s call
+	// timeout. Past it, a reload Hop stopped waiting for cannot still be
+	// applying. This is an empirical bound, not an observed signal: a core that
+	// somehow took longer would leave the target stale until the next
+	// invalidation.
+	uncertainRulesWindow = 90 * time.Second
 )
 
 // APIError is a controller response that was not a success.
@@ -73,9 +83,21 @@ type ruleTargetCache struct {
 	generation uint64
 	loaded     bool
 	uncertain  bool
-	expiresAt  time.Time
-	target     string
-	loading    chan struct{}
+	// uncertainUntil ends the doubt a lost reload reply starts; past it the
+	// read target is kept until the next invalidation.
+	uncertainUntil time.Time
+	expiresAt      time.Time
+	target         string
+	loading        chan struct{}
+}
+
+// uncertainExpired reports that a reload Hop stopped waiting for can no longer
+// be applying: its window has passed, so what the core answers now is final.
+// The caller holds r.mu. A doubt that somehow has no window stays one, so a
+// state that failed to set it caches briefly instead of trusting a half applied
+// target.
+func (r *ruleTargetCache) uncertainExpired(now time.Time) bool {
+	return r.uncertain && !r.uncertainUntil.IsZero() && !now.Before(r.uncertainUntil)
 }
 
 // NewClient returns a client for the controller listening on addr
@@ -255,10 +277,18 @@ func (c *Client) CatchAll(ctx context.Context) (string, error) {
 		if current {
 			c.rules.loading = nil
 			if err == nil {
+				now := time.Now()
 				c.rules.target, c.rules.loaded = string(target), true
+				// A settled target is kept until the next invalidation. While a
+				// reload Hop gave up on may still be applying it is read again
+				// every uncertainRulesTTL, and the read that finds the window
+				// over is final.
 				c.rules.expiresAt = time.Time{}
-				if c.rules.uncertain {
-					c.rules.expiresAt = time.Now().Add(uncertainRulesTTL)
+				switch {
+				case c.rules.uncertainExpired(now):
+					c.rules.uncertain, c.rules.uncertainUntil = false, time.Time{}
+				case c.rules.uncertain:
+					c.rules.expiresAt = now.Add(uncertainRulesTTL)
 				}
 			}
 		}
@@ -278,15 +308,24 @@ func (c *Client) InvalidateRules() {
 
 // CoreChanged invalidates the target after a lifecycle operation. Without a
 // confirmed outcome, the core may still be applying a timed-out request: keep
-// successful reads briefly until a confirmed core replacement settles it.
-// A later reload can finish before the old request, so it cannot clear doubt.
+// successful reads briefly until uncertainRulesWindow passes or a confirmed
+// core replacement settles it. A later reload can finish before the old
+// request, so it cannot clear doubt.
 func (c *Client) CoreChanged(confirmed, replaced bool) {
 	c.rules.mu.Lock()
 	defer c.rules.mu.Unlock()
 	c.rules.generation++
 	c.rules.loaded, c.rules.target, c.rules.loading = false, "", nil
-	c.rules.uncertain = !confirmed || c.rules.uncertain && !replaced
 	c.rules.expiresAt = time.Time{}
+	switch {
+	case confirmed && replaced:
+		// A new process cannot finish the old one's request.
+		c.rules.uncertain, c.rules.uncertainUntil = false, time.Time{}
+	case !confirmed:
+		// The reply was lost: start, or extend, the window that bounds the
+		// doubt. A later reload leaves it alone, since it may finish first.
+		c.rules.uncertain, c.rules.uncertainUntil = true, time.Now().Add(uncertainRulesWindow)
+	}
 }
 
 // readCatchAll streams rules one at a time: a small profile can expand beyond
