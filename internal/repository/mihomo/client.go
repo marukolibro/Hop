@@ -34,6 +34,9 @@ const (
 	// the app's helper call timeout, so a reload the helper runs fails with
 	// the helper's own error, not the app's.
 	reloadTimeout = 50 * time.Second
+	// uncertainRulesTTL limits repeated reads after a lost reload reply while
+	// still detecting a config the core finishes applying after that timeout.
+	uncertainRulesTTL = 5 * time.Second
 )
 
 // APIError is a controller response that was not a success.
@@ -60,6 +63,19 @@ type Client struct {
 	// streams are the WebSocket streams open now, which CloseStreams ends.
 	streamsMu sync.Mutex
 	streams   map[*websocket.Conn]struct{}
+	rules     ruleTargetCache
+}
+
+// ruleTargetCache belongs to one core/config epoch, including an empty target.
+// An invalidation detaches an in-flight read so its old reply cannot be cached.
+type ruleTargetCache struct {
+	mu         sync.Mutex
+	generation uint64
+	loaded     bool
+	uncertain  bool
+	expiresAt  time.Time
+	target     string
+	loading    chan struct{}
 }
 
 // NewClient returns a client for the controller listening on addr
@@ -115,6 +131,11 @@ type delayEntry struct {
 	Delay int `json:"delay"`
 }
 
+type ruleEntry struct {
+	Type  string `json:"type"`
+	Proxy string `json:"proxy"`
+}
+
 // builtinTypes are the core's own outbounds, which are no proxy.
 var builtinTypes = []string{"Direct", "Reject", "RejectDrop", "Compatible", "Pass"}
 
@@ -148,9 +169,8 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 	return out.Version, nil
 }
 
-// Snapshot returns the policy groups in the order the profile declares
-// them, without the core's GLOBAL group and Hop's own probe groups, and each
-// proxy's latest delay.
+// Snapshot returns the policy groups in GLOBAL's order and each proxy's
+// latest delay. A custom GLOBAL may omit groups: those follow by name.
 func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	raw, err := c.do(ctx, c.timeout, http.MethodGet, "/proxies", nil, http.StatusOK)
 	if err != nil {
@@ -164,11 +184,24 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	if !ok {
 		return model.Snapshot{}, fmt.Errorf("mihomo proxies response has no %s group", globalGroup)
 	}
-	// GLOBAL lists every proxy and group in profile order.
+	// The core-generated GLOBAL lists every proxy and group in profile order.
+	// A profile can supply its own GLOBAL with only some of those options.
 	groups := make([]model.ProxyGroup, 0, len(global.All))
-	for _, name := range global.All {
+	names := slices.Clone(global.All)
+	seen := map[string]bool{globalGroup: true}
+	for _, name := range names {
+		seen[name] = true
+	}
+	var missing []string
+	for name, entry := range out.Proxies {
+		if !seen[name] && slices.Contains(groupTypes, entry.Type) {
+			missing = append(missing, name)
+		}
+	}
+	slices.Sort(missing)
+	for _, name := range append(names, missing...) {
 		entry := out.Proxies[name]
-		if !slices.Contains(groupTypes, entry.Type) {
+		if name == globalGroup || !slices.Contains(groupTypes, entry.Type) {
 			continue
 		}
 		groups = append(groups, model.ProxyGroup{Name: name, Type: entry.Type, Selected: entry.Now, Options: entry.All})
@@ -185,6 +218,132 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	}
 	globalGroupView := model.ProxyGroup{Name: globalGroup, Type: global.Type, Selected: global.Now, Options: slices.Clone(global.All)}
 	return model.Snapshot{Groups: groups, Global: globalGroupView, Delays: delays, Facts: facts}, nil
+}
+
+// CatchAll returns the first Match rule's target, or "" when there is none.
+// The target is cached until a config reload or core change invalidates it.
+// After an unconfirmed reload, successful reads are cached only briefly.
+// Concurrent readers share one request; failed reads are never cached.
+func (c *Client) CatchAll(ctx context.Context) (string, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		c.rules.mu.Lock()
+		if c.rules.loaded && (c.rules.expiresAt.IsZero() || time.Now().Before(c.rules.expiresAt)) {
+			target := c.rules.target
+			c.rules.mu.Unlock()
+			return target, nil
+		}
+		if loading := c.rules.loading; loading != nil {
+			c.rules.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-loading:
+				continue
+			}
+		}
+		generation := c.rules.generation
+		loading := make(chan struct{})
+		c.rules.loading = loading
+		c.rules.mu.Unlock()
+
+		target, err := c.do(ctx, c.timeout, http.MethodGet, "/rules", nil, http.StatusOK, readCatchAll)
+		c.rules.mu.Lock()
+		current := generation == c.rules.generation
+		if current {
+			c.rules.loading = nil
+			if err == nil {
+				c.rules.target, c.rules.loaded = string(target), true
+				c.rules.expiresAt = time.Time{}
+				if c.rules.uncertain {
+					c.rules.expiresAt = time.Now().Add(uncertainRulesTTL)
+				}
+			}
+		}
+		close(loading)
+		c.rules.mu.Unlock()
+		if current {
+			return string(target), err
+		}
+	}
+}
+
+// InvalidateRules begins a new epoch after core replacement. Config reloads
+// use CoreChanged instead: an older timed-out reload may still be pending.
+func (c *Client) InvalidateRules() {
+	c.CoreChanged(true, true)
+}
+
+// CoreChanged invalidates the target after a lifecycle operation. Without a
+// confirmed outcome, the core may still be applying a timed-out request: keep
+// successful reads briefly until a confirmed core replacement settles it.
+// A later reload can finish before the old request, so it cannot clear doubt.
+func (c *Client) CoreChanged(confirmed, replaced bool) {
+	c.rules.mu.Lock()
+	defer c.rules.mu.Unlock()
+	c.rules.generation++
+	c.rules.loaded, c.rules.target, c.rules.loading = false, "", nil
+	c.rules.uncertain = !confirmed || c.rules.uncertain && !replaced
+	c.rules.expiresAt = time.Time{}
+}
+
+// readCatchAll streams rules one at a time: a small profile can expand beyond
+// maxBodySize in the controller's JSON, so buffering that response truncates it.
+func readCatchAll(body io.Reader) ([]byte, error) {
+	decoder := json.NewDecoder(body)
+	token, err := decoder.Token()
+	if err != nil {
+		return nil, err
+	}
+	if token != json.Delim('{') {
+		return nil, errors.New("mihomo rules response is not an object")
+	}
+	found := false
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		if key != "rules" {
+			var ignored json.RawMessage
+			if err := decoder.Decode(&ignored); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		if token != json.Delim('[') {
+			return nil, errors.New("mihomo rules response has no rules array")
+		}
+		found = true
+		for decoder.More() {
+			var rule ruleEntry
+			if err := decoder.Decode(&rule); err != nil {
+				return nil, err
+			}
+			if strings.EqualFold(rule.Type, "Match") {
+				if rule.Proxy == "" {
+					return nil, errors.New("mihomo Match rule has no target")
+				}
+				return []byte(rule.Proxy), nil
+			}
+		}
+		if _, err := decoder.Token(); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := decoder.Token(); err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, errors.New("mihomo rules response has no rules array")
+	}
+	return nil, nil
 }
 
 // TestProxyDelay measures one proxy against testURL and returns its delay in
@@ -248,6 +407,8 @@ func (c *Client) ApplyConfig(ctx context.Context, config []byte) error {
 		return fmt.Errorf("write mihomo config (path=%q): %w", c.configPath, err)
 	}
 	reloadErr := c.reload(ctx)
+	var apiErr *APIError
+	c.CoreChanged(reloadErr == nil || errors.As(reloadErr, &apiErr), false)
 	if reloadErr == nil {
 		return nil
 	}
@@ -340,8 +501,9 @@ func (c *Client) authHeader() http.Header {
 }
 
 // do sends one request and returns the response body. Any status other
-// than want is an *APIError.
-func (c *Client) do(ctx context.Context, timeout time.Duration, method string, path string, body []byte, want int) ([]byte, error) {
+// than want is an *APIError. readResponse optionally decodes a successful
+// response as a stream instead of buffering its body.
+func (c *Client) do(ctx context.Context, timeout time.Duration, method string, path string, body []byte, want int, readResponse ...func(io.Reader) ([]byte, error)) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, method, "http://"+c.addr+path, bytes.NewReader(body))
@@ -357,6 +519,13 @@ func (c *Client) do(ctx context.Context, timeout time.Duration, method string, p
 		return nil, fmt.Errorf("send mihomo request (method=%s path=%q): %w", method, path, err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == want && len(readResponse) > 0 {
+		decoded, err := readResponse[0](resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("decode mihomo response (method=%s path=%q): %w", method, path, err)
+		}
+		return decoded, nil
+	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
 	if err != nil {
 		return nil, fmt.Errorf("read mihomo response (method=%s path=%q status=%d): %w", method, path, resp.StatusCode, err)

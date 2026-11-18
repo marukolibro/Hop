@@ -17,6 +17,7 @@ import (
 type Controller interface {
 	Snapshot(ctx context.Context) (model.Snapshot, error)
 	Mode(ctx context.Context) (string, error)
+	CatchAll(ctx context.Context) (string, error)
 	SelectProxy(ctx context.Context, group string, proxy string) error
 	Connections(ctx context.Context) (model.Connections, error)
 	CloseConnection(ctx context.Context, id string) error
@@ -55,7 +56,14 @@ func (s *ProxyService) View(ctx context.Context) (model.ProxyView, error) {
 	if err != nil {
 		return model.ProxyView{}, err
 	}
-	return BuildView(snapshot, mode), nil
+	catchAll := ""
+	if mode == model.ModeRule {
+		catchAll, err = s.controller.CatchAll(ctx)
+		if err != nil {
+			return model.ProxyView{}, err
+		}
+	}
+	return BuildView(snapshot, mode, catchAll), nil
 }
 
 // TestDelay measures every node of group, those of the groups inside it

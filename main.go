@@ -168,7 +168,7 @@ func run() (err error) {
 		NodeDNSListen:      cfg.NodeDNSAddr,
 	}
 	client := mihomo.NewClient(cfg.ControllerAddr, cfg.Secret, mihomo.ConfigPath(cfg.HomeDir), &http.Client{}, controllerTimeout)
-	helperClient, geodataHelper, helperInstaller := helperAccess(instance)
+	helperClient, geodataHelper, helperInstaller := helperAccess(instance, client.CoreChanged)
 	tunFlag := service.NewTunFlag()
 	lanState := service.NewLANState()
 	fakeIPState := service.NewFakeIPExceptionsState()
@@ -441,11 +441,15 @@ type helperConnection interface {
 // waits longer, and its installer. An instance that does not use the helper
 // gets stand-ins that fail and reach nothing: its start and quit must not
 // stop the core the installed Hop runs under the helper.
-func helperAccess(instance config.Instance) (helperConnection, helperConnection, service.HelperInstall) {
+func helperAccess(instance config.Instance, coreChanged func(bool, bool)) (helperConnection, helperConnection, service.HelperInstall) {
 	if !instance.UsesHelper {
 		return helper.Absent{}, helper.Absent{}, helper.Absent{}
 	}
-	return helper.NewClient(helper.SocketPath, helperCallTimeout), helper.NewClient(helper.SocketPath, geodataHelperTimeout), helper.Installer{}
+	client := helper.NewClient(helper.SocketPath, helperCallTimeout)
+	geodata := helper.NewClient(helper.SocketPath, geodataHelperTimeout)
+	client.OnCoreChange(coreChanged)
+	geodata.OnCoreChange(coreChanged)
+	return client, geodata, helper.Installer{}
 }
 
 // runningInstance is the development instance under mygo dev and the

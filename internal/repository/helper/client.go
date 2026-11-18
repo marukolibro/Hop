@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"hop/internal/model"
@@ -29,6 +31,32 @@ type Client struct {
 	socket  string
 	http    *http.Client
 	timeout time.Duration
+	// coreMu protects the callback and the last observed core identity.
+	coreMu       sync.Mutex
+	onCoreChange func(bool, bool)
+	coreKnown    bool
+	corePid      int
+	coreRestart  model.CoreRestart
+}
+
+// OnCoreChange registers the controller cache invalidator before use. It runs
+// after core mutations and when Status observes a supervised core replacement.
+// confirmed distinguishes replies from transport failures; replaced is true
+// only for an acknowledged process change or an observed restart.
+func (c *Client) OnCoreChange(fn func(confirmed, replaced bool)) {
+	c.coreMu.Lock()
+	defer c.coreMu.Unlock()
+	c.onCoreChange = fn
+}
+
+func (c *Client) coreChanged(err error, replaced bool) {
+	c.coreMu.Lock()
+	fn := c.onCoreChange
+	c.coreMu.Unlock()
+	if fn != nil {
+		var apiErr *APIError
+		fn(err == nil || errors.As(err, &apiErr), err == nil && replaced)
+	}
 }
 
 // NewClient returns a client for the helper listening on socket.
@@ -63,6 +91,19 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	if err := c.call(ctx, http.MethodGet, "/status", nil, &body); err != nil {
 		return Status{}, err
 	}
+	c.coreMu.Lock()
+	restart := model.CoreRestart{}
+	if body.LastRestart != nil {
+		restart = *body.LastRestart
+	}
+	changed := c.coreKnown && c.corePid != body.Pid || body.LastRestart != nil && restart != c.coreRestart
+	c.coreKnown, c.corePid = true, body.Pid
+	c.coreRestart = restart
+	fn := c.onCoreChange
+	c.coreMu.Unlock()
+	if changed && fn != nil {
+		fn(true, true)
+	}
 	return body, nil
 }
 
@@ -78,25 +119,33 @@ func (c *Client) InstallCore(ctx context.Context, archive model.CoreArchive, pro
 // those in geodataDir and, when its core runs, restarts it on them: the core
 // reads the databases once, at start.
 func (c *Client) InstallGeodata(ctx context.Context, geodataDir string) error {
-	return c.call(ctx, http.MethodPost, "/geodata/install", GeodataInstallRequest{Path: geodataDir}, nil)
+	err := c.call(ctx, http.MethodPost, "/geodata/install", GeodataInstallRequest{Path: geodataDir}, nil)
+	c.coreChanged(err, true)
+	return err
 }
 
 // StartCore makes the helper write config as its core's config and start the
 // core on it, returning once the core's controller answers.
 func (c *Client) StartCore(ctx context.Context, config []byte) error {
-	return c.call(ctx, http.MethodPost, "/core/start", StartRequest{Config: string(config)}, nil)
+	err := c.call(ctx, http.MethodPost, "/core/start", StartRequest{Config: string(config)}, nil)
+	c.coreChanged(err, true)
+	return err
 }
 
 // ApplyConfig makes the helper's running core switch to config: the helper
 // writes it as the core's own config file and has the core reload it,
 // putting the previous file back when the core refuses it.
 func (c *Client) ApplyConfig(ctx context.Context, config []byte) error {
-	return c.call(ctx, http.MethodPost, "/core/apply", ApplyRequest{Config: string(config)}, nil)
+	err := c.call(ctx, http.MethodPost, "/core/apply", ApplyRequest{Config: string(config)}, nil)
+	c.coreChanged(err, false)
+	return err
 }
 
 // StopCore stops the helper's core and waits for it to exit.
 func (c *Client) StopCore(ctx context.Context) error {
-	return c.call(ctx, http.MethodPost, "/core/stop", nil, nil)
+	err := c.call(ctx, http.MethodPost, "/core/stop", nil, nil)
+	c.coreChanged(err, true)
+	return err
 }
 
 // call sends one request and decodes its answer into out, which is nil for

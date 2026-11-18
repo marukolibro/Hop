@@ -35,7 +35,8 @@ func TestCoreCrashRestart(t *testing.T) {
 		AppDir: appDir, HomeDir: filepath.Join(appDir, "mihomo"),
 		MixedPort: testMixedPort, ControllerAddr: testController, Secret: testSecret,
 	}
-	client := mihomo.NewClient(testController, testSecret, mihomo.ConfigPath(cfg.HomeDir), &http.Client{}, 5*time.Second)
+	rules := &ruleCounter{RoundTripper: http.DefaultTransport.(*http.Transport).Clone()}
+	client := mihomo.NewClient(testController, testSecret, mihomo.ConfigPath(cfg.HomeDir), &http.Client{Transport: rules}, 5*time.Second)
 	settings := service.RuntimeSettings{
 		MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
 		BindAddress: "127.0.0.1", LogLevel: "warning", BootstrapGroupName: "Hop", Mode: model.ModeRule,
@@ -57,6 +58,9 @@ func TestCoreCrashRestart(t *testing.T) {
 			t.Errorf("stop core: %v", err)
 		}
 	}()
+	if target, err := client.CatchAll(ctx); err != nil || target != "Hop" {
+		t.Fatalf("initial rule target = %q (error %v), want Hop", target, err)
+	}
 
 	// The pid Hop recorded, and none other, is the child this test kills.
 	raw, err := os.ReadFile(filepath.Join(appDir, "mihomo.pid"))
@@ -112,5 +116,14 @@ func TestCoreCrashRestart(t *testing.T) {
 	}
 	if restarted == pid {
 		t.Errorf("the core runs as pid %d, the very one that was killed", pid)
+	}
+	beforeRules := rules.reads.Load()
+	for range 2 {
+		if target, err := client.CatchAll(ctx); err != nil || target != "Hop" {
+			t.Fatalf("restarted rule target = %q (error %v), want Hop", target, err)
+		}
+	}
+	if got := rules.reads.Load() - beforeRules; got != 1 {
+		t.Errorf("/rules requests after supervised restart = %d, want 1", got)
 	}
 }
