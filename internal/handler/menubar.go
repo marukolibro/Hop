@@ -57,8 +57,10 @@ type MenuBar struct {
 	// arcs are the mark's arcs alone, drawn once; each frame of a hop and
 	// each rate is the mark built over them.
 	arcs *image.NRGBA
-	// speed is the rate column beside the mark, nil while the speed is off.
-	speed *image.RGBA
+	// speed is the rate column beside the mark, nil while the speed is off;
+	// speedPainter draws it.
+	speed        *image.RGBA
+	speedPainter *traySpeedPainter
 	// sample is the latest traffic, drawn when a hop ends.
 	sample model.Traffic
 	// hopping says the ball is hopping in the icon.
@@ -78,7 +80,7 @@ func NewMenuBar(win *mygo.Window, d *Dashboard) (*MenuBar, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create menu bar item: %w", err)
 	}
-	m := &MenuBar{tray: tray, win: win, d: d, mark: icon, arcs: arcs}
+	m := &MenuBar{tray: tray, win: win, d: d, mark: icon, arcs: arcs, speedPainter: newTraySpeedPainter()}
 	tray.OnClick(m.togglePanel)
 	tray.OnRightClick(m.popUpMenu)
 	d.OnTraffic(m.showSpeed)
@@ -235,7 +237,7 @@ func (m *MenuBar) drawRest() {
 	if up+"/"+down == m.shown {
 		return
 	}
-	speed := traySpeedColumn(up, down)
+	speed := m.speedPainter.draw(up, down)
 	icon, err := traySpeedIcon(markImage(m.arcs, 0), speed)
 	if err != nil {
 		slog.Warn("draw menu bar speed", "error", err)
