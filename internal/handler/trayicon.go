@@ -288,18 +288,41 @@ const (
 	trayScale = 2
 )
 
-// traySpeedColumn draws the upload and download rates, black on transparent,
-// in the column the menu bar item keeps at one width.
-func traySpeedColumn(up string, down string) *image.RGBA {
-	return ui.Render(func(c *ui.Context) {
+// traySpeedPainter draws the upload and download rates, black on transparent,
+// in the column the menu bar item keeps at one width. It keeps one renderer
+// for the app's life: every ui.Render makes a text system that loads the
+// app's fonts (RegisterFonts) again and never lets them go, about 1 MB a
+// call, and the column is drawn again every second the speed changes. It runs
+// on the main thread with the MenuBar.
+type traySpeedPainter struct {
+	tester *ui.Tester
+	rates  [2]string
+}
+
+func newTraySpeedPainter() *traySpeedPainter {
+	p := &traySpeedPainter{}
+	p.tester = ui.NewTester(func(c *ui.Context) {
 		c.Root().Background(ui.Transparent)
 		ui.Column(c).Fill().Justify(ui.Center).Children(func() {
-			for _, rate := range []string{up, down} {
+			for _, rate := range p.rates {
 				ui.Text(c, rate).FontSize(traySpeedFont).FontWeight(weightSemibold).FontFeatures("tnum").
 					LineHeight(1.08).TextColor(ui.RGBA(0, 0, 0, 1)).TextAlign(ui.End).NoWrap()
 			}
 		})
-	}, traySpeedWidth, trayHeight, trayScale)
+	}, traySpeedWidth, trayHeight)
+	p.tester.SetScale(trayScale)
+	return p
+}
+
+// draw returns the column with up over down: a copy, since the renderer
+// draws the next column into the same pixels.
+func (p *traySpeedPainter) draw(up string, down string) *image.RGBA {
+	p.rates = [2]string{up, down}
+	p.tester.Frame()
+	frame := p.tester.Image()
+	column := image.NewRGBA(frame.Rect)
+	draw.Draw(column, column.Rect, frame, frame.Rect.Min, draw.Src)
+	return column
 }
 
 // traySpeedIcon draws mark with speed beside it, as the PNG the menu bar
