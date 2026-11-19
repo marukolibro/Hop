@@ -52,7 +52,7 @@ func modeLabels() []string {
 
 // ProxyService is what the dashboard needs to show and switch nodes.
 type ProxyService interface {
-	View(ctx context.Context) (model.ProxyView, error)
+	View(ctx context.Context, epoch int) (model.ProxyView, error)
 	Select(ctx context.Context, group string, proxy string) error
 	TestDelay(ctx context.Context, group string, timeout time.Duration) error
 	TestAutoGroups(ctx context.Context, timeout time.Duration) error
@@ -666,7 +666,7 @@ func (d *Dashboard) stopTesting() {
 // loadView reads the node view; a reply from an epoch older than the current one
 // is dropped, so state from an old profile cannot cover the new one.
 func (d *Dashboard) loadView(ctx context.Context, win Updater, gen int) {
-	view, err := d.services.Proxies.View(ctx)
+	view, err := d.services.Proxies.View(ctx, gen)
 	win.Update(func() {
 		if gen != d.viewGen {
 			return

@@ -156,7 +156,6 @@ func (r *Runner) launchAndWait(ctx context.Context, binary string) error {
 // waitReady waits for the controller; a core that never answers is stopped,
 // so a failed start leaves nothing running.
 func (r *Runner) waitReady(ctx context.Context) error {
-	defer r.client.InvalidateRules()
 	if err := WaitReady(ctx, r.client); err != nil {
 		if endErr := r.end(); endErr != nil {
 			slog.Warn("mihomo exited after failed start", "error", endErr)

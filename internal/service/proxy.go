@@ -38,6 +38,17 @@ const (
 // ProxyService exposes the proxy groups and live traffic of the core.
 type ProxyService struct {
 	controller Controller
+	// catchAll is the Match rule's target as the epoch it was read in last
+	// had it; a profile's rules change only with a new epoch.
+	catchAllMu sync.Mutex
+	catchAll   epochTarget
+}
+
+// epochTarget is a value read from the core in one runtime epoch.
+type epochTarget struct {
+	epoch  int
+	target string
+	read   bool
 }
 
 // NewProxyService returns a service backed by controller.
@@ -46,8 +57,10 @@ func NewProxyService(controller Controller) *ProxyService {
 }
 
 // View returns the groups, their nodes by region, the account details and
-// the route traffic takes now.
-func (s *ProxyService) View(ctx context.Context) (model.ProxyView, error) {
+// the route traffic takes now. epoch is the caller's runtime epoch, which
+// moves whenever the core's config or process may have changed: the rules
+// are read once in each, not again for the views a delay test refreshes.
+func (s *ProxyService) View(ctx context.Context, epoch int) (model.ProxyView, error) {
 	snapshot, err := s.controller.Snapshot(ctx)
 	if err != nil {
 		return model.ProxyView{}, err
@@ -58,12 +71,33 @@ func (s *ProxyService) View(ctx context.Context) (model.ProxyView, error) {
 	}
 	catchAll := ""
 	if mode == model.ModeRule {
-		catchAll, err = s.controller.CatchAll(ctx)
+		catchAll, err = s.catchAllIn(ctx, epoch)
 		if err != nil {
 			return model.ProxyView{}, err
 		}
 	}
 	return BuildView(snapshot, mode, catchAll), nil
+}
+
+// catchAllIn returns the Match rule's target, read from the core once per
+// epoch; a failed read is not kept.
+func (s *ProxyService) catchAllIn(ctx context.Context, epoch int) (string, error) {
+	s.catchAllMu.Lock()
+	cached := s.catchAll
+	s.catchAllMu.Unlock()
+	if cached.read && cached.epoch == epoch {
+		return cached.target, nil
+	}
+	target, err := s.controller.CatchAll(ctx)
+	if err != nil {
+		return "", err
+	}
+	s.catchAllMu.Lock()
+	defer s.catchAllMu.Unlock()
+	if !s.catchAll.read || epoch >= s.catchAll.epoch {
+		s.catchAll = epochTarget{epoch: epoch, target: target, read: true}
+	}
+	return target, nil
 }
 
 // TestDelay measures every node of group, those of the groups inside it

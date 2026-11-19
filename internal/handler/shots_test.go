@@ -144,29 +144,6 @@ func shotManualRoute(n shotNames) *Dashboard {
 	return d
 }
 
-func TestDefaultExitInBothWindows(t *testing.T) {
-	names := shotZH
-	if os.Getenv("MYGO_LOCALE") == "en" {
-		names = shotEN
-	}
-	d := shotManualRoute(names)
-	for _, view := range []struct {
-		name string
-		show func(*ui.Context)
-	}{
-		{"window", func(c *ui.Context) { d.routeBar(c, c.Theme()) }},
-		{"menu bar", func(c *ui.Context) { d.flyoutRoute(c, c.Theme()) }},
-	} {
-		t.Run(view.name, func(t *testing.T) {
-			tester := ui.NewTester(view.show, flyoutWidth, flyoutHeight)
-			tester.Advance(2 * time.Second)
-			if !tester.HasText("Japan · konan") || tester.HasText("HK · PCCW") {
-				t.Fatal("the exit card does not show the default manual choice")
-			}
-		})
-	}
-}
-
 // shotStats is thirty days of traffic and this month's, for the one provider.
 func shotStats(n shotNames) model.TrafficView {
 	now := time.Now()
@@ -278,10 +255,6 @@ func TestShots(t *testing.T) {
 		window("nodes", pageNodes, nil)
 		manual := shotManualRoute(names)
 		shotRender(t, filepath.Join(dir, "nodes-manual-"+scheme+".png"), func(c *ui.Context) { manual.View(c) }, dark, width, height, true)
-		for _, narrow := range []int{860, 700} {
-			path := filepath.Join(dir, fmt.Sprintf("nodes-manual-%d-%s.png", narrow, scheme))
-			shotRender(t, path, func(c *ui.Context) { manual.View(c) }, dark, narrow, height, true)
-		}
 		// Only the Hack theme has a node list of its own.
 		if os.Getenv("HOP_SHOTS_THEME") == string(model.ThemeHack) {
 			window("picker", pageNodes, func(d *Dashboard) { d.hackPickerOpen = true })

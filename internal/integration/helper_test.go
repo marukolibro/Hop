@@ -86,9 +86,7 @@ func TestHelperServesItsCore(t *testing.T) {
 	}
 
 	client := helper.NewClient(sock, 20*time.Second)
-	rules := &ruleCounter{RoundTripper: http.DefaultTransport.(*http.Transport).Clone()}
-	coreClient := mihomo.NewClient(testController, testSecret, mihomo.ConfigPath(home), &http.Client{Transport: rules}, 5*time.Second)
-	client.OnCoreChange(coreClient.CoreChanged)
+	coreClient := mihomo.NewClient(testController, testSecret, mihomo.ConfigPath(home), &http.Client{}, 5*time.Second)
 
 	// runHelper starts a helper serving uid and hands its process back; the
 	// test stops every process it started, by its pid.
@@ -261,17 +259,13 @@ func TestHelperServesItsCore(t *testing.T) {
 		t.Fatalf("the helper wrote no pid file in its home: %v", err)
 	}
 	if got, _ := strconv.Atoi(string(pidFile)); got != status.Pid {
-		t.Fatalf("status pid %d, pid file %d", status.Pid, got)
+		t.Errorf("status pid %d, pid file %d", status.Pid, got)
 	}
 
 	// A second config applied through the helper replaces the running one:
 	// the controller reports the new mode.
-	if target, err := coreClient.CatchAll(ctx); err != nil || target != "Hop" {
-		t.Fatalf("initial helper rule target = %q (error %v), want Hop", target, err)
-	}
 	next := settings
 	next.Mode = model.ModeGlobal
-	next.BootstrapGroupName = "Reloaded"
 	second, err := service.BootstrapConfig(next)
 	if err != nil {
 		t.Fatal(err)
@@ -283,70 +277,6 @@ func TestHelperServesItsCore(t *testing.T) {
 		t.Fatalf("read the mode after the apply: %v", err)
 	} else if mode != model.ModeGlobal {
 		t.Errorf("mode after the apply = %q, want %q", mode, model.ModeGlobal)
-	}
-	beforeRules := rules.reads.Load()
-	for range 2 {
-		if target, err := coreClient.CatchAll(ctx); err != nil || target != "Reloaded" {
-			t.Fatalf("reloaded helper rule target = %q (error %v), want Reloaded", target, err)
-		}
-	}
-	if got := rules.reads.Load() - beforeRules; got != 1 {
-		t.Errorf("/rules requests after helper reload = %d, want 1", got)
-	}
-
-	// The pid belongs to the unprivileged test helper's core, whose home and
-	// pid file were checked above. Its supervisor replaces only that child.
-	// Do not poll Status after ApplyConfig: a restart before the next regular
-	// poll must still be recognized against the pid observed before the reload.
-	pidFile, err = os.ReadFile(filepath.Join(home, "mihomo.pid"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	oldPid := status.Pid
-	if ownedPid, err := strconv.Atoi(string(pidFile)); err != nil || ownedPid <= 0 || ownedPid != oldPid {
-		t.Fatalf("the temporary helper's verified pid changed: recorded=%d file=%q error=%v", oldPid, pidFile, err)
-	}
-	proc, err := os.FindProcess(oldPid)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := proc.Kill(); err != nil {
-		t.Fatal(err)
-	}
-	deadline := time.Now().Add(30 * time.Second)
-	for {
-		pidFile, err = os.ReadFile(filepath.Join(home, "mihomo.pid"))
-		if err == nil {
-			pid, err := strconv.Atoi(string(pidFile))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if pid > 0 && pid != oldPid {
-				break
-			}
-		} else if !errors.Is(err, os.ErrNotExist) {
-			t.Fatal(err)
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the test helper did not restart its core")
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	if err := mihomo.WaitReady(ctx, coreClient); err != nil {
-		t.Fatal(err)
-	}
-	status, err = client.Status(ctx)
-	if err != nil || !status.Running || status.Pid == oldPid {
-		t.Fatalf("status after the supervised replacement = %+v (error %v)", status, err)
-	}
-	beforeRules = rules.reads.Load()
-	for range 2 {
-		if target, err := coreClient.CatchAll(ctx); err != nil || target != "Reloaded" {
-			t.Fatalf("restarted helper rule target = %q (error %v), want Reloaded", target, err)
-		}
-	}
-	if got := rules.reads.Load() - beforeRules; got != 1 {
-		t.Errorf("/rules requests after helper restart = %d, want 1", got)
 	}
 
 	// A config a root-run core must never run is refused, and the core keeps

@@ -34,19 +34,6 @@ const (
 	// the app's helper call timeout, so a reload the helper runs fails with
 	// the helper's own error, not the app's.
 	reloadTimeout = 50 * time.Second
-	// uncertainRulesTTL is how long a target read stays cached while a reload
-	// Hop gave up on may still be applying: short enough to notice a config the
-	// core finishes late, long enough not to read again for every refresh.
-	uncertainRulesTTL = 15 * time.Second
-	// uncertainRulesWindow bounds that doubt: a reload request can finish after
-	// its own timeout, since the core fetches each provider it lacks for 20 s
-	// and, on the platforms Hop ships, loads a kind at once, so a reload settles
-	// within some 40 s; a reload the helper runs stays under its 60 s call
-	// timeout. Past it, a reload Hop stopped waiting for cannot still be
-	// applying. This is an empirical bound, not an observed signal: a core that
-	// somehow took longer would leave the target stale until the next
-	// invalidation.
-	uncertainRulesWindow = 90 * time.Second
 )
 
 // APIError is a controller response that was not a success.
@@ -73,31 +60,6 @@ type Client struct {
 	// streams are the WebSocket streams open now, which CloseStreams ends.
 	streamsMu sync.Mutex
 	streams   map[*websocket.Conn]struct{}
-	rules     ruleTargetCache
-}
-
-// ruleTargetCache belongs to one core/config epoch, including an empty target.
-// An invalidation detaches an in-flight read so its old reply cannot be cached.
-type ruleTargetCache struct {
-	mu         sync.Mutex
-	generation uint64
-	loaded     bool
-	uncertain  bool
-	// uncertainUntil ends the doubt a lost reload reply starts; past it the
-	// read target is kept until the next invalidation.
-	uncertainUntil time.Time
-	expiresAt      time.Time
-	target         string
-	loading        chan struct{}
-}
-
-// uncertainExpired reports that a reload Hop stopped waiting for can no longer
-// be applying: its window has passed, so what the core answers now is final.
-// The caller holds r.mu. A doubt that somehow has no window stays one, so a
-// state that failed to set it caches briefly instead of trusting a half applied
-// target.
-func (r *ruleTargetCache) uncertainExpired(now time.Time) bool {
-	return r.uncertain && !r.uncertainUntil.IsZero() && !now.Before(r.uncertainUntil)
 }
 
 // NewClient returns a client for the controller listening on addr
@@ -242,147 +204,83 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	return model.Snapshot{Groups: groups, Global: globalGroupView, Delays: delays, Facts: facts}, nil
 }
 
-// CatchAll returns the first Match rule's target, or "" when there is none.
-// The target is cached until a config reload or core change invalidates it.
-// After an unconfirmed reload, successful reads are cached only briefly.
-// Concurrent readers share one request; failed reads are never cached.
+// CatchAll returns the target of the first Match rule, where the core sends
+// what no other rule matched, or "" when the rules have none. It reads the
+// rules as a stream and stops at that rule: a profile's rules can be far
+// larger in the controller's JSON than maxBodySize.
 func (c *Client) CatchAll(ctx context.Context) (string, error) {
-	for {
-		if err := ctx.Err(); err != nil {
-			return "", err
-		}
-		c.rules.mu.Lock()
-		if c.rules.loaded && (c.rules.expiresAt.IsZero() || time.Now().Before(c.rules.expiresAt)) {
-			target := c.rules.target
-			c.rules.mu.Unlock()
-			return target, nil
-		}
-		if loading := c.rules.loading; loading != nil {
-			c.rules.mu.Unlock()
-			select {
-			case <-ctx.Done():
-				return "", ctx.Err()
-			case <-loading:
-				continue
-			}
-		}
-		generation := c.rules.generation
-		loading := make(chan struct{})
-		c.rules.loading = loading
-		c.rules.mu.Unlock()
-
-		target, err := c.do(ctx, c.timeout, http.MethodGet, "/rules", nil, http.StatusOK, readCatchAll)
-		c.rules.mu.Lock()
-		current := generation == c.rules.generation
-		if current {
-			c.rules.loading = nil
-			if err == nil {
-				now := time.Now()
-				c.rules.target, c.rules.loaded = string(target), true
-				// A settled target is kept until the next invalidation. While a
-				// reload Hop gave up on may still be applying it is read again
-				// every uncertainRulesTTL, and the read that finds the window
-				// over is final.
-				c.rules.expiresAt = time.Time{}
-				switch {
-				case c.rules.uncertainExpired(now):
-					c.rules.uncertain, c.rules.uncertainUntil = false, time.Time{}
-				case c.rules.uncertain:
-					c.rules.expiresAt = now.Add(uncertainRulesTTL)
-				}
-			}
-		}
-		close(loading)
-		c.rules.mu.Unlock()
-		if current {
-			return string(target), err
-		}
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	resp, err := c.send(ctx, http.MethodGet, "/rules", nil)
+	if err != nil {
+		return "", err
 	}
-}
-
-// InvalidateRules begins a new epoch after core replacement. Config reloads
-// use CoreChanged instead: an older timed-out reload may still be pending.
-func (c *Client) InvalidateRules() {
-	c.CoreChanged(true, true)
-}
-
-// CoreChanged invalidates the target after a lifecycle operation. Without a
-// confirmed outcome, the core may still be applying a timed-out request: keep
-// successful reads briefly until uncertainRulesWindow passes or a confirmed
-// core replacement settles it. A later reload can finish before the old
-// request, so it cannot clear doubt.
-func (c *Client) CoreChanged(confirmed, replaced bool) {
-	c.rules.mu.Lock()
-	defer c.rules.mu.Unlock()
-	c.rules.generation++
-	c.rules.loaded, c.rules.target, c.rules.loading = false, "", nil
-	c.rules.expiresAt = time.Time{}
-	switch {
-	case confirmed && replaced:
-		// A new process cannot finish the old one's request.
-		c.rules.uncertain, c.rules.uncertainUntil = false, time.Time{}
-	case !confirmed:
-		// The reply was lost: start, or extend, the window that bounds the
-		// doubt. A later reload leaves it alone, since it may finish first.
-		c.rules.uncertain, c.rules.uncertainUntil = true, time.Now().Add(uncertainRulesWindow)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", apiError(http.MethodGet, "/rules", resp)
 	}
+	target, err := readCatchAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("decode mihomo response (method=GET path=\"/rules\"): %w", err)
+	}
+	return target, nil
 }
 
-// readCatchAll streams rules one at a time: a small profile can expand beyond
-// maxBodySize in the controller's JSON, so buffering that response truncates it.
-func readCatchAll(body io.Reader) ([]byte, error) {
+// readCatchAll decodes the rules of a /rules reply one at a time up to the
+// first Match rule and returns its target.
+func readCatchAll(body io.Reader) (string, error) {
 	decoder := json.NewDecoder(body)
 	token, err := decoder.Token()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if token != json.Delim('{') {
-		return nil, errors.New("mihomo rules response is not an object")
+		return "", errors.New("mihomo rules response is not an object")
 	}
 	found := false
 	for decoder.More() {
 		key, err := decoder.Token()
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		if key != "rules" {
 			var ignored json.RawMessage
 			if err := decoder.Decode(&ignored); err != nil {
-				return nil, err
+				return "", err
 			}
 			continue
 		}
 		token, err := decoder.Token()
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		if token != json.Delim('[') {
-			return nil, errors.New("mihomo rules response has no rules array")
+			return "", errors.New("mihomo rules response has no rules array")
 		}
 		found = true
 		for decoder.More() {
 			var rule ruleEntry
 			if err := decoder.Decode(&rule); err != nil {
-				return nil, err
+				return "", err
 			}
 			if strings.EqualFold(rule.Type, "Match") {
 				if rule.Proxy == "" {
-					return nil, errors.New("mihomo Match rule has no target")
+					return "", errors.New("mihomo Match rule has no target")
 				}
-				return []byte(rule.Proxy), nil
+				return rule.Proxy, nil
 			}
 		}
 		if _, err := decoder.Token(); err != nil {
-			return nil, err
+			return "", err
 		}
 	}
 	if _, err := decoder.Token(); err != nil {
-		return nil, err
+		return "", err
 	}
 	if !found {
-		return nil, errors.New("mihomo rules response has no rules array")
+		return "", errors.New("mihomo rules response has no rules array")
 	}
-	return nil, nil
+	return "", nil
 }
 
 // TestProxyDelay measures one proxy against testURL and returns its delay in
@@ -446,8 +344,6 @@ func (c *Client) ApplyConfig(ctx context.Context, config []byte) error {
 		return fmt.Errorf("write mihomo config (path=%q): %w", c.configPath, err)
 	}
 	reloadErr := c.reload(ctx)
-	var apiErr *APIError
-	c.CoreChanged(reloadErr == nil || errors.As(reloadErr, &apiErr), false)
 	if reloadErr == nil {
 		return nil
 	}
@@ -540,11 +436,28 @@ func (c *Client) authHeader() http.Header {
 }
 
 // do sends one request and returns the response body. Any status other
-// than want is an *APIError. readResponse optionally decodes a successful
-// response as a stream instead of buffering its body.
-func (c *Client) do(ctx context.Context, timeout time.Duration, method string, path string, body []byte, want int, readResponse ...func(io.Reader) ([]byte, error)) ([]byte, error) {
+// than want is an *APIError.
+func (c *Client) do(ctx context.Context, timeout time.Duration, method string, path string, body []byte, want int) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	resp, err := c.send(ctx, method, path, body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != want {
+		return nil, apiError(method, path, resp)
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
+	if err != nil {
+		return nil, fmt.Errorf("read mihomo response (method=%s path=%q status=%d): %w", method, path, resp.StatusCode, err)
+	}
+	return raw, nil
+}
+
+// send sends one request and returns the response, whose body the caller
+// closes.
+func (c *Client) send(ctx context.Context, method string, path string, body []byte) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, "http://"+c.addr+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("build mihomo request (method=%s path=%q): %w", method, path, err)
@@ -557,20 +470,14 @@ func (c *Client) do(ctx context.Context, timeout time.Duration, method string, p
 	if err != nil {
 		return nil, fmt.Errorf("send mihomo request (method=%s path=%q): %w", method, path, err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode == want && len(readResponse) > 0 {
-		decoded, err := readResponse[0](resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("decode mihomo response (method=%s path=%q): %w", method, path, err)
-		}
-		return decoded, nil
-	}
+	return resp, nil
+}
+
+// apiError is the *APIError of a response with an unexpected status.
+func apiError(method string, path string, resp *http.Response) error {
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
 	if err != nil {
-		return nil, fmt.Errorf("read mihomo response (method=%s path=%q status=%d): %w", method, path, resp.StatusCode, err)
+		return fmt.Errorf("read mihomo response (method=%s path=%q status=%d): %w", method, path, resp.StatusCode, err)
 	}
-	if resp.StatusCode != want {
-		return nil, &APIError{Method: method, Path: path, Status: resp.StatusCode, Body: strings.TrimSpace(string(raw))}
-	}
-	return raw, nil
+	return &APIError{Method: method, Path: path, Status: resp.StatusCode, Body: strings.TrimSpace(string(raw))}
 }

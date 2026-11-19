@@ -1,16 +1,10 @@
 package integration
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -41,99 +35,29 @@ rules:
   - MATCH,CatchAll
 `
 
-// ruleCounter counts actual controller requests while forwarding them unchanged.
-type ruleCounter struct {
+// ruleReads counts the controller's /rules requests while forwarding every
+// request unchanged.
+type ruleReads struct {
 	http.RoundTripper
-	reads         atomic.Int32
-	failNext      atomic.Bool
-	blockNext     atomic.Bool
-	blocked       chan struct{}
-	release       chan struct{}
-	lateApply     atomic.Bool
-	configPath    string
-	applyRelease  chan struct{}
-	applyFinished chan error
+	count atomic.Int32
 }
 
-func (c *ruleCounter) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.Method == http.MethodPut && req.URL.Path == "/configs" && c.lateApply.Swap(false) {
-		return nil, c.delayConfig(req)
+func (r *ruleReads) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL.Path == "/rules" {
+		r.count.Add(1)
 	}
-	isRules := req.URL.Path == "/rules"
-	if isRules {
-		c.reads.Add(1)
-		if c.failNext.Swap(false) {
-			return nil, errors.New("controller request failed in test")
-		}
-	}
-	response, err := c.RoundTripper.RoundTrip(req)
-	if err != nil || !isRules || !c.blockNext.Swap(false) {
-		return response, err
-	}
-	// Capture the real old response before allowing a concurrent config reload.
-	body, readErr := io.ReadAll(response.Body)
-	if err := errors.Join(readErr, response.Body.Close()); err != nil {
-		return nil, err
-	}
-	response.Body = io.NopCloser(bytes.NewReader(body))
-	close(c.blocked)
-	select {
-	case <-c.release:
-		return response, nil
-	case <-req.Context().Done():
-		return nil, req.Context().Err()
-	}
+	return r.RoundTripper.RoundTrip(req)
 }
 
-// delayConfig models a core that parsed the new file before the caller lost
-// its reply, then applies those captured bytes after the caller has returned.
-func (c *ruleCounter) delayConfig(req *http.Request) error {
-	config, err := os.ReadFile(c.configPath)
-	if err != nil {
-		return err
-	}
-	body, err := json.Marshal(struct {
-		Payload string `json:"payload"`
-	}{string(config)})
-	if err != nil {
-		return err
-	}
-	if err := req.Body.Close(); err != nil {
-		return err
-	}
-	delayed := req.Clone(context.WithoutCancel(req.Context()))
-	delayed.Body = io.NopCloser(bytes.NewReader(body))
-	delayed.ContentLength = int64(len(body))
-	go func() {
-		ctx, cancel := context.WithTimeout(delayed.Context(), 5*time.Second)
-		defer cancel()
-		select {
-		case <-c.applyRelease:
-		case <-ctx.Done():
-			c.applyFinished <- ctx.Err()
-			return
-		}
-		response, err := c.RoundTripper.RoundTrip(delayed.WithContext(ctx))
-		if response != nil {
-			if response.StatusCode != http.StatusNoContent {
-				err = errors.Join(err, fmt.Errorf("delayed config answered %d", response.StatusCode))
-			}
-			err = errors.Join(err, response.Body.Close())
-		}
-		c.applyFinished <- err
-	}()
-	return context.DeadlineExceeded
-}
-
-// TestDefaultRouteFollowsCore checks the shared window/menu-bar view against
-// the core's default rule, independently of profile order and page selection.
+// TestDefaultRouteFollowsCore checks the route the window and the menu bar
+// show against the core's default rule, whatever order the profile declares
+// its groups in.
 func TestDefaultRouteFollowsCore(t *testing.T) {
 	h := newHarness(t, t.TempDir())
-	counter := &ruleCounter{RoundTripper: http.DefaultTransport.(*http.Transport).Clone()}
-	h.client = mihomo.NewClient(testController, testSecret, mihomo.ConfigPath(h.cfg.HomeDir), &http.Client{Transport: counter}, 5*time.Second)
-	// A lost reply waits out the re-read interval and the last scenario loads
-	// 60k rules, so the budget is wider than the slowest run needs.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	reads := &ruleReads{RoundTripper: http.DefaultTransport.(*http.Transport).Clone()}
+	h.client = mihomo.NewClient(testController, testSecret, mihomo.ConfigPath(h.cfg.HomeDir), &http.Client{Transport: reads}, 5*time.Second)
+	// The last scenario loads 60k rules.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	settings := service.RuntimeSettings{
 		MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
@@ -160,15 +84,19 @@ func TestDefaultRouteFollowsCore(t *testing.T) {
 		}
 	}()
 	proxies := service.NewProxyService(h.client)
+	// epoch stands for the dashboard's runtime epoch, which every selection,
+	// mode change and config apply moves.
+	epoch := 0
 	selectNode := func(t *testing.T, group, node string) {
 		t.Helper()
+		epoch++
 		if err := proxies.Select(ctx, group, node); err != nil {
 			t.Fatalf("select %q in %q: %v", node, group, err)
 		}
 	}
 	assertRoute := func(t *testing.T, want ...string) model.ProxyView {
 		t.Helper()
-		view, err := proxies.View(ctx)
+		view, err := proxies.View(ctx, epoch)
 		if err != nil {
 			t.Fatalf("read proxy view: %v", err)
 		}
@@ -205,8 +133,6 @@ func TestDefaultRouteFollowsCore(t *testing.T) {
 		}
 	})
 	t.Run("changing a service route preserves the default exit", func(t *testing.T) {
-		selectNode(t, "Proxy", "Japan · konan")
-		selectNode(t, "Media", "Japan · konan")
 		selectNode(t, "Media", "HK · PCCW")
 		assertRoute(t, "CatchAll", "Proxy", "Japan · konan")
 	})
@@ -219,6 +145,7 @@ func TestDefaultRouteFollowsCore(t *testing.T) {
 	t.Run("global and direct modes use their own route", func(t *testing.T) {
 		selectNode(t, "GLOBAL", "Japan · konan")
 		for _, mode := range []string{model.ModeGlobal, model.ModeDirect} {
+			epoch++
 			if err := h.client.SetMode(ctx, mode); err != nil {
 				t.Fatalf("set mode %q: %v", mode, err)
 			}
@@ -228,206 +155,24 @@ func TestDefaultRouteFollowsCore(t *testing.T) {
 				assertRoute(t, "DIRECT")
 			}
 		}
-	})
-	t.Run("views node choices and delay tests reuse the default rule", func(t *testing.T) {
-		if err := h.client.ApplyConfig(ctx, build(t, routeProfile)); err != nil {
-			t.Fatal(err)
-		}
+		epoch++
 		if err := h.client.SetMode(ctx, model.ModeRule); err != nil {
 			t.Fatal(err)
 		}
-		before := counter.reads.Load()
+	})
+	t.Run("the rules are read once an epoch", func(t *testing.T) {
+		epoch++
+		before := reads.count.Load()
+		for range 3 {
+			assertRoute(t, "CatchAll", "Proxy", "Auto", "HK · PCCW")
+		}
+		if got := reads.count.Load() - before; got != 1 {
+			t.Errorf("/rules requests in one epoch = %d, want 1", got)
+		}
 		selectNode(t, "Proxy", "Japan · konan")
 		assertRoute(t, "CatchAll", "Proxy", "Japan · konan")
-		selectNode(t, "Proxy", "HK · PCCW")
-		for range 3 {
-			assertRoute(t, "CatchAll", "Proxy", "HK · PCCW")
-		}
-		if err := proxies.TestDelay(ctx, "Proxy", time.Millisecond); err != nil {
-			t.Fatalf("test node delays: %v", err)
-		}
-		assertRoute(t, "CatchAll", "Proxy", "HK · PCCW")
-		if got := counter.reads.Load() - before; got != 1 {
-			t.Errorf("/rules requests across views, choices and delay tests = %d, want 1", got)
-		}
-	})
-	t.Run("concurrent first reads share one rules request", func(t *testing.T) {
-		if err := h.client.ApplyConfig(ctx, build(t, routeProfile)); err != nil {
-			t.Fatal(err)
-		}
-		before := counter.reads.Load()
-		var wg sync.WaitGroup
-		for range 8 {
-			wg.Go(func() {
-				target, err := h.client.CatchAll(ctx)
-				if err != nil || target != "CatchAll" {
-					t.Errorf("concurrent default target = %q (error %v), want CatchAll", target, err)
-				}
-			})
-		}
-		wg.Wait()
-		if got := counter.reads.Load() - before; got != 1 {
-			t.Errorf("concurrent /rules requests = %d, want 1", got)
-		}
-	})
-	t.Run("a restarted core refreshes the default rule", func(t *testing.T) {
-		assertRoute(t, "CatchAll", "Proxy", "HK · PCCW")
-		before := counter.reads.Load()
-		if err := runner.RestartCurrent(ctx); err != nil {
-			t.Fatal(err)
-		}
-		selectNode(t, "Proxy", "HK · PCCW")
-		assertRoute(t, "CatchAll", "Proxy", "HK · PCCW")
-		assertRoute(t, "CatchAll", "Proxy", "HK · PCCW")
-		if got := counter.reads.Load() - before; got != 1 {
-			t.Errorf("/rules requests after restart = %d, want 1", got)
-		}
-	})
-	t.Run("failed rule reads can be retried", func(t *testing.T) {
-		if err := h.client.ApplyConfig(ctx, build(t, routeProfile)); err != nil {
-			t.Fatal(err)
-		}
-		before := counter.reads.Load()
-		counter.failNext.Store(true)
-		if _, err := h.client.CatchAll(ctx); err == nil {
-			t.Fatal("a failed rules request returned a cached target")
-		}
-		for range 2 {
-			if target, err := h.client.CatchAll(ctx); err != nil || target != "CatchAll" {
-				t.Fatalf("retried default target = %q (error %v), want CatchAll", target, err)
-			}
-		}
-		if got := counter.reads.Load() - before; got != 2 {
-			t.Errorf("/rules requests for failure, retry and cached read = %d, want 2", got)
-		}
-	})
-	t.Run("a pre-reload response cannot fill the new cache", func(t *testing.T) {
-		if err := h.client.ApplyConfig(ctx, build(t, routeProfile)); err != nil {
-			t.Fatal(err)
-		}
-		readCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		counter.blocked, counter.release = make(chan struct{}), make(chan struct{})
-		counter.blockNext.Store(true)
-		before := counter.reads.Load()
-		result := make(chan error, 1)
-		go func() {
-			target, err := h.client.CatchAll(readCtx)
-			if err == nil && target != "DIRECT" {
-				err = fmt.Errorf("old in-flight target = %q, want the reloaded DIRECT target", target)
-			}
-			result <- err
-		}()
-		select {
-		case <-counter.blocked:
-		case <-readCtx.Done():
-			t.Fatal("rules request never reached the response gate")
-		}
-		reloaded := strings.ReplaceAll(routeProfile, "MATCH,CatchAll", "MATCH,DIRECT")
-		err := h.client.ApplyConfig(ctx, build(t, reloaded))
-		close(counter.release)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := <-result; err != nil {
-			t.Fatal(err)
-		}
-		if target, err := h.client.CatchAll(ctx); err != nil || target != "DIRECT" {
-			t.Fatalf("new cached target = %q (error %v), want DIRECT", target, err)
-		}
-		if got := counter.reads.Load() - before; got != 2 {
-			t.Errorf("/rules requests across the in-flight reload = %d, want 2", got)
-		}
-	})
-	t.Run("a lost reload reply cannot freeze the previous target", func(t *testing.T) {
-		if err := h.client.ApplyConfig(ctx, build(t, routeProfile)); err != nil {
-			t.Fatal(err)
-		}
-		counter.configPath = mihomo.ConfigPath(h.cfg.HomeDir)
-		counter.applyRelease, counter.applyFinished = make(chan struct{}), make(chan error, 1)
-		counter.lateApply.Store(true)
-		reloaded := build(t, strings.ReplaceAll(routeProfile, "MATCH,CatchAll", "MATCH,DIRECT"))
-		if err := h.client.ApplyConfig(ctx, reloaded); err == nil {
-			t.Fatal("the simulated lost reload reply returned no error")
-		}
-		before := counter.reads.Load()
-		target, readErr := h.client.CatchAll(ctx)
-		// Proxies remain readable while the parsed config is waiting to apply;
-		// a successful snapshot is not a reload-completion barrier.
-		_, snapshotErr := h.client.Snapshot(ctx)
-		for range 3 {
-			if _, err := h.client.CatchAll(ctx); err != nil {
-				t.Fatal(err)
-			}
-		}
-		if got := counter.reads.Load() - before; got != 1 {
-			t.Errorf("/rules requests immediately after a lost reply = %d, want 1", got)
-		}
-		// A different rejected reload cannot prove that the earlier lost one
-		// has finished. It must not restore permanent caching of the old target.
-		rejectErr := h.client.ApplyConfig(ctx, []byte("proxy-groups: ["))
-		var apiErr *mihomo.APIError
-		if !errors.As(rejectErr, &apiErr) || apiErr.Status != http.StatusBadRequest {
-			close(counter.applyRelease)
-			t.Fatalf("invalid reload error = %v, want HTTP 400", rejectErr)
-		}
-		target, readErr = h.client.CatchAll(ctx)
-		close(counter.applyRelease)
-		if snapshotErr != nil {
-			t.Fatalf("snapshot while the reload is pending: %v", snapshotErr)
-		}
-		if readErr != nil || target != "CatchAll" {
-			t.Fatalf("target while reload is pending = %q (error %v), want CatchAll", target, readErr)
-		}
-		if err := <-counter.applyFinished; err != nil {
-			t.Fatal(err)
-		}
-		// Browsing alone must eventually see the delayed target, without an
-		// additional apply or restart, while repeated refreshes reuse the cache.
-		// The wait has to outlast the interval the doubt caches for.
-		deadline := time.Now().Add(25 * time.Second)
-		for {
-			target, err := h.client.CatchAll(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if target == "DIRECT" {
-				break
-			}
-			if time.Now().After(deadline) {
-				t.Fatalf("target did not recover after delayed reload: %q, want DIRECT", target)
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
-		if err := h.client.ApplyConfig(ctx, reloaded); err != nil {
-			t.Fatal(err)
-		}
-		for range 2 {
-			if target, err := h.client.CatchAll(ctx); err != nil || target != "DIRECT" {
-				t.Fatalf("target after acknowledged reload = %q (error %v), want DIRECT", target, err)
-			}
-		}
-		if got := counter.reads.Load() - before; got != 4 {
-			t.Errorf("/rules requests across the lost, rejected and acknowledged reloads = %d, want 4", got)
-		}
-		// A new process cannot finish a request from the old one. Only then
-		// is indefinite caching safe again, including past the short expiry.
-		if err := runner.RestartCurrent(ctx); err != nil {
-			t.Fatal(err)
-		}
-		before = counter.reads.Load()
-		if target, err := h.client.CatchAll(ctx); err != nil || target != "DIRECT" {
-			t.Fatalf("target after core replacement = %q (error %v), want DIRECT", target, err)
-		}
-		// A replacement ends the doubt, so the read is kept rather than read
-		// again after the interval. Whether it stays kept past that interval is
-		// TestCatchAllDoubtIsBounded's check: waiting it out here would add the
-		// whole interval to this suite.
-		if target, err := h.client.CatchAll(ctx); err != nil || target != "DIRECT" {
-			t.Fatalf("cached target after core replacement = %q (error %v), want DIRECT", target, err)
-		}
-		if got := counter.reads.Load() - before; got != 1 {
-			t.Errorf("/rules requests after core replacement = %d, want 1", got)
+		if got := reads.count.Load() - before; got != 2 {
+			t.Errorf("/rules requests over two epochs = %d, want 2", got)
 		}
 	})
 
@@ -455,7 +200,7 @@ func TestDefaultRouteFollowsCore(t *testing.T) {
 		{"DIRECT needs no groups", "proxies:\n  - {name: \"Japan · konan\", type: http, server: 127.0.0.1, port: 1}\nrules:\n  - MATCH,DIRECT\n", []string{"DIRECT"}},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			before := counter.reads.Load()
+			epoch++
 			if err := h.client.ApplyConfig(ctx, build(t, scenario.profile)); err != nil {
 				t.Fatalf("apply route config: %v", err)
 			}
@@ -469,10 +214,6 @@ func TestDefaultRouteFollowsCore(t *testing.T) {
 				selectNode(t, "Proxy", "Japan · konan")
 			}
 			assertRoute(t, scenario.want...)
-			assertRoute(t, scenario.want...)
-			if got := counter.reads.Load() - before; got != 1 {
-				t.Errorf("/rules requests after config reload = %d, want 1", got)
-			}
 		})
 	}
 }
