@@ -61,23 +61,25 @@ var (
 )
 
 // BuildView turns a snapshot of the core into what the dashboard shows for
-// mode. In rule mode the route starts from the profile's first group; in
-// global mode from the core's GLOBAL group, which then leads the tabs; in
-// direct mode traffic skips every proxy.
-func BuildView(snapshot model.Snapshot, mode string) model.ProxyView {
+// mode. Rule mode follows catchAll, the first Match rule's target, or DIRECT
+// when there is none. Global mode follows GLOBAL; direct mode skips proxies.
+func BuildView(snapshot model.Snapshot, mode string, catchAll string) model.ProxyView {
 	byName := make(map[string]model.ProxyGroup, len(snapshot.Groups)+1)
 	for _, g := range snapshot.Groups {
 		byName[g.Name] = g
 	}
+	if snapshot.Global.Name != "" {
+		byName[snapshot.Global.Name] = snapshot.Global
+	}
 	groups := snapshot.Groups
 	if mode == model.ModeGlobal {
 		groups = append([]model.ProxyGroup{snapshot.Global}, snapshot.Groups...)
-		byName[snapshot.Global.Name] = snapshot.Global
 	}
+	main := slices.IndexFunc(groups, func(g model.ProxyGroup) bool { return g.Type == model.GroupSelector })
 	view := model.ProxyView{Mode: mode, Groups: make([]model.GroupView, len(groups))}
 	for i, g := range groups {
 		view.Groups[i] = buildGroup(g, byName, snapshot)
-		view.Groups[i].Kind = groupKind(g, i, byName)
+		view.Groups[i].Kind = groupKind(g, i == main, byName)
 		view.Groups[i].Pick = pickLabel(g.Selected)
 		if exit := finalPick(g.Name, byName); exit != "" {
 			view.Groups[i].Exit = describeNode(exit, snapshot)
@@ -87,12 +89,17 @@ func BuildView(snapshot model.Snapshot, mode string) model.ProxyView {
 		view.Groups[0].Label = locales.ModeGlobal()
 	}
 	view.Plan = planNotes(snapshot.Groups)
+	start := catchAll
 	switch mode {
+	case model.ModeGlobal:
+		start = snapshot.Global.Name
 	case model.ModeDirect:
-		view.Route = []model.RouteHop{{Name: "DIRECT", Node: optionNode("DIRECT", byName, snapshot)}}
-	default:
-		view.Route = resolveRoute(groups, byName, snapshot)
+		start = "DIRECT"
 	}
+	if start == "" {
+		start = "DIRECT"
+	}
+	view.Route = resolveRoute(start, byName, snapshot)
 	return view
 }
 
@@ -127,13 +134,13 @@ func buildGroup(g model.ProxyGroup, groups map[string]model.ProxyGroup, snapshot
 	return view
 }
 
-// groupKind sorts a group by what it is for: the profile's first group is
-// the main route; groups that pick by delay are automatic; a selector over
+// groupKind sorts a group by what it is for: the first manual selector is
+// the main group; groups that pick by delay are automatic; a selector over
 // other groups only, such as "Netflix", routes a service; a selector named
 // after a flag lists a region's nodes.
-func groupKind(g model.ProxyGroup, index int, groups map[string]model.ProxyGroup) string {
+func groupKind(g model.ProxyGroup, main bool, groups map[string]model.ProxyGroup) string {
 	switch {
-	case index == 0:
+	case main:
 		return model.GroupKindMain
 	case slices.Contains(autoGroupTypes, g.Type):
 		return model.GroupKindAuto
@@ -336,18 +343,19 @@ func planNotes(groups []model.ProxyGroup) []string {
 	return notes
 }
 
-// resolveRoute follows the first group's choice through nested groups to
-// the proxy traffic actually leaves by.
-func resolveRoute(groups []model.ProxyGroup, byName map[string]model.ProxyGroup, snapshot model.Snapshot) []model.RouteHop {
-	if len(groups) == 0 {
-		return nil
-	}
+// resolveRoute follows start through nested groups to its final outbound.
+// A rule can name a node or built-in outbound without any groups at all.
+func resolveRoute(start string, byName map[string]model.ProxyGroup, snapshot model.Snapshot) []model.RouteHop {
 	var route []model.RouteHop
-	current := groups[0].Name
+	current := start
 	for len(route) <= len(byName) {
 		g, isGroup := byName[current]
 		if !isGroup {
-			return append(route, model.RouteHop{Name: current, Node: describeNode(current, snapshot)})
+			node := describeNode(current, snapshot)
+			if current == "DIRECT" {
+				node = optionNode(current, byName, snapshot)
+			}
+			return append(route, model.RouteHop{Name: current, Node: node})
 		}
 		route = append(route, model.RouteHop{Name: current, Group: true})
 		if g.Selected == "" {

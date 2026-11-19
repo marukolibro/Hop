@@ -107,7 +107,7 @@ func shotDashboard(n shotNames, page int) *Dashboard {
 		{Name: n.telegram, Type: model.GroupSelector, Selected: n.main, Options: []string{n.main}},
 		{Name: n.google, Type: model.GroupSelector, Selected: n.main, Options: []string{n.main}},
 	}
-	d.view = service.BuildView(snap, model.ModeRule)
+	d.view = service.BuildView(snap, model.ModeRule, n.main)
 	d.activeGroup = n.main
 	d.exitIP = exitIPState{status: exitIPReady, ip: model.ExitIP{Address: netip.MustParseAddr("203.0.113.42"), Country: "SG"}}
 	d.subscription = subscriptionsState{loaded: true, activeChoice: "a", view: model.SubscriptionsView{ActiveID: "a", Items: []model.SubscriptionSummary{{
@@ -122,6 +122,25 @@ func shotDashboard(n shotNames, page int) *Dashboard {
 	d.connections.data = shotConnections(n)
 	d.logs.entries = shotLogs()
 	d.stats = shotStats(n)
+	return d
+}
+
+// shotManualRoute keeps the automatic group's exit different from the default
+// manual choice, so both windows can be checked for the same resolved exit.
+func shotManualRoute(n shotNames) *Dashboard {
+	d := shotDashboard(n, pageNodes)
+	const hk, jp = "HK · PCCW", "Japan · konan"
+	snapshot := model.Snapshot{
+		Groups: []model.ProxyGroup{
+			{Name: n.auto, Type: model.GroupURLTest, Selected: hk, Options: []string{hk}},
+			{Name: n.main, Type: model.GroupSelector, Selected: jp, Options: []string{hk, jp, n.auto}},
+		},
+		Delays: map[string]int{hk: 24, jp: 48},
+		Facts:  map[string]model.ProxyFacts{hk: {Protocol: "Shadowsocks", UDP: true}, jp: {Protocol: "Shadowsocks", UDP: true}},
+	}
+	d.view = service.BuildView(snapshot, model.ModeRule, n.main)
+	d.activeGroup = n.main
+	d.exitIP.ip.Country = "JP"
 	return d
 }
 
@@ -234,6 +253,8 @@ func TestShots(t *testing.T) {
 			shotRender(t, filepath.Join(dir, name+"-"+scheme+".png"), func(c *ui.Context) { d.View(c) }, dark, width, height, true)
 		}
 		window("nodes", pageNodes, nil)
+		manual := shotManualRoute(names)
+		shotRender(t, filepath.Join(dir, "nodes-manual-"+scheme+".png"), func(c *ui.Context) { manual.View(c) }, dark, width, height, true)
 		// Only the Hack theme has a node list of its own.
 		if os.Getenv("HOP_SHOTS_THEME") == string(model.ThemeHack) {
 			window("picker", pageNodes, func(d *Dashboard) { d.hackPickerOpen = true })
@@ -250,5 +271,9 @@ func TestShots(t *testing.T) {
 		show := func(c *ui.Context) { panel.flyoutView(c, func() {}, func() {}, func(h int) { fit = h }) }
 		shotRender(t, filepath.Join(dir, "menubar-"+scheme+".png"), show, dark, flyoutWidth, flyoutHeight, false)
 		shotRender(t, filepath.Join(dir, "menubar-"+scheme+".png"), show, dark, flyoutWidth, fit, false)
+		panel = manual
+		fit = flyoutHeight
+		shotRender(t, filepath.Join(dir, "menubar-manual-"+scheme+".png"), show, dark, flyoutWidth, flyoutHeight, false)
+		shotRender(t, filepath.Join(dir, "menubar-manual-"+scheme+".png"), show, dark, flyoutWidth, fit, false)
 	}
 }

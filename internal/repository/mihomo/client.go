@@ -115,6 +115,11 @@ type delayEntry struct {
 	Delay int `json:"delay"`
 }
 
+type ruleEntry struct {
+	Type  string `json:"type"`
+	Proxy string `json:"proxy"`
+}
+
 // builtinTypes are the core's own outbounds, which are no proxy.
 var builtinTypes = []string{"Direct", "Reject", "RejectDrop", "Compatible", "Pass"}
 
@@ -148,9 +153,8 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 	return out.Version, nil
 }
 
-// Snapshot returns the policy groups in the order the profile declares
-// them, without the core's GLOBAL group and Hop's own probe groups, and each
-// proxy's latest delay.
+// Snapshot returns the policy groups in GLOBAL's order and each proxy's
+// latest delay. A custom GLOBAL may omit groups: those follow by name.
 func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	raw, err := c.do(ctx, c.timeout, http.MethodGet, "/proxies", nil, http.StatusOK)
 	if err != nil {
@@ -164,11 +168,24 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	if !ok {
 		return model.Snapshot{}, fmt.Errorf("mihomo proxies response has no %s group", globalGroup)
 	}
-	// GLOBAL lists every proxy and group in profile order.
+	// The core-generated GLOBAL lists every proxy and group in profile order.
+	// A profile can supply its own GLOBAL with only some of those options.
 	groups := make([]model.ProxyGroup, 0, len(global.All))
-	for _, name := range global.All {
+	names := slices.Clone(global.All)
+	seen := map[string]bool{globalGroup: true}
+	for _, name := range names {
+		seen[name] = true
+	}
+	var missing []string
+	for name, entry := range out.Proxies {
+		if !seen[name] && slices.Contains(groupTypes, entry.Type) {
+			missing = append(missing, name)
+		}
+	}
+	slices.Sort(missing)
+	for _, name := range append(names, missing...) {
 		entry := out.Proxies[name]
-		if !slices.Contains(groupTypes, entry.Type) {
+		if name == globalGroup || !slices.Contains(groupTypes, entry.Type) {
 			continue
 		}
 		groups = append(groups, model.ProxyGroup{Name: name, Type: entry.Type, Selected: entry.Now, Options: entry.All})
@@ -185,6 +202,85 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 	}
 	globalGroupView := model.ProxyGroup{Name: globalGroup, Type: global.Type, Selected: global.Now, Options: slices.Clone(global.All)}
 	return model.Snapshot{Groups: groups, Global: globalGroupView, Delays: delays, Facts: facts}, nil
+}
+
+// CatchAll returns the target of the first Match rule, where the core sends
+// what no other rule matched, or "" when the rules have none. It reads the
+// rules as a stream and stops at that rule: a profile's rules can be far
+// larger in the controller's JSON than maxBodySize.
+func (c *Client) CatchAll(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	resp, err := c.send(ctx, http.MethodGet, "/rules", nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", apiError(http.MethodGet, "/rules", resp)
+	}
+	target, err := readCatchAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("decode mihomo response (method=GET path=\"/rules\"): %w", err)
+	}
+	return target, nil
+}
+
+// readCatchAll decodes the rules of a /rules reply one at a time up to the
+// first Match rule and returns its target.
+func readCatchAll(body io.Reader) (string, error) {
+	decoder := json.NewDecoder(body)
+	token, err := decoder.Token()
+	if err != nil {
+		return "", err
+	}
+	if token != json.Delim('{') {
+		return "", errors.New("mihomo rules response is not an object")
+	}
+	found := false
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil {
+			return "", err
+		}
+		if key != "rules" {
+			var ignored json.RawMessage
+			if err := decoder.Decode(&ignored); err != nil {
+				return "", err
+			}
+			continue
+		}
+		token, err := decoder.Token()
+		if err != nil {
+			return "", err
+		}
+		if token != json.Delim('[') {
+			return "", errors.New("mihomo rules response has no rules array")
+		}
+		found = true
+		for decoder.More() {
+			var rule ruleEntry
+			if err := decoder.Decode(&rule); err != nil {
+				return "", err
+			}
+			if strings.EqualFold(rule.Type, "Match") {
+				if rule.Proxy == "" {
+					return "", errors.New("mihomo Match rule has no target")
+				}
+				return rule.Proxy, nil
+			}
+		}
+		if _, err := decoder.Token(); err != nil {
+			return "", err
+		}
+	}
+	if _, err := decoder.Token(); err != nil {
+		return "", err
+	}
+	if !found {
+		return "", errors.New("mihomo rules response has no rules array")
+	}
+	return "", nil
 }
 
 // TestProxyDelay measures one proxy against testURL and returns its delay in
@@ -344,6 +440,24 @@ func (c *Client) authHeader() http.Header {
 func (c *Client) do(ctx context.Context, timeout time.Duration, method string, path string, body []byte, want int) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	resp, err := c.send(ctx, method, path, body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != want {
+		return nil, apiError(method, path, resp)
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
+	if err != nil {
+		return nil, fmt.Errorf("read mihomo response (method=%s path=%q status=%d): %w", method, path, resp.StatusCode, err)
+	}
+	return raw, nil
+}
+
+// send sends one request and returns the response, whose body the caller
+// closes.
+func (c *Client) send(ctx context.Context, method string, path string, body []byte) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, "http://"+c.addr+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("build mihomo request (method=%s path=%q): %w", method, path, err)
@@ -356,13 +470,14 @@ func (c *Client) do(ctx context.Context, timeout time.Duration, method string, p
 	if err != nil {
 		return nil, fmt.Errorf("send mihomo request (method=%s path=%q): %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	return resp, nil
+}
+
+// apiError is the *APIError of a response with an unexpected status.
+func apiError(method string, path string, resp *http.Response) error {
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
 	if err != nil {
-		return nil, fmt.Errorf("read mihomo response (method=%s path=%q status=%d): %w", method, path, resp.StatusCode, err)
+		return fmt.Errorf("read mihomo response (method=%s path=%q status=%d): %w", method, path, resp.StatusCode, err)
 	}
-	if resp.StatusCode != want {
-		return nil, &APIError{Method: method, Path: path, Status: resp.StatusCode, Body: strings.TrimSpace(string(raw))}
-	}
-	return raw, nil
+	return &APIError{Method: method, Path: path, Status: resp.StatusCode, Body: strings.TrimSpace(string(raw))}
 }
