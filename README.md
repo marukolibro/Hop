@@ -111,8 +111,11 @@ running in a webview, and the same code runs on macOS and Windows.
 - **TUN.** Carries every app's traffic through a small
   privileged helper you install once (a LaunchDaemon on macOS, a service on
   Windows), so the core runs with the rights a TUN needs and Hop itself never
-  does. On macOS the helper also points the system DNS at resolvers whose
-  traffic enters the TUN and restores the previous DNS when the core stops.
+  does. Once installed, the helper runs the core whether TUN is on or off, so
+  turning TUN on or off is a reload of the same core and the proxy port never
+  stops. On macOS the helper also points the system DNS at resolvers whose
+  traffic enters the TUN and restores the previous DNS when TUN goes off or
+  the core stops.
   Hop refuses to turn TUN on while another TUN holds the default routes.
   **Settings → TUN → Fake-IP exceptions** lists names that must get their
   real addresses without changing routing rules. `example.com` matches only
@@ -263,7 +266,7 @@ ready-made terminal command.
 ```
  Hop (MyGo native UI) ── REST / WebSocket ──▶ mihomo core (loopback)
         │                                          ▲
-        └── privileged helper (TUN only) ──────────┘ runs the core with TUN
+        └── privileged helper (installed) ─────────┘ runs the core, TUN on or off
 ```
 
 - Hop starts its own mihomo as a sidecar process, supervised and restarted on a
@@ -271,8 +274,9 @@ ready-made terminal command.
 - It generates the core's configuration itself. From a subscription it takes
   only proxies, groups and rules (a whitelist); ports, DNS, TUN and the
   controller are always Hop's own.
-- With TUN on, the helper runs the core instead, and Hop sends its
-  configuration to that core.
+- Once you install the helper (the first time you turn TUN on), it runs the
+  core instead, with TUN on or off, and Hop sends its configuration to that
+  core.
 
 | What | Where |
 | --- | --- |

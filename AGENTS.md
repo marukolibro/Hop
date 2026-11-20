@@ -13,17 +13,26 @@ may quote a UI label but is never written in Chinese. Below are the rules specif
 
 ## Safety: never disturb the user's running proxy
 
-The user runs Clash Verge (its own mihomo, in service mode, possibly with TUN)
-on this machine while developing Hop. Hop must never interfere with it.
+Hop's users may run another client beside it (Clash Verge, mihomo-party,
+each with its own mihomo, possibly in service mode and with TUN). Hop must
+never interfere with one.
 
 - Never set or change DNS, routes or network settings. TUN is the one
   exception, and only through Hop's privileged helper (`cmd/hop-helper`).
-  While its core runs with TUN on, the helper points the system DNS of the
+  Once the helper is installed (the first time the user turns TUN on), Hop's
+  core always runs under it as root, TUN on or off, like Clash Verge's
+  service mode: turning TUN on or off is a reload of that one core
+  (`TunService.reloadTun`, the helper's `/core/apply`), so its ports never
+  pass between root and the user, which on macOS would keep them from the
+  user's core for TIME_WAIT (30 s; issue #20). Hop runs its own core only
+  without the helper, with one of another version, or when starting under it
+  failed; the core moves back to the user only when the helper is
+  uninstalled. While its core runs with TUN on, the helper points the system DNS of the
   enabled network services at public resolvers whose traffic enters the TUN
   (so lookups get fake IPs, except the built-in `tunFakeIPFilter` and the
   user's own `fake-ip-exceptions.json`), backs up what was there first, and
-  restores it when the core stops, when the helper starts and finds a backup, and at
-  quit. Tests never let the helper touch the real DNS. TUN is off
+  restores it when the core stops or a reload turns TUN off, when the helper
+  starts and finds a backup, and at quit. Tests never let the helper touch the real DNS. TUN is off
   by default, turned on by the user, refused while another TUN holds the
   default routes, and never turned on in a test or experiment unless the user
   is present and agrees. Never run `sudo`, `osascript ... with administrator
@@ -35,7 +44,7 @@ on this machine while developing Hop. Hop must never interfere with it.
   points at Hop itself (at quit and when the core gives up). Never run
   `networksetup` or touch the proxy registry keys anywhere else, and never
   turn the real system proxy on in a test or experiment.
-- Never read, write, stop or signal Clash Verge's processes or files
+- Never read, write, stop or signal another client's processes or files, such as Clash Verge's
   (`~/.config/mihomo`, `/Library/Application Support/clash-verge-service`,
   `~/Library/Application Support/io.github.clash-verge-rev.*`, mihomo-party).
 - Hop runs its own core, fetched by `scripts/fetch-mihomo.sh` — the core
@@ -60,7 +69,7 @@ on this machine while developing Hop. Hop must never interfere with it.
   an installed Hop and never reaps its core; it starts with no subscription.
   It also never talks to the privileged helper (`helper.Absent`, `Instance.UsesHelper`):
   the helper is one per machine, so a dev start or quit would stop the core
-  the installed Hop's TUN runs under it.
+  the installed Hop runs under it.
   The integration tests use `17891`/`19091`/`17854`. Check a port is free before
   adding one.
 - The mixed port is the one port the user can change (`service/mixed_port.go`,
@@ -80,7 +89,7 @@ on this machine while developing Hop. Hop must never interfere with it.
   port is validated at start (a corrupt or out-of-range one is an error). If the
   core cannot start and the chosen port is held by another program, `startCore`
   runs this time on the instance's own port (`FallBack`, only then, so a leftover
-  core or one the helper keeps under TUN is never mistaken for a taken port);
+  core or one the helper runs is never mistaken for a taken port);
   the choice stays saved and the settings row says which port was skipped. The dial cannot tell
   the core from another program that took the port between the check and the
   bind. Tests keep `17891`; `TestMixedPortChange` covers the change, the
@@ -97,14 +106,14 @@ on this machine while developing Hop. Hop must never interfere with it.
   own requests need no account. Everything else (the controller, the core's
   DNS) names `127.0.0.1` itself and never follows
   `bind-address`; `TestLANAccess` checks that against a real core. Never widen
-  `lanAllowedSources`, and never open any other port to the network. Under TUN
-  the core is the helper's and runs as root, and a root process must not parse
+  `lanAllowedSources`, and never open any other port to the network. Once the
+  helper is installed the core is the helper's and runs as root, and a root process must not parse
   requests from the whole internet, so the helper (`controllerKeys`,
   `checkLANSources`) accepts `allow-lan` only with a `lan-allowed-ips` list
   inside `helper.LANSources` (the one list the app writes too), and refuses a
   config with listeners of its own (the app writes none); `TestHelperServesItsCore` checks that
   against a real helper. That rule is a privileged boundary: widening it needs
-  the user's say, and it changes `helper.Version` (now 11), which makes an
+  the user's say, and it changes `helper.Version` (now 12), which makes an
   installed older helper be replaced on the user's authorization.
 - The unlock check is the services card and its dialog (`service/unlock.go`,
   `repository/unlock`). Its requests go through the mixed port, where the
@@ -160,7 +169,10 @@ handler → service → repository, interfaces defined where they are used.
   core that exits on its own is restarted by the runner's supervisor with
   bounded backoff (`supervise.go`); `Stop` and `Restart` never trigger it,
   and after five crashes in a row it gives up and tells the UI through
-  `Runner.OnRestart`. Geodata that ships with the app is seeded into the
+  `Runner.OnRestart`. The helper supervises its core with the same runner and
+  counts the reports in its status (`helper.Status.Restarts`); the dashboard
+  reads that every few seconds and shows a new one as it would its own
+  core's, giving up included. Geodata that ships with the app is seeded into the
   core's home dir before the first start (`geodata.go`).
 - `internal/repository/corerelease` and `corestore` — finding, downloading
   (SHA-256 checked against the digest GitHub publishes) and keeping upgraded
@@ -168,7 +180,8 @@ handler → service → repository, interfaces defined where they are used.
   is a pointer file (`current.json`) to a downloaded one. `config.Load` runs
   `HOP_MIHOMO_BINARY` first, then the upgraded core, then the bundled one.
   `service.CoreService.Upgrade` checks a candidate with `mihomo -v` and `-t`
-  on the running config before `mihomo.Runner.Restart`, and puts the old core
+  on the running config before `mihomo.Runner.Restart`, or, while the core
+  runs under the helper, before the helper's install, and the old core goes
   back when the new one does not come up. Core downloads go through Hop's own
   loopback proxy, never the system's or another client's. A download keeps
   its release archive beside the core (`corestore.ArchivePath`): the
@@ -178,10 +191,15 @@ handler → service → repository, interfaces defined where they are used.
   unpacks itself, and it refuses a release older than the bundled one
   (`scripts/build-helper.sh` stamps that from `mihomo.version`). Nothing a
   caller sends runs as root before that check, so a process running as the
-  user can never make the helper run its own binary. `TunService.Enable`
-  installs the release Hop's own core runs when the helper reports another,
-  fetching the archive of that release once when Hop has none (the bundled
-  core); a start with TUN on keeps the helper's core. The administrator's
+  user can never make the helper run its own binary. An install while the
+  helper's core runs checks the archive first (through that core's proxy),
+  then stops the core, puts the new file in place and starts it on the same
+  config, and puts the previous file back when the new one does not come up.
+  The helper runs the release Hop chose (`CoreService.ChosenVersion`): the
+  move into the helper installs it when the helper reports another, and at
+  start the dashboard has the helper follow (`TunService.FollowCore`) after an
+  app update ships a newer one, fetching the archive of that release once
+  when Hop has none (the bundled core). The administrator's
   install of the helper copies the bundled core in directly. The helper reads
   geodata through `plainfile.Read` too. This is a privileged boundary: never
   let the helper run or install a file it has not verified.
