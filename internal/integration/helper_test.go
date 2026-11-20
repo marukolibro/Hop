@@ -254,6 +254,12 @@ func TestHelperServesItsCore(t *testing.T) {
 	if status.DNSManaged {
 		t.Error("the helper reports managed DNS although the test started it without -manage-dns")
 	}
+	if status.Tun {
+		t.Error("the helper reports TUN on for a core started on a config without TUN")
+	}
+	if status.Restarts != 0 || status.LastRestart != nil {
+		t.Errorf("the helper reports %d supervised restarts (last %v) for a core that never left", status.Restarts, status.LastRestart)
+	}
 	pidFile, err := os.ReadFile(filepath.Join(home, "mihomo.pid"))
 	if err != nil {
 		t.Fatalf("the helper wrote no pid file in its home: %v", err)
@@ -386,6 +392,40 @@ func TestHelperServesItsCore(t *testing.T) {
 	}
 	if got, err := os.ReadFile(filepath.Join(home, "GeoSite.dat")); err != nil || string(got) != "new-site" {
 		t.Errorf("the helper's GeoSite.dat = %q (err %v) after a refused install, want %q", got, err, "new-site")
+	}
+
+	// A release installed while the core runs replaces it: the helper checks
+	// the archive, restarts the core on the new file and keeps the config it
+	// ran. A refused archive leaves the running core alone.
+	before, err := client.Status(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = client.InstallCore(ctx, model.CoreArchive{Tag: tag, Path: fake}, "")
+	skipWhenRateLimited(t, err)
+	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusBadRequest {
+		t.Errorf("install of a fake archive under a running core = %v, want a 400", err)
+	}
+	if status, err := client.Status(ctx); err != nil || !status.Running || status.Pid != before.Pid {
+		t.Errorf("a refused install touched the running core: running %v pid %d (err %v), want pid %d", status.Running, status.Pid, err, before.Pid)
+	}
+	err = geodataClient.InstallCore(ctx, model.CoreArchive{Tag: tag, Path: archive}, "")
+	skipWhenRateLimited(t, err)
+	if err != nil {
+		t.Fatalf("install the release archive under a running core: %v", err)
+	}
+	after, err := client.Status(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.Running || after.Pid == before.Pid || after.CoreVersion != tag {
+		t.Errorf("status after the install = running %v pid %d core %q, want a new pid than %d on core %q", after.Running, after.Pid, after.CoreVersion, before.Pid, tag)
+	}
+	if mode, err := coreClient.Mode(ctx); err != nil || mode != model.ModeGlobal {
+		t.Errorf("mode after the install = %q (err %v), want %q", mode, err, model.ModeGlobal)
+	}
+	if _, err := os.Stat(core + ".previous"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the replaced core was left beside the new one (err %v)", err)
 	}
 
 	if err := client.StopCore(ctx); err != nil {

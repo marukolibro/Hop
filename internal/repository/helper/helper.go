@@ -1,6 +1,7 @@
 // Package helper talks to Hop's privileged helper (cmd/hop-helper): the
-// root-run process that owns the TUN core, over a unix socket, and installs
-// and removes its LaunchDaemon on macOS or its service on Windows.
+// root-run process that runs Hop's core, TUN on or off, once it is installed,
+// over a unix socket, and installs and removes its LaunchDaemon on macOS or
+// its service on Windows.
 package helper
 
 import (
@@ -23,8 +24,13 @@ import (
 // reload as long as the core takes to download the config's providers, where
 // 9 gave up after 5 s and reported a config the core went on to run, and
 // version 11 refuses a config with listeners of its own, which 10 accepted on
-// the loopback for the unlock check's probe lanes the app no longer runs.
-const Version = "11"
+// the loopback for the unlock check's probe lanes the app no longer runs, and
+// version 12 serves the app's core with TUN off too: a reload that turns TUN
+// on or off takes the system DNS over or gives it back, an install replaces a
+// running core and restarts it on the new one, and the status says whether the
+// core runs TUN and counts its supervised restarts, where 11 did all of that
+// only through a stop and a start and reported no count.
+const Version = "12"
 
 // LANSources are the only source ranges a core run as root may be told to
 // answer when the config serves the network: this computer and the private
@@ -65,6 +71,8 @@ func BundledToolPath(resourcesDir string) (string, error) {
 // Status is what GET /status reports about the core the helper runs.
 type Status struct {
 	Running bool `json:"running"`
+	// Tun says the running core's config has TUN on; false when none runs.
+	Tun bool `json:"tun"`
 	// Pid is the core's process id, 0 when none runs.
 	Pid int `json:"pid"`
 	// DNSManaged says whether the helper holds the system DNS now: it points
@@ -72,8 +80,10 @@ type Status struct {
 	// runs.
 	DNSManaged bool `json:"dnsManaged"`
 	// LastRestart is what the helper's supervision did after the core last
-	// left on its own, nil when it never did.
+	// left on its own, nil when it never did; Restarts counts those reports
+	// since the helper started, so the app tells a new one from one it saw.
 	LastRestart *model.CoreRestart `json:"lastRestart"`
+	Restarts    int                `json:"restarts"`
 	// CoreVersion is the release of the core the helper has installed, ""
 	// when it has none.
 	CoreVersion string `json:"coreVersion"`
@@ -88,7 +98,7 @@ type VersionResponse struct {
 // release archive of the core to install and Tag its release. Proxy is the
 // loopback HTTP proxy the helper asks GitHub for the release's digest
 // through, "" to go direct; it cannot change the answer, which comes over
-// TLS.
+// TLS. A core that runs is replaced and restarted on the new one.
 type InstallRequest struct {
 	Archive string `json:"archive"`
 	Tag     string `json:"tag"`
@@ -107,7 +117,7 @@ type StartRequest struct {
 }
 
 // ApplyRequest is POST /core/apply's body: the runtime config the helper's
-// running core should switch to.
+// running core should switch to, TUN on or off.
 type ApplyRequest struct {
 	Config string `json:"config"`
 }

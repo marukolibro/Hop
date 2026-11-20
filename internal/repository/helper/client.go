@@ -69,7 +69,8 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 // InstallCore has the helper install the core in archive: the helper checks
 // the archive against the digest GitHub publishes for its release, asking
 // GitHub through proxy (Hop's own loopback proxy, "" to go direct), and
-// unpacks and installs the core only when they match.
+// unpacks and installs the core only when they match. A core that runs is
+// restarted on the new one, and put back when the new one does not come up.
 func (c *Client) InstallCore(ctx context.Context, archive model.CoreArchive, proxy string) error {
 	return c.call(ctx, http.MethodPost, "/core/install", InstallRequest{Archive: archive.Path, Tag: archive.Tag, Proxy: proxy}, nil)
 }
@@ -89,7 +90,9 @@ func (c *Client) StartCore(ctx context.Context, config []byte) error {
 
 // ApplyConfig makes the helper's running core switch to config: the helper
 // writes it as the core's own config file and has the core reload it,
-// putting the previous file back when the core refuses it.
+// putting the previous file back when the core refuses it. A config that
+// turns TUN on or off has the helper take the system DNS over or give it
+// back.
 func (c *Client) ApplyConfig(ctx context.Context, config []byte) error {
 	return c.call(ctx, http.MethodPost, "/core/apply", ApplyRequest{Config: string(config)}, nil)
 }

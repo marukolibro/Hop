@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json/v2"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -27,8 +28,9 @@ const windowsTunDevice = "utun199"
 // helper service: install it (the caller is already elevated, as a CI
 // runner is, so no UAC prompt), run a core with TUN on in direct mode, and
 // check the adapter, its routes, DNS answered by the core, traffic carried
-// by it and Hop's own route-conflict reading; then stop and uninstall and
-// check nothing is left. It changes the machine's routes and services, so
+// by it and Hop's own route-conflict reading; turn TUN off and on again as
+// reloads of the same core; then stop and uninstall and check nothing is
+// left. It changes the machine's routes and services, so
 // it runs only where HOP_WINDOWS_TUN_E2E=1 says the machine is disposable.
 func TestWindowsTunEndToEnd(t *testing.T) {
 	if os.Getenv("HOP_WINDOWS_TUN_E2E") != "1" {
@@ -86,13 +88,33 @@ func TestWindowsTunEndToEnd(t *testing.T) {
 rules:
   - MATCH,DIRECT
 `)
-	config, err := service.RuntimeConfig(subscription, model.RulesProvider, nil, service.RuntimeSettings{
+	settings := service.RuntimeSettings{
 		MixedPort: testMixedPort, ControllerAddr: testController, ControllerSecret: testSecret,
 		BindAddress: "127.0.0.1", LogLevel: "info", BootstrapGroupName: "Hop",
 		Mode: model.ModeRule, Tun: true,
-	})
+	}
+	config, err := service.RuntimeConfig(subscription, model.RulesProvider, nil, settings)
 	if err != nil {
 		t.Fatal(err)
+	}
+	plainSettings := settings
+	plainSettings.Tun = false
+	plainConfig, err := service.RuntimeConfig(subscription, model.RulesProvider, nil, plainSettings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapterUp := func() error {
+		status := powershell(ctx, t, `(Get-NetAdapter -Name '`+windowsTunDevice+`' -ErrorAction Stop).Status`)
+		if status != "Up" {
+			return fmt.Errorf("adapter status %q", status)
+		}
+		return nil
+	}
+	adapterGone := func() error {
+		if out := powershell(ctx, t, `if (Get-NetAdapter -Name '`+windowsTunDevice+`' -ErrorAction SilentlyContinue) { 'present' }`); out != "" {
+			return fmt.Errorf("adapter still %s", out)
+		}
+		return nil
 	}
 	if err := client.StartCore(ctx, config); err != nil {
 		t.Fatalf("start the TUN core: %v\n%s", err, helperLog())
@@ -104,13 +126,7 @@ rules:
 		}
 	})
 
-	waitFor(ctx, t, "the TUN adapter to come up", func() error {
-		status := powershell(ctx, t, `(Get-NetAdapter -Name '`+windowsTunDevice+`' -ErrorAction Stop).Status`)
-		if status != "Up" {
-			return fmt.Errorf("adapter status %q", status)
-		}
-		return nil
-	})
+	waitFor(ctx, t, "the TUN adapter to come up", adapterUp)
 	t.Logf("TUN adapter routes:\n%s", powershell(ctx, t,
 		`Get-NetRoute -InterfaceAlias '`+windowsTunDevice+`' -AddressFamily IPv4 | Sort-Object DestinationPrefix | Format-Table -AutoSize DestinationPrefix,RouteMetric | Out-String -Width 200`))
 	t.Logf("TUN adapter DNS: %s", powershell(ctx, t,
@@ -153,16 +169,57 @@ rules:
 		t.Errorf("the core carried nothing for a plain request (download %d -> %d)", before.DownloadTotal, after.DownloadTotal)
 	}
 
+	// TUN off and on again is a reload of the same core: the adapter goes
+	// and comes back while the process and its proxy port stay, so no port
+	// ever has to pass to another core.
+	started := tunStatus(ctx, t, client, true)
+	if err := client.ApplyConfig(ctx, plainConfig); err != nil {
+		t.Fatalf("reload the core without TUN: %v\n%s", err, helperLog())
+	}
+	waitFor(ctx, t, "the TUN adapter to go away after the reload", adapterGone)
+	if off := tunStatus(ctx, t, client, false); off.Pid != started.Pid {
+		t.Errorf("the reload without TUN replaced the core (pid %d -> %d)", started.Pid, off.Pid)
+	}
+	dialMixedPort(ctx, t)
+	if err := client.ApplyConfig(ctx, config); err != nil {
+		t.Fatalf("reload the core with TUN again: %v\n%s", err, helperLog())
+	}
+	waitFor(ctx, t, "the TUN adapter to come back after the reload", adapterUp)
+	if on := tunStatus(ctx, t, client, true); on.Pid != started.Pid {
+		t.Errorf("the reload with TUN replaced the core (pid %d -> %d)", started.Pid, on.Pid)
+	}
+	dialMixedPort(ctx, t)
+
 	if err := client.StopCore(ctx); err != nil {
 		t.Fatalf("stop the TUN core: %v", err)
 	}
 	stopped = true
-	waitFor(ctx, t, "the TUN adapter to go away", func() error {
-		if out := powershell(ctx, t, `if (Get-NetAdapter -Name '`+windowsTunDevice+`' -ErrorAction SilentlyContinue) { 'present' }`); out != "" {
-			return fmt.Errorf("adapter still %s", out)
-		}
-		return nil
-	})
+	waitFor(ctx, t, "the TUN adapter to go away", adapterGone)
+}
+
+// tunStatus reads the helper's status and fails unless its core runs with
+// TUN as wantTun says.
+func tunStatus(ctx context.Context, t *testing.T, client *helper.Client, wantTun bool) helper.Status {
+	t.Helper()
+	status, err := client.Status(ctx)
+	if err != nil {
+		t.Fatalf("read the helper's status: %v", err)
+	}
+	if !status.Running || status.Tun != wantTun {
+		t.Fatalf("helper status running %v tun %v, want a running core with tun %v", status.Running, status.Tun, wantTun)
+	}
+	return status
+}
+
+// dialMixedPort fails unless the core's proxy port takes a connection.
+func dialMixedPort(ctx context.Context, t *testing.T) {
+	t.Helper()
+	addr := net.JoinHostPort("127.0.0.1", fmt.Sprint(testMixedPort))
+	conn, err := (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp", addr)
+	if err != nil {
+		t.Fatalf("the core's proxy port does not answer (addr=%s): %v", addr, err)
+	}
+	conn.Close()
 }
 
 // coreTotalsMessage is what the controller's /connections reports in sum.

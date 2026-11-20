@@ -54,6 +54,9 @@ const (
 	dnsBackupPerm     = 0o600
 	// dnsOpTimeout bounds one takeover or restore.
 	dnsOpTimeout = 30 * time.Second
+	// undoApplyTimeout bounds the reload that takes the core back to its
+	// config without TUN when the DNS takeover after a reload failed.
+	undoApplyTimeout = 30 * time.Second
 )
 
 // bundledCoreVersion is the release of the core the app this helper ships
@@ -99,10 +102,17 @@ type server struct {
 	runner *mihomo.Runner
 	// client is the running core's controller client, kept with the
 	// controller keys it was built from so a reload goes to the right core.
-	client       *mihomo.Client
-	ctrlAddr     string
-	ctrlSecret   string
-	lastRestart  *model.CoreRestart
+	client     *mihomo.Client
+	ctrlAddr   string
+	ctrlSecret string
+	// config is the config the running core runs, and tun whether it has
+	// TUN on: a reload that turns TUN on can be taken back to it, and a
+	// reload that turns TUN on or off moves the system DNS with it.
+	config      string
+	tun         bool
+	lastRestart *model.CoreRestart
+	// restarts counts what supervision reported, see helper.Status.
+	restarts     int
 	parentCtx    context.Context
 	parentCancel context.CancelFunc
 	// coreVersion is the release of the installed core, read from the core
@@ -237,7 +247,7 @@ func (s *server) status() helper.Status {
 	status := helper.Status{DNSManaged: s.dnsManaged.Load()}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	status.LastRestart = s.lastRestart
+	status.LastRestart, status.Restarts = s.lastRestart, s.restarts
 	status.CoreVersion = s.installedCoreVersion()
 	if s.runner == nil {
 		return status
@@ -246,7 +256,7 @@ func (s *server) status() helper.Status {
 	if err != nil {
 		slog.Warn("could not read the core's pid file for the status", "error", err)
 	}
-	status.Running, status.Pid = true, pid
+	status.Running, status.Tun, status.Pid = true, s.tun, pid
 	return status
 }
 
@@ -274,8 +284,9 @@ func (s *server) installedCoreVersion() string {
 // it copies the archive in, asks GitHub for the digest of that release's
 // asset and unpacks the core over its own only when the copy matches. Nothing
 // the caller sent runs before that, so a caller can only ever install a core
-// MetaCubeX published, and none older than the bundled one. A running core is
-// never replaced.
+// MetaCubeX published, and none older than the bundled one. A running core
+// keeps running while the archive is checked, so the check can go through
+// Hop's proxy, and is then restarted on the new core (replaceRunningCore).
 func (s *server) handleInstall(w http.ResponseWriter, r *http.Request) {
 	var req helper.InstallRequest
 	if !readJSON(w, r, &req) {
@@ -307,13 +318,6 @@ func (s *server) handleInstall(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	s.mu.Lock()
-	running := s.runner != nil
-	s.mu.Unlock()
-	if running {
-		writeError(w, http.StatusConflict, errors.New("the core is running; stop it before installing another"))
-		return
-	}
 	// The archive is copied first and then checked as copied: what matches
 	// the digest and what is unpacked are the very same bytes, so the source
 	// can change in between without slipping in an unchecked core.
@@ -337,14 +341,74 @@ func (s *server) handleInstall(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("the archive does not match the digest GitHub publishes for %s (want sha256 %s)", release.AssetName, release.SHA256))
 		return
 	}
-	if err := corerelease.Unpack(staged, release.AssetName, s.opts.core); err != nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	running := s.runner != nil
+	if running {
+		err = s.replaceRunningCore(r.Context(), staged, release.AssetName)
+	} else {
+		err = corerelease.Unpack(staged, release.AssetName, s.opts.core)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	s.mu.Lock()
 	s.coreVersion = req.Tag
-	s.mu.Unlock()
-	slog.Info("installed a verified core into the helper", "tag", req.Tag, "asset", release.AssetName, "sha256", sum, "core", s.opts.core)
+	slog.Info("installed a verified core into the helper", "tag", req.Tag, "asset", release.AssetName, "sha256", sum, "core", s.opts.core, "restarted", running)
+}
+
+// replaceRunningCore puts the verified core in staged in place of the one
+// that runs and starts the core again on it, on the config it ran. The core
+// is stopped before its file is touched, so no platform has to move a running
+// executable. When the new core does not come up the previous file goes back
+// and runs again; when even that fails no core is left (giveUpCore). mu must
+// be held.
+func (s *server) replaceRunningCore(ctx context.Context, staged string, assetName string) error {
+	if err := s.runner.Stop(); err != nil {
+		return fmt.Errorf("stop the core before replacing it: %w", err)
+	}
+	previous := s.opts.core + ".previous"
+	if err := os.Rename(s.opts.core, previous); err != nil {
+		return s.restartCore(ctx, fmt.Errorf("set the running core aside (from=%q to=%q): %w", s.opts.core, previous, err))
+	}
+	if err := corerelease.Unpack(staged, assetName, s.opts.core); err != nil {
+		return s.putBackCore(ctx, previous, err)
+	}
+	if err := s.runner.Restart(ctx, s.opts.core); err != nil {
+		return s.putBackCore(ctx, previous, fmt.Errorf("start the new core: %w", err))
+	}
+	if err := os.Remove(previous); err != nil {
+		slog.Warn("could not remove the core the install replaced", "path", previous, "error", err)
+	}
+	return nil
+}
+
+// putBackCore moves the core set aside at previous back into place after a
+// failed replacement and starts it again. mu must be held.
+func (s *server) putBackCore(ctx context.Context, previous string, cause error) error {
+	if err := os.Rename(previous, s.opts.core); err != nil {
+		return s.giveUpCore(errors.Join(cause, fmt.Errorf("put the previous core back (from=%q to=%q): %w", previous, s.opts.core, err)))
+	}
+	return s.restartCore(ctx, cause)
+}
+
+// restartCore starts the installed core again after a replacement failed
+// with cause, and says in the error whether that worked. mu must be held.
+func (s *server) restartCore(ctx context.Context, cause error) error {
+	if err := s.runner.Restart(ctx, s.opts.core); err != nil {
+		return s.giveUpCore(errors.Join(cause, fmt.Errorf("start the previous core again: %w", err)))
+	}
+	return fmt.Errorf("%w (the previous core runs again)", cause)
+}
+
+// giveUpCore forgets a core that could not be started again. Its TUN routes
+// went away with it, so the system DNS goes back to the user's servers rather
+// than staying pointed at Hop's resolvers. mu must be held.
+func (s *server) giveUpCore(cause error) error {
+	s.clearCore()
+	restoreCtx, restoreDone := context.WithTimeout(context.Background(), dnsOpTimeout)
+	defer restoreDone()
+	return errors.Join(cause, s.restoreDNS(restoreCtx))
 }
 
 // releaseClient is the client the helper asks GitHub through: direct, or
@@ -416,14 +480,7 @@ func (s *server) handleGeodataInstall(w http.ResponseWriter, r *http.Request) {
 	running := s.runner != nil
 	if running {
 		if err := s.runner.Restart(r.Context(), s.opts.core); err != nil {
-			s.clearCore()
-			restoreCtx, restoreDone := context.WithTimeout(context.Background(), dnsOpTimeout)
-			defer restoreDone()
-			restoreErr := s.restoreDNS(restoreCtx)
-			writeError(w, http.StatusInternalServerError, errors.Join(
-				fmt.Errorf("restart the core on the new geodata: %w", err),
-				restoreErr,
-			))
+			writeError(w, http.StatusInternalServerError, s.giveUpCore(fmt.Errorf("restart the core on the new geodata: %w", err)))
 			return
 		}
 	}
@@ -453,6 +510,11 @@ func (s *server) handleStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	tunOn, err := tunEnabled(req.Config)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	// The runner the helper reuses from Hop: config, core and pid file all
 	// under the helper's own home, crash supervision with it.
 	cfg := config.Config{
@@ -470,6 +532,7 @@ func (s *server) handleStart(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.lastRestart = &restart
+		s.restarts++
 		if !restart.GaveUp || s.runner != runner {
 			return
 		}
@@ -491,21 +554,14 @@ func (s *server) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 	s.runner = runner
 	s.client, s.ctrlAddr, s.ctrlSecret = client, addr, secret
-	if s.opts.manageDNS {
-		tunOn, err := tunEnabled(req.Config)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err)
+	s.config, s.tun = req.Config, tunOn
+	if tunOn {
+		if err := s.takeoverDNS(r.Context()); err != nil {
+			// The core is up but the DNS is not Hop's: stop it again, so
+			// a failed start leaves neither a TUN nor a half-managed DNS.
 			s.stopStartedCore(runner)
+			writeError(w, http.StatusInternalServerError, err)
 			return
-		}
-		if tunOn {
-			if err := s.takeoverDNS(r.Context()); err != nil {
-				// The core is up but the DNS is not Hop's: stop it again, so
-				// a failed start leaves neither a TUN nor a half-managed DNS.
-				s.stopStartedCore(runner)
-				writeError(w, http.StatusInternalServerError, err)
-				return
-			}
 		}
 	}
 }
@@ -522,13 +578,20 @@ func (s *server) stopStartedCore(runner *mihomo.Runner) {
 // handleApply writes the request's config as the running core's config and
 // makes it reload, the way Hop's own core reloads: the new file is kept only
 // when the core accepts it. The controller address and secret cannot change
-// under a running core, or the helper could no longer reach it.
+// under a running core, or the helper could no longer reach it. A config that
+// turns TUN on or off moves the system DNS with it, as a start and a stop do,
+// so turning TUN on or off never stops the core or hands its ports over.
 func (s *server) handleApply(w http.ResponseWriter, r *http.Request) {
 	var req helper.ApplyRequest
 	if !readJSON(w, r, &req) {
 		return
 	}
 	addr, secret, err := controllerKeys(req.Config)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	tunOn, err := tunEnabled(req.Config)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -547,6 +610,37 @@ func (s *server) handleApply(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	previous, wasTun := s.config, s.tun
+	s.config, s.tun = req.Config, tunOn
+	switch {
+	case tunOn && !wasTun:
+		if err := s.takeoverDNS(r.Context()); err != nil {
+			writeError(w, http.StatusInternalServerError, s.undoTunOn(previous, err))
+		}
+	case !tunOn && wasTun:
+		restoreCtx, restoreDone := context.WithTimeout(context.Background(), dnsOpTimeout)
+		defer restoreDone()
+		if err := s.restoreDNS(restoreCtx); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Errorf("the core runs without TUN, but the system DNS was not put back: %w", err))
+		}
+	}
+}
+
+// undoTunOn takes back a reload that turned TUN on when the DNS takeover
+// after it failed: the core goes back to previous, its config without TUN,
+// so no TUN runs with the DNS half managed. When even that fails the core is
+// stopped, as after a failed start. The reload gets its own bounded context:
+// the request's may be what went away. mu must be held.
+func (s *server) undoTunOn(previous string, cause error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), undoApplyTimeout)
+	defer cancel()
+	cause = fmt.Errorf("take the system DNS over for TUN: %w", cause)
+	if err := s.client.ApplyConfig(ctx, []byte(previous)); err != nil {
+		s.stopStartedCore(s.runner)
+		return errors.Join(cause, fmt.Errorf("put the core back on its config without TUN, so it was stopped: %w", err))
+	}
+	s.config, s.tun = previous, false
+	return fmt.Errorf("%w (the core runs its config without TUN again)", cause)
 }
 
 // handleStop stops the core and waits for it. Stopping when none runs is a
@@ -590,6 +684,7 @@ func (s *server) stopCore() error {
 func (s *server) clearCore() {
 	s.runner = nil
 	s.client, s.ctrlAddr, s.ctrlSecret = nil, "", ""
+	s.config, s.tun = "", false
 }
 
 // takeoverDNS points every enabled service's DNS at Hop's resolvers and
