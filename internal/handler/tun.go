@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/egoist/mygo/ui"
 
@@ -9,7 +10,7 @@ import (
 	"hop/locales"
 )
 
-// tunState is what the TUN switch shows: whether the helper's core runs,
+// tunState is what the TUN switch shows: whether the helper's core runs TUN,
 // whether the helper is installed, and which interface holds the default
 // routes when another client's TUN does.
 type tunState struct {
@@ -23,16 +24,31 @@ type tunState struct {
 	// taken names the interface another client's TUN holds the routes with.
 	taken   bool
 	takenBy string
+	// restarts is the count of the helper's supervised restarts last seen.
+	restarts int
 	// installOpen shows the one-time explanation of what enabling needs.
 	installOpen bool
 }
 
 // startTun reads TUN's state, which main's startup already settled: adopted,
-// enabled or refused. Goroutine ownership: started by Start, it ends after
-// one read.
+// enabled or refused. When the core runs under the helper on another release
+// than the one Hop chose, as after an app update that ships a newer core, it
+// has the helper follow, as any other change of core runs. Goroutine
+// ownership: started by Start, it ends after one read.
 func (d *Dashboard) startTun(ctx context.Context, win Updater) {
 	status, err := d.services.Tun.Status(ctx)
+	behind, behindErr := d.services.Tun.CoreBehind(ctx)
 	win.Update(func() {
+		switch {
+		case behindErr != nil:
+			d.fail(actionFollowCore, behindErr)
+		case behind && (d.core.busy || d.controlsLocked()):
+			slog.Warn("the helper runs another core than Hop chose; it follows at the next start, as another change holds the controls")
+		case behind:
+			d.beginCoreOp(actionFollowCore, func(opCtx context.Context, _ func(model.CoreProgress)) error {
+				return d.services.Tun.FollowCore(opCtx)
+			})
+		}
 		if err != nil {
 			d.fail(actionReadTun, err)
 			return
@@ -51,17 +67,24 @@ func (d *Dashboard) startTun(ctx context.Context, win Updater) {
 // user's click and administrator password.
 func (d *Dashboard) helperUpdateWanted(status model.TunStatus) bool {
 	return d.settings.settings.Tun && status.HelperInstalled && status.HelperOutdated &&
-		!status.CoreRunning && !status.Taken
+		!status.On && !status.Taken
 }
 
-// applyTunStatus shows the state the service reports. TUN is on exactly when
-// the helper's core runs: only Hop's TUN runs there.
+// applyTunStatus shows the state the service reports: TUN is on when the
+// helper says its core runs with TUN on. A restart the helper's supervision
+// reported since the last read is shown as one of Hop's own core is, giving
+// up included, which clears a system proxy that points at the core that is
+// gone; the first read only takes the count.
 func (d *Dashboard) applyTunStatus(status model.TunStatus) {
 	s := &d.tun
+	if s.loaded && status.CoreRestarts > s.restarts {
+		d.applyCoreRestart(status.LastCoreRestart)
+	}
+	s.restarts = status.CoreRestarts
 	s.loaded = true
 	s.helper = status.HelperInstalled
 	s.helperOutdated = status.HelperOutdated
-	s.on = status.CoreRunning
+	s.on = status.On
 	s.taken, s.takenBy = status.Taken, status.TakenBy
 }
 
@@ -89,8 +112,9 @@ func (d *Dashboard) submitTunInstall() {
 	d.runTun(true)
 }
 
-// runTun applies on in the background. Whichever core comes out of it serves
-// the same controller, so the streams and the views are read anew under it.
+// runTun applies on in the background. The core that comes out of it serves
+// the same controller, reloaded or moved into the helper, so the streams and
+// the views are read anew under it.
 func (d *Dashboard) runTun(on bool) {
 	s := &d.tun
 	d.stopWatchers()
@@ -127,19 +151,16 @@ func (d *Dashboard) runTun(on bool) {
 	}()
 }
 
-// beginUninstallHelper removes the helper from the settings page. A TUN that
-// is on is turned off first, so Hop's own core carries the traffic again
-// before the helper goes.
+// beginUninstallHelper removes the helper from the settings page. The core
+// moves out of it first, TUN off, so Hop's own core carries the traffic again
+// before the helper goes; the streams are read anew from it.
 func (d *Dashboard) beginUninstallHelper() {
 	s := &d.tun
 	if s.busy || !s.loaded || d.controlsLocked() {
 		return
 	}
 	s.busy = true
-	wasOn := s.on
-	if wasOn {
-		d.stopWatchers()
-	}
+	d.stopWatchers()
 	gen := d.nextViewGen()
 	ctx, win := d.opCtx, d.opWin
 	go func() {
@@ -155,11 +176,9 @@ func (d *Dashboard) beginUninstallHelper() {
 			if err != nil {
 				d.fail(actionUninstallHelper, err)
 			}
-			if wasOn {
-				d.startWatchers(ctx, win)
-				go d.startupTest(ctx, win, gen)
-				go d.loadCore(ctx, win)
-			}
+			d.startWatchers(ctx, win)
+			go d.startupTest(ctx, win, gen)
+			go d.loadCore(ctx, win)
 		})
 	}()
 }

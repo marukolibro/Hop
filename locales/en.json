@@ -10,6 +10,7 @@
   "actionCoreRestarted": "The core quit unexpectedly and was restarted",
   "actionDeleteSubscription": "Couldn't delete the subscription",
   "actionEditSubscription": "Couldn't edit the subscription",
+  "actionFollowCore": "Couldn't update the helper's core",
   "actionInstallAppUpdate": "Couldn't install the app update",
   "actionLan": "Couldn't change LAN access",
   "actionLoadGroups": "Couldn't read the node list",
@@ -133,7 +134,6 @@
       }
     }
   },
-  "coreLockedByTun": "The core can't be replaced while TUN is on. Turn it off first.",
   "coreNewDev": "Version {version} is available. The development core comes from HOP_MIHOMO_BINARY and isn't upgraded here.",
   "@coreNewDev": {
     "placeholders": {
@@ -262,7 +262,7 @@
   "hackRoutesHint": "Pick a line to change its node",
   "hackRoutesTitle": "Routes",
   "hackYou": "You",
-  "helperInstalled": "Installed. With TUN on, it runs the core with system privileges.",
+  "helperInstalled": "Installed. It runs the core with system privileges.",
   "helperNeedsUpdate": "Needs an update. Turning on TUN next time asks to update it.",
   "helperNotInstalled": "Not installed. Turning on TUN asks to install it.",
   "helperTitle": "Helper",
@@ -763,7 +763,7 @@
   "tunDialogTitle": "Turn on TUN",
   "tunHint": "Takes over all traffic, including terminals and games",
   "tunInstallAndOn": "Install and turn on",
-  "tunInstallDescription": "TUN takes over all traffic and needs Hop's helper installed first. {prompt}. You can uninstall it any time in Settings.",
+  "tunInstallDescription": "TUN takes over all traffic and needs Hop's helper installed first, which then runs the core with system privileges. {prompt}. You can uninstall it any time in Settings.",
   "@tunInstallDescription": {
     "placeholders": {
       "prompt": {
@@ -783,7 +783,7 @@
     }
   },
   "tunUpdateAndOn": "Update and turn on",
-  "tunUpdateDescription": "TUN takes over all traffic and needs Hop's helper updated first. {prompt}. You can uninstall it any time in Settings.",
+  "tunUpdateDescription": "TUN takes over all traffic and needs Hop's helper updated first, which then runs the core with system privileges. {prompt}. You can uninstall it any time in Settings.",
   "@tunUpdateDescription": {
     "placeholders": {
       "prompt": {

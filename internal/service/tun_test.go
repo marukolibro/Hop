@@ -18,10 +18,12 @@ import (
 // installed Hop's core.
 func TestTunLeavesTheHelperAloneWithoutIt(t *testing.T) {
 	absent := helper.Absent{}
-	tun := NewTunService(absent, absent, nil, nil, nil, nil, nil, nil, "", "", "", NewTunFlag(), nil)
-	on, err := tun.Startup(context.Background(), false)
-	if err != nil || on {
-		t.Fatalf("Startup(false) = %v, %v; want false and no error", on, err)
+	tun := NewTunService(absent, absent, nil, nil, nil, nil, nil, nil, "", "", "", NewTunFlag(), NewHelperCoreFlag(), nil)
+	for _, wanted := range []bool{false, true} {
+		underHelper, err := tun.Startup(context.Background(), wanted)
+		if err != nil || underHelper {
+			t.Fatalf("Startup(%v) = %v, %v; want Hop's own core and no error", wanted, underHelper, err)
+		}
 	}
 	if err := tun.Release(context.Background()); err != nil {
 		t.Fatalf("Release: %v", err)

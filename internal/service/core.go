@@ -23,11 +23,6 @@ var ErrCoreUpToDate = errors.New("the running mihomo core is already the newest 
 // developer's environment variable, which an upgrade could not replace.
 var ErrCoreNotUpgradable = errors.New("the running core comes from HOP_MIHOMO_BINARY; unset it to let Hop manage the core")
 
-// ErrCoreLockedByTun is returned when the core is asked to change while TUN
-// is on: the helper's root core owns the ports, and Hop's own core could not
-// start beside it.
-var ErrCoreLockedByTun = errors.New("the core cannot be changed while TUN is on; turn TUN off first")
-
 // CoreVersionReader asks the running core what version it is.
 type CoreVersionReader interface {
 	Version(ctx context.Context) (string, error)
@@ -58,21 +53,40 @@ type CoreProcess interface {
 }
 
 // CoreChecker runs a candidate core on the running config before it takes
-// over, and returns the version it reports.
+// over, and returns the version it reports; Version only asks a core's.
 type CoreChecker interface {
-	Check(ctx context.Context, binary string) (string, error)
+	Check(ctx context.Context, binary string, config []byte) (string, error)
+	Version(ctx context.Context, binary string) (string, error)
 }
 
-// CoreService reports which mihomo core runs and upgrades it.
+// CoreConfigs builds the config the running core runs, which a candidate
+// core is checked on.
+type CoreConfigs interface {
+	CurrentConfig(ctx context.Context) ([]byte, error)
+}
+
+// CoreHelper installs a release archive into the privileged helper, which
+// checks it against GitHub itself and restarts its running core on it,
+// putting the previous one back when the new one does not come up.
+type CoreHelper interface {
+	InstallCore(ctx context.Context, archive model.CoreArchive, proxy string) error
+}
+
+// CoreService reports which mihomo core runs and upgrades it. While the core
+// runs under the helper, a change of core goes through the helper's install,
+// the only way root runs a core.
 type CoreService struct {
 	version  CoreVersionReader
 	releases CoreReleases
 	installs CoreInstalls
 	process  CoreProcess
 	checker  CoreChecker
-	// tun says whether TUN is on: the helper's core runs then, and a change
-	// of Hop's own core must wait.
-	tun *TunFlag
+	configs  CoreConfigs
+	helper   CoreHelper
+	// placement says whether the core runs under the helper; port is Hop's
+	// proxy, which the helper asks GitHub through.
+	placement *HelperCoreFlag
+	port      *MixedPortState
 
 	// mu serializes upgrades with each other and with reads of the state
 	// they change.
@@ -83,12 +97,13 @@ type CoreService struct {
 }
 
 // NewCoreService returns a service for a core started from binary of origin;
-// bundledBinary is the core that ships with the app, and tun says whether
-// TUN is on.
-func NewCoreService(version CoreVersionReader, releases CoreReleases, installs CoreInstalls, process CoreProcess, checker CoreChecker, binary string, bundledBinary string, origin model.CoreOrigin, tun *TunFlag) *CoreService {
+// bundledBinary is the core that ships with the app, and placement says
+// whether the core runs under the helper, reached through helper.
+func NewCoreService(version CoreVersionReader, releases CoreReleases, installs CoreInstalls, process CoreProcess, checker CoreChecker, configs CoreConfigs, helper CoreHelper, binary string, bundledBinary string, origin model.CoreOrigin, placement *HelperCoreFlag, port *MixedPortState) *CoreService {
 	return &CoreService{
 		version: version, releases: releases, installs: installs, process: process, checker: checker,
-		binary: binary, bundledBinary: bundledBinary, origin: origin, tun: tun,
+		configs: configs, helper: helper, placement: placement, port: port,
+		binary: binary, bundledBinary: bundledBinary, origin: origin,
 	}
 }
 
@@ -124,15 +139,13 @@ func (s *CoreService) CheckLatest(ctx context.Context) (model.CoreRelease, bool,
 }
 
 // Upgrade downloads the newest release, checks it runs the current config,
-// and restarts the core on it. When the new core does not come up, the old
-// one is started again, so a failed upgrade ends where it began. progress
-// hears each step; the proxy is unavailable for the restart, a second or two.
+// and restarts the core on it: Hop's own, or the helper's through its
+// verified install. When the new core does not come up, the old one is
+// started again, so a failed upgrade ends where it began. progress hears
+// each step; the proxy is unavailable for the restart, a second or two.
 func (s *CoreService) Upgrade(ctx context.Context, progress func(model.CoreProgress)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.tun.On() {
-		return ErrCoreLockedByTun
-	}
 	if s.origin == model.CoreOverride {
 		return ErrCoreNotUpgradable
 	}
@@ -165,7 +178,11 @@ func (s *CoreService) Upgrade(ctx context.Context, progress func(model.CoreProgr
 	}
 
 	progress(model.CoreProgress{Stage: model.CoreStageVerify})
-	reported, err := s.checker.Check(ctx, binary)
+	config, err := s.configs.CurrentConfig(ctx)
+	if err != nil {
+		return s.discard(release.Tag, fmt.Errorf("read the running config to check the new core on: %w", err))
+	}
+	reported, err := s.checker.Check(ctx, binary, config)
 	if err != nil {
 		return s.discard(release.Tag, err)
 	}
@@ -174,11 +191,20 @@ func (s *CoreService) Upgrade(ctx context.Context, progress func(model.CoreProgr
 	}
 
 	progress(model.CoreProgress{Stage: model.CoreStageRestart})
-	if err := s.process.Restart(ctx, binary); err != nil {
-		return s.discard(release.Tag, s.restore(s.binary, fmt.Errorf("the new core did not start: %w", err)))
-	}
-	if err := s.installs.Activate(release.Tag); err != nil {
-		return s.discard(release.Tag, s.restore(s.binary, fmt.Errorf("remember the new core: %w", err)))
+	if s.placement.On() {
+		if err := s.helper.InstallCore(ctx, model.CoreArchive{Tag: release.Tag, Path: archive}, s.port.ProxyURL()); err != nil {
+			return s.discard(release.Tag, fmt.Errorf("install the new core into the helper: %w", err))
+		}
+		if err := s.installs.Activate(release.Tag); err != nil {
+			return fmt.Errorf("remember the new core, which the helper runs until Hop next starts: %w", err)
+		}
+	} else {
+		if err := s.process.Restart(ctx, binary); err != nil {
+			return s.discard(release.Tag, s.restore(s.binary, fmt.Errorf("the new core did not start: %w", err)))
+		}
+		if err := s.installs.Activate(release.Tag); err != nil {
+			return s.discard(release.Tag, s.restore(s.binary, fmt.Errorf("remember the new core: %w", err)))
+		}
 	}
 	s.binary, s.origin = binary, model.CoreInstalled
 	// The upgrade worked; what is left over is only disk space.
@@ -188,58 +214,98 @@ func (s *CoreService) Upgrade(ctx context.Context, progress func(model.CoreProgr
 	return nil
 }
 
-// HelperArchive returns the release archive of the core running now, which
+// ChosenVersion returns the release of the core Hop chose to run (bundled,
+// upgraded or the developer's), read from the binary itself: while the core
+// runs under the helper, the running one may be the helper's older copy.
+func (s *CoreService) ChosenVersion(ctx context.Context) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.checker.Version(ctx, s.binary)
+}
+
+// HelperArchive returns the release archive of the core Hop chose, which
 // the privileged helper verifies against GitHub before it runs that core
-// itself. An upgraded core kept its archive; for any other, such as the
-// bundled one, the archive of the same release is downloaded once and kept.
+// itself.
 func (s *CoreService) HelperArchive(ctx context.Context) (model.CoreArchive, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	info, err := s.info(ctx)
+	tag, err := s.checker.Version(ctx, s.binary)
 	if err != nil {
 		return model.CoreArchive{}, err
 	}
-	path, kept, err := s.installs.KeptArchive(info.Version)
+	return s.archiveOf(ctx, tag)
+}
+
+// archiveOf returns the release archive of core tag. An upgraded core kept
+// its archive; for any other, such as the bundled one, the archive of the
+// same release is downloaded once and kept.
+func (s *CoreService) archiveOf(ctx context.Context, tag string) (model.CoreArchive, error) {
+	path, kept, err := s.installs.KeptArchive(tag)
 	if err != nil {
-		return model.CoreArchive{}, fmt.Errorf("the running core cannot run under the helper: %w", err)
+		return model.CoreArchive{}, fmt.Errorf("core %s cannot run under the helper: %w", tag, err)
 	}
 	if kept {
-		return model.CoreArchive{Tag: info.Version, Path: path}, nil
+		return model.CoreArchive{Tag: tag, Path: path}, nil
 	}
-	release, err := s.releases.Release(ctx, info.Version)
+	release, err := s.releases.Release(ctx, tag)
 	if err != nil {
 		return model.CoreArchive{}, err
 	}
 	if err := s.releases.DownloadArchive(ctx, release, path, func(int64, int64) {}); err != nil {
 		return model.CoreArchive{}, err
 	}
-	return model.CoreArchive{Tag: info.Version, Path: path}, nil
+	return model.CoreArchive{Tag: tag, Path: path}, nil
 }
 
 // RestoreBundled goes back to the core that ships with the app, forgetting
-// the upgraded one.
+// the upgraded one: Hop's own core restarts on it, or the helper installs
+// its release.
 func (s *CoreService) RestoreBundled(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.tun.On() {
-		return ErrCoreLockedByTun
-	}
 	if s.origin != model.CoreInstalled {
 		return errors.New("the bundled core is already running")
 	}
 	if s.bundledBinary == "" {
 		return errors.New("this build has no bundled core to go back to")
 	}
-	previous := s.binary
-	if err := s.process.Restart(ctx, s.bundledBinary); err != nil {
-		return s.restore(previous, fmt.Errorf("the bundled core did not start: %w", err))
-	}
-	if err := s.installs.Deactivate(); err != nil {
-		return s.restore(previous, fmt.Errorf("forget the upgraded core: %w", err))
+	if s.placement.On() {
+		if err := s.restoreBundledInHelper(ctx); err != nil {
+			return err
+		}
+	} else {
+		previous := s.binary
+		if err := s.process.Restart(ctx, s.bundledBinary); err != nil {
+			return s.restore(previous, fmt.Errorf("the bundled core did not start: %w", err))
+		}
+		if err := s.installs.Deactivate(); err != nil {
+			return s.restore(previous, fmt.Errorf("forget the upgraded core: %w", err))
+		}
 	}
 	s.binary, s.origin = s.bundledBinary, model.CoreBundled
 	if err := s.installs.Prune(""); err != nil {
 		slog.Warn("could not remove the downloaded cores", "error", err)
+	}
+	return nil
+}
+
+// restoreBundledInHelper has the helper run the bundled core's release and
+// then forgets the upgraded one. The helper puts its previous core back when
+// the bundled one does not come up. mu must be held.
+func (s *CoreService) restoreBundledInHelper(ctx context.Context) error {
+	tag, err := s.checker.Version(ctx, s.bundledBinary)
+	if err != nil {
+		return fmt.Errorf("read the bundled core's version: %w", err)
+	}
+	archive, err := s.archiveOf(ctx, tag)
+	if err != nil {
+		return err
+	}
+	if err := s.helper.InstallCore(ctx, archive, s.port.ProxyURL()); err != nil {
+		return fmt.Errorf("install the bundled core into the helper: %w", err)
+	}
+	if err := s.installs.Deactivate(); err != nil {
+		return fmt.Errorf("forget the upgraded core, while the helper runs the bundled one until Hop next starts: %w", err)
 	}
 	return nil
 }

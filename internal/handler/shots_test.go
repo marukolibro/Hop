@@ -264,6 +264,7 @@ func TestShots(t *testing.T) {
 		window("stats", pageStats, nil)
 		window("settings", pageSettings, nil)
 		window("add-rule", pageActivity, func(d *Dashboard) { d.openRuleEditorFor(d.connections.data.Active[2]) })
+		window("tun-install", pageNodes, func(d *Dashboard) { d.tun.installOpen = true })
 
 		// The panel is as tall as its content, which it reports once drawn.
 		panel := shotDashboard(names, pageNodes)

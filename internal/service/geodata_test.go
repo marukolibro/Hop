@@ -118,7 +118,7 @@ func TestGeodataReplacement(t *testing.T) {
 			wantErr:     true,
 		},
 		{
-			name:       "tun on leaves the copy and restart to the helper",
+			name:       "a core under the helper leaves the copy and restart to it",
 			validator:  &geodataTestValidator{},
 			wantHelper: true,
 			wantSaved:  true,
@@ -150,13 +150,13 @@ func TestGeodataReplacement(t *testing.T) {
 			helper := &geodataTestHelper{}
 			core := &geodataTestCore{}
 			lock := &geodataTestLock{}
-			tun := NewTunFlag()
-			tun.Set(tc.wantHelper)
+			placement := NewHelperCoreFlag()
+			placement.Set(tc.wantHelper)
 			svc := NewGeodataService(
 				geodatarepo.NewSource(server.Client(), server.URL+"/"),
 				tc.validator,
 				geodataTestConfigs{config: []byte("mixed-port: 17890\n")},
-				store, helper, core, tun, lock,
+				store, helper, core, placement, lock,
 				appDir, homeDir, validateDir,
 			)
 
@@ -226,7 +226,7 @@ func TestGeodataReplacement(t *testing.T) {
 			geodatarepo.NewSource(server.Client(), server.URL+"/"),
 			&geodataTestValidator{},
 			geodataTestConfigs{config: []byte("mixed-port: 17890\n")},
-			store, &geodataTestHelper{}, &geodataTestCore{}, NewTunFlag(), &geodataTestLock{},
+			store, &geodataTestHelper{}, &geodataTestCore{}, NewHelperCoreFlag(), &geodataTestLock{},
 			filepath.Join(root, "geodata"), filepath.Join(root, "mihomo"), filepath.Join(root, "validate"),
 		)
 		if changed, err := svc.AutoUpdate(context.Background()); err != nil || !changed {

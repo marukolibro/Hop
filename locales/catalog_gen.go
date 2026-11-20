@@ -134,6 +134,16 @@ func (msgs Messages) ActionEditSubscription() string {
 	return Catalog.Format(msgs.locale, "actionEditSubscription", nil)
 }
 
+// ActionFollowCore says "Couldn't update the helper's core"
+// in the language the app shows.
+func ActionFollowCore() string { return In(i18n.Locale()).ActionFollowCore() }
+
+// ActionFollowCore says "Couldn't update the helper's core"
+// in the language of msgs.
+func (msgs Messages) ActionFollowCore() string {
+	return Catalog.Format(msgs.locale, "actionFollowCore", nil)
+}
+
 // ActionInstallAppUpdate says "Couldn't install the app update"
 // in the language the app shows.
 func ActionInstallAppUpdate() string { return In(i18n.Locale()).ActionInstallAppUpdate() }
@@ -858,16 +868,6 @@ func (msgs Messages) CoreDownloadingProgress(done string, total string) string {
 	return Catalog.Format(msgs.locale, "coreDownloadingProgress", map[string]any{"done": done, "total": total})
 }
 
-// CoreLockedByTun says "The core can't be replaced while TUN is on. Turn it off first."
-// in the language the app shows.
-func CoreLockedByTun() string { return In(i18n.Locale()).CoreLockedByTun() }
-
-// CoreLockedByTun says "The core can't be replaced while TUN is on. Turn it off first."
-// in the language of msgs.
-func (msgs Messages) CoreLockedByTun() string {
-	return Catalog.Format(msgs.locale, "coreLockedByTun", nil)
-}
-
 // CoreNewDev says "Version {version} is available. The development core comes from HOP_MIHOMO_BINARY and isn't upgraded here."
 // in the language the app shows.
 func CoreNewDev(version string) string { return In(i18n.Locale()).CoreNewDev(version) }
@@ -1390,11 +1390,11 @@ func (msgs Messages) HackYou() string {
 	return Catalog.Format(msgs.locale, "hackYou", nil)
 }
 
-// HelperInstalled says "Installed. With TUN on, it runs the core with system privileges."
+// HelperInstalled says "Installed. It runs the core with system privileges."
 // in the language the app shows.
 func HelperInstalled() string { return In(i18n.Locale()).HelperInstalled() }
 
-// HelperInstalled says "Installed. With TUN on, it runs the core with system privileges."
+// HelperInstalled says "Installed. It runs the core with system privileges."
 // in the language of msgs.
 func (msgs Messages) HelperInstalled() string {
 	return Catalog.Format(msgs.locale, "helperInstalled", nil)
@@ -3964,13 +3964,13 @@ func (msgs Messages) TunInstallAndOn() string {
 	return Catalog.Format(msgs.locale, "tunInstallAndOn", nil)
 }
 
-// TunInstallDescription says "TUN takes over all traffic and needs Hop's helper installed first. {prompt}. You can uninstall it any time in Settings."
+// TunInstallDescription says "TUN takes over all traffic and needs Hop's helper installed first, which then runs the core with system privileges. {…"
 // in the language the app shows.
 func TunInstallDescription(prompt string) string {
 	return In(i18n.Locale()).TunInstallDescription(prompt)
 }
 
-// TunInstallDescription says "TUN takes over all traffic and needs Hop's helper installed first. {prompt}. You can uninstall it any time in Settings."
+// TunInstallDescription says "TUN takes over all traffic and needs Hop's helper installed first, which then runs the core with system privileges. {…"
 // in the language of msgs.
 func (msgs Messages) TunInstallDescription(prompt string) string {
 	return Catalog.Format(msgs.locale, "tunInstallDescription", map[string]any{"prompt": prompt})
@@ -4026,13 +4026,13 @@ func (msgs Messages) TunUpdateAndOn() string {
 	return Catalog.Format(msgs.locale, "tunUpdateAndOn", nil)
 }
 
-// TunUpdateDescription says "TUN takes over all traffic and needs Hop's helper updated first. {prompt}. You can uninstall it any time in Settings."
+// TunUpdateDescription says "TUN takes over all traffic and needs Hop's helper updated first, which then runs the core with system privileges. {pr…"
 // in the language the app shows.
 func TunUpdateDescription(prompt string) string {
 	return In(i18n.Locale()).TunUpdateDescription(prompt)
 }
 
-// TunUpdateDescription says "TUN takes over all traffic and needs Hop's helper updated first. {prompt}. You can uninstall it any time in Settings."
+// TunUpdateDescription says "TUN takes over all traffic and needs Hop's helper updated first, which then runs the core with system privileges. {pr…"
 // in the language of msgs.
 func (msgs Messages) TunUpdateDescription(prompt string) string {
 	return Catalog.Format(msgs.locale, "tunUpdateDescription", map[string]any{"prompt": prompt})

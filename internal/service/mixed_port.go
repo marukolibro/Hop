@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,6 +43,12 @@ func (s *MixedPortState) Get() int { return int(s.port.Load()) }
 
 // Set makes port the proxy port of everything that reads the state.
 func (s *MixedPortState) Set(port int) { s.port.Store(int32(port)) }
+
+// ProxyURL is Hop's own proxy as the helper is told to ask GitHub through
+// it: an HTTP proxy on the loopback, at the port now.
+func (s *MixedPortState) ProxyURL() string {
+	return "http://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(s.Get()))
+}
 
 // MixedPortStore keeps the port the user chose between starts.
 type MixedPortStore interface {

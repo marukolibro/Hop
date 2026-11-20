@@ -21,6 +21,7 @@ import (
 	"hop/internal/model"
 	"hop/internal/repository/corerelease"
 	"hop/internal/repository/corestore"
+	"hop/internal/repository/helper"
 	"hop/internal/repository/mihomo"
 	"hop/internal/service"
 )
@@ -30,6 +31,12 @@ import (
 type olderVersion struct{}
 
 func (olderVersion) Version(context.Context) (string, error) { return "v1.0.0", nil }
+
+// runningConfig is the config the test's core runs, which an upgrade checks
+// the new core on.
+type runningConfig []byte
+
+func (c runningConfig) CurrentConfig(context.Context) ([]byte, error) { return c, nil }
 
 // releaseServer serves one release the way GitHub does: the newest-release
 // document, and the asset it points to.
@@ -141,9 +148,12 @@ func TestCoreUpgrade(t *testing.T) {
 		olderVersion{},
 		corerelease.NewSource(&http.Client{}, releases.server.URL),
 		store, runner,
-		mihomo.NewCoreChecker(mihomo.ConfigPath(cfg.HomeDir), filepath.Join(appDir, "validate"), validateTimeout),
+		mihomo.NewCoreChecker(filepath.Join(appDir, "validate"), validateTimeout),
+		runningConfig(startup),
+		// Hop's own core runs here, so nothing reaches the helper.
+		helper.Absent{},
 		binary, binary, model.CoreBundled,
-		service.NewTunFlag(),
+		service.NewHelperCoreFlag(), service.NewMixedPortState(testMixedPort),
 	)
 	noProgress := func(model.CoreProgress) {}
 
@@ -233,7 +243,7 @@ func TestCoreUpgrade(t *testing.T) {
 	})
 
 	t.Run("a developer's core cannot be upgraded", func(t *testing.T) {
-		override := service.NewCoreService(olderVersion{}, nil, nil, nil, nil, binary, binary, model.CoreOverride, service.NewTunFlag())
+		override := service.NewCoreService(olderVersion{}, nil, nil, nil, nil, nil, nil, binary, binary, model.CoreOverride, service.NewHelperCoreFlag(), nil)
 		if err := override.Upgrade(ctx, noProgress); !errors.Is(err, service.ErrCoreNotUpgradable) {
 			t.Errorf("err = %v, want ErrCoreNotUpgradable", err)
 		}

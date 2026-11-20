@@ -6,23 +6,23 @@ import (
 )
 
 // CoreApplier sends every config to the core that serves Hop's controller:
-// the helper's while TUN is on, Hop's own otherwise. A config applied to the
-// wrong core would either be refused or silently drop the tun section.
+// the helper's once the core runs there, Hop's own otherwise. A config
+// applied to the wrong core would be refused, as no core would answer it.
 type CoreApplier struct {
-	local  ConfigApplier
-	helper ConfigApplier
-	state  *TunFlag
+	local     ConfigApplier
+	helper    ConfigApplier
+	placement *HelperCoreFlag
 }
 
-// NewCoreApplier returns an applier that writes to local until TUN turns
-// on, then to the helper's core.
-func NewCoreApplier(local ConfigApplier, helperConfig ConfigApplier, state *TunFlag) *CoreApplier {
-	return &CoreApplier{local: local, helper: helperConfig, state: state}
+// NewCoreApplier returns an applier that writes to local until the core
+// moves under the helper, then to the helper's core.
+func NewCoreApplier(local ConfigApplier, helperConfig ConfigApplier, placement *HelperCoreFlag) *CoreApplier {
+	return &CoreApplier{local: local, helper: helperConfig, placement: placement}
 }
 
 // ApplyConfig makes the core serving Hop's controller now switch to config.
 func (a *CoreApplier) ApplyConfig(ctx context.Context, config []byte) error {
-	if a.state.On() {
+	if a.placement.On() {
 		if err := a.helper.ApplyConfig(ctx, config); err != nil {
 			return fmt.Errorf("the helper's core did not accept the config: %w", err)
 		}

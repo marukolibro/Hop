@@ -675,17 +675,22 @@ type GeodataStatus struct {
 }
 
 // TunStatus is what the dashboard shows of TUN mode: whether the privileged
-// helper is installed and its version, whether its core runs, and which
-// interface holds the default routes when another client's TUN does.
+// helper is installed and its version, whether TUN is on, and which interface
+// holds the default routes when another client's TUN does.
 type TunStatus struct {
 	HelperInstalled bool
 	HelperVersion   string
 	// HelperOutdated says the installed helper is another version than this
 	// app's: it must be replaced before TUN can use it.
 	HelperOutdated bool
-	CoreRunning    bool
-	Taken          bool
-	TakenBy        string
+	// On says the helper's core runs with TUN on: only Hop's TUN runs there.
+	On      bool
+	Taken   bool
+	TakenBy string
+	// CoreRestarts counts the restarts the helper's supervision reported
+	// since the helper started, and LastCoreRestart is the latest of them.
+	CoreRestarts    int
+	LastCoreRestart CoreRestart
 }
 
 // ProxyEndpoint is one proxy the system sends traffic to.

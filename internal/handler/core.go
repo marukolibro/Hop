@@ -136,11 +136,6 @@ func (d *Dashboard) coreRows(c *ui.Context, t *ui.Theme) []func() {
 	case s.latest != nil:
 		rows = append(rows, func() { mutedText(c, t, locales.CoreUpToDate()) })
 	}
-	if d.tun.on {
-		rows = append(rows, func() {
-			mutedText(c, t, locales.CoreLockedByTun())
-		})
-	}
 	return rows
 }
 
@@ -184,7 +179,7 @@ func originText(origin model.CoreOrigin) string {
 // found.
 func (d *Dashboard) coreActions(c *ui.Context, t *ui.Theme) {
 	s := &d.core
-	canChange := s.info.Origin != model.CoreOverride && !d.controlsLocked() && !d.tun.on
+	canChange := s.info.Origin != model.CoreOverride && !d.controlsLocked()
 	ui.Row(c.Key("actions")).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 		if s.info.Origin == model.CoreInstalled {
 			button(c, buttonSpec{label: locales.CoreRestoreBundled(), style: mainSoftButton(t), disabled: !canChange}, d.beginRestoreCore)

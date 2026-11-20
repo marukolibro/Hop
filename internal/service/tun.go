@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"os"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -35,6 +33,7 @@ type HelperControl interface {
 	InstallCore(ctx context.Context, archive model.CoreArchive, proxy string) error
 	InstallGeodata(ctx context.Context, geodataDir string) error
 	StartCore(ctx context.Context, config []byte) error
+	ApplyConfig(ctx context.Context, config []byte) error
 	StopCore(ctx context.Context) error
 }
 
@@ -46,10 +45,10 @@ type HelperInstall interface {
 	Uninstall(ctx context.Context) error
 }
 
-// TunCores says which core Hop runs and hands over its release archive, the
-// one form of a core the helper accepts.
+// TunCores says which release Hop chose to run and hands over its archive,
+// the one form of a core the helper accepts.
 type TunCores interface {
-	Info(ctx context.Context) (model.CoreInfo, error)
+	ChosenVersion(ctx context.Context) (string, error)
 	HelperArchive(ctx context.Context) (model.CoreArchive, error)
 }
 
@@ -67,10 +66,13 @@ type ControllerConns interface {
 	CloseStreams()
 }
 
-// TunRunner is Hop's own core, which TUN mode stops while the helper's runs.
+// TunRunner is Hop's own core, which stops for good once the helper runs
+// the core. ReapLeftover stops one an earlier Hop left running, which would
+// hold the ports the helper's core needs.
 type TunRunner interface {
 	Start(config []byte) error
 	Stop() error
+	ReapLeftover() error
 }
 
 // TunConfigs builds the runtime config with TUN on or off: the startup
@@ -101,11 +103,29 @@ func (f *TunFlag) On() bool { return f.on.Load() }
 // Set records whether TUN is on; the TUN service is the only writer.
 func (f *TunFlag) Set(on bool) { f.on.Store(on) }
 
-// TunService turns TUN mode on and off. On, the core runs under the
-// privileged helper as root and takes the default routes over its own TUN
-// device; Hop's own core is stopped, and the helper's serves the same
-// controller address, so the dashboard carries on against it. Off, the
-// helper's core is stopped and Hop's own runs again.
+// HelperCoreFlag is whether Hop's core runs under the privileged helper, as
+// root. Once the helper is installed it always does, TUN on or off, so
+// turning TUN on or off reloads that one core and its ports never pass
+// between root and the user: a port root's core closed connections on stays
+// from a core the user runs for TIME_WAIT, 30 s on macOS. The TUN service
+// sets it, and everything that reaches the running core reads it.
+type HelperCoreFlag struct{ on atomic.Bool }
+
+// NewHelperCoreFlag returns a flag that says Hop runs its own core.
+func NewHelperCoreFlag() *HelperCoreFlag { return &HelperCoreFlag{} }
+
+// On says whether the core runs under the helper.
+func (f *HelperCoreFlag) On() bool { return f.on.Load() }
+
+// Set records where the core runs; the TUN service is the only writer.
+func (f *HelperCoreFlag) Set(on bool) { f.on.Store(on) }
+
+// TunService runs the core under the privileged helper and turns TUN on and
+// off in it. Once the helper is installed, the core runs there as root, TUN
+// on or off, on the same controller address, so the dashboard reaches it as
+// it would Hop's own; TUN on, it takes the default routes over its own TUN
+// device. Without the helper, Hop runs its own core and TUN is off; the first
+// time TUN is turned on, the helper is installed and the core moves into it.
 type TunService struct {
 	helper    HelperControl
 	install   HelperInstall
@@ -124,8 +144,10 @@ type TunService struct {
 	geodata string
 	tool    string
 	// state is whether TUN is on, shared with the services that build and
-	// apply configs.
-	state *TunFlag
+	// apply configs; placement is whether the core runs under the helper,
+	// shared with the services that reach the running core.
+	state     *TunFlag
+	placement *HelperCoreFlag
 	// controller is Hop's client of the controller, whose idle connections
 	// are closed before the helper's core stops.
 	controller ControllerConns
@@ -137,9 +159,9 @@ type TunService struct {
 // NewTunService returns a TUN service whose helper talks on the helper
 // client's socket, running the core cores reports, seeding geodata from
 // geodataDir and installing the helper from toolSource with bundledCore when
-// the user asks for one. state is the flag the service sets and the rest of
-// Hop reads.
-func NewTunService(helperClient HelperControl, installer HelperInstall, routes RouteTable, runner TunRunner, configs TunConfigs, validator TunValidator, cores TunCores, port *MixedPortState, bundledCore string, geodataDir string, toolSource string, state *TunFlag, controller ControllerConns) *TunService {
+// the user asks for one. state and placement are the flags the service sets
+// and the rest of Hop reads.
+func NewTunService(helperClient HelperControl, installer HelperInstall, routes RouteTable, runner TunRunner, configs TunConfigs, validator TunValidator, cores TunCores, port *MixedPortState, bundledCore string, geodataDir string, toolSource string, state *TunFlag, placement *HelperCoreFlag, controller ControllerConns) *TunService {
 	return &TunService{
 		helper:     helperClient,
 		install:    installer,
@@ -153,12 +175,13 @@ func NewTunService(helperClient HelperControl, installer HelperInstall, routes R
 		geodata:    geodataDir,
 		tool:       toolSource,
 		state:      state,
+		placement:  placement,
 		controller: controller,
 	}
 }
 
 // Status reports what the dashboard shows: whether the helper is installed
-// and its version, whether its core runs, and which interface holds the
+// and its version, whether its core runs TUN, and which interface holds the
 // default routes when another TUN does.
 func (s *TunService) Status(ctx context.Context) (model.TunStatus, error) {
 	table, err := s.routes.Read(ctx)
@@ -176,9 +199,13 @@ func (s *TunService) Status(ctx context.Context) (model.TunStatus, error) {
 		status.HelperOutdated = version != helper.Version
 	}
 	if coreErr == nil {
-		status.CoreRunning = core.Running
+		status.On = core.Running && core.Tun
+		status.CoreRestarts = core.Restarts
+		if core.LastRestart != nil {
+			status.LastCoreRestart = *core.LastRestart
+		}
 	}
-	s.noteAgreement(s.state.On(), status.CoreRunning)
+	s.noteAgreement(s.state.On(), status.On)
 	return status, nil
 }
 
@@ -191,23 +218,26 @@ func (s *TunService) noteAgreement(remembered bool, running bool) {
 		return
 	}
 	if disagree {
-		slog.Warn("TUN's remembered state and the helper's core disagree", "remembered", remembered, "running", running)
+		slog.Warn("TUN's remembered state and the helper's core disagree", "remembered", remembered, "helper_tun", running)
 		return
 	}
 	slog.Info("TUN's remembered state and the helper's core agree again", "on", remembered)
 }
 
-// Enable turns TUN on from the user's click: it installs the helper when
-// there is none yet (asking for administrator approval once — a password on
-// macOS, a UAC prompt on Windows), puts the core Hop runs into it when the
-// helper has another release, refreshes the geodata in it,
-// validates the TUN config with the core itself, stops Hop's own core and
-// starts the helper's, keeping the outbound mode the running core is in.
-// When the helper's core does not come up, Hop's own is started again and
-// the error says so.
+// Enable turns TUN on from the user's click. With the core under the helper
+// that is one reload of it (reloadTun). Otherwise it installs the helper when
+// there is none yet, or replaces one of another version (asking for
+// administrator approval once — a password on macOS, a UAC prompt on
+// Windows), puts the release Hop runs into it when the helper has another,
+// and moves the core into the helper with TUN on, keeping the outbound mode
+// the running core is in. When the helper's core does not come up, Hop's own
+// is started again and the error says so.
 func (s *TunService) Enable(ctx context.Context) error {
 	if err := s.refuseTaken(ctx); err != nil {
 		return err
+	}
+	if s.placement.On() {
+		return s.reloadTun(ctx, true)
 	}
 	if err := s.ensureHelper(ctx); err != nil {
 		return err
@@ -219,37 +249,84 @@ func (s *TunService) Enable(ctx context.Context) error {
 	if err := s.refreshCore(ctx); err != nil {
 		return err
 	}
-	return s.switchCore(ctx, config, plain)
+	return s.moveToHelper(ctx, config, plain)
 }
 
-// refreshCore has the helper run the release Hop's own core runs, after an
-// upgrade or a move back to the bundled core: when the helper has another
-// release, it gets this one's GitHub archive, which it verifies against
-// GitHub itself before installing, asking through Hop's own proxy. It runs
-// only while Hop's own core does, which answers the version and carries the
-// requests; a start with TUN on keeps the helper's core as it is.
+// reloadTun turns TUN on or off in the core the helper runs: one reload of
+// that core, which keeps its ports, its connections and the outbound mode it
+// runs in, while the helper moves the system DNS with it.
+func (s *TunService) reloadTun(ctx context.Context, on bool) error {
+	config, err := s.configs.LiveConfigTun(ctx, on)
+	if err != nil {
+		return fmt.Errorf("build the config (tun=%t): %w", on, err)
+	}
+	if err := s.validator.Validate(ctx, config); err != nil {
+		return fmt.Errorf("the core's config test rejected the config (tun=%t): %w", on, err)
+	}
+	if err := s.helper.ApplyConfig(ctx, config); err != nil {
+		return fmt.Errorf("reload the helper's core (tun=%t): %w", on, err)
+	}
+	s.state.Set(on)
+	return nil
+}
+
+// CoreBehind says whether the core runs under the helper on another release
+// than the one Hop chose, as after an app update that ships a newer core: the
+// helper keeps its own copy, which only an install replaces (FollowCore).
+func (s *TunService) CoreBehind(ctx context.Context) (bool, error) {
+	if !s.placement.On() {
+		return false, nil
+	}
+	chosen, installed, err := s.coreVersions(ctx)
+	if err != nil {
+		return false, err
+	}
+	return chosen != installed, nil
+}
+
+// FollowCore has the helper run the release Hop chose, restarting its core
+// on it (refreshCore).
+func (s *TunService) FollowCore(ctx context.Context) error {
+	return s.refreshCore(ctx)
+}
+
+// refreshCore has the helper run the release Hop chose (bundled or
+// upgraded): when the helper has another release, it gets this one's GitHub
+// archive, which it verifies against GitHub itself before installing, asking
+// through Hop's own proxy; a core it runs is restarted on it. The proxy must
+// answer, so this runs while a core does: Hop's own before the core moves
+// into the helper, or the helper's.
 func (s *TunService) refreshCore(ctx context.Context) error {
-	info, err := s.cores.Info(ctx)
+	chosen, installed, err := s.coreVersions(ctx)
 	if err != nil {
 		return err
 	}
-	status, err := s.helper.Status(ctx)
-	if err != nil {
-		return fmt.Errorf("read the helper's core version: %w", err)
-	}
-	if status.CoreVersion == info.Version {
+	if chosen == installed {
 		return nil
 	}
 	archive, err := s.cores.HelperArchive(ctx)
 	if err != nil {
-		return fmt.Errorf("get the release archive of core %s for the helper: %w", info.Version, err)
+		return fmt.Errorf("get the release archive of core %s for the helper: %w", chosen, err)
 	}
-	proxy := "http://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(s.port.Get()))
-	if err := s.helper.InstallCore(ctx, archive, proxy); err != nil {
-		return fmt.Errorf("install core %s into the helper (had %q): %w", archive.Tag, status.CoreVersion, err)
+	if err := s.helper.InstallCore(ctx, archive, s.port.ProxyURL()); err != nil {
+		return fmt.Errorf("install core %s into the helper (had %q): %w", archive.Tag, installed, err)
 	}
-	slog.Info("installed the running core into the helper", "tag", archive.Tag, "previous", status.CoreVersion)
+	slog.Info("installed the chosen core into the helper", "tag", archive.Tag, "previous", installed)
 	return nil
+}
+
+// coreVersions returns the release Hop chose and the one the helper has
+// installed.
+func (s *TunService) coreVersions(ctx context.Context) (chosen string, installed string, err error) {
+	chosen, err = s.cores.ChosenVersion(ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("read the version of the core Hop chose: %w", err)
+	}
+	status, err := s.helper.Status(ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("read the helper's core version: %w", err)
+	}
+	return chosen, status.CoreVersion, nil
 }
 
 // ensureHelper installs the helper when none answers, and replaces one that
@@ -275,46 +352,40 @@ func (s *TunService) ensureHelper(ctx context.Context) error {
 	return nil
 }
 
-// enableCold turns TUN on at start, before any core of Hop's runs: the
-// config comes from the saved startup mode, and a failure has no proxy to
-// put back — the caller starts Hop's own core.
-func (s *TunService) enableCold(ctx context.Context) error {
-	if err := s.refuseTaken(ctx); err != nil {
+// moveToHelper hands the core over to the helper with TUN on, the one move
+// from a core the user runs to one root runs: root may bind the ports Hop's
+// own core just closed connections on at once. It stops Hop's own core and
+// starts the helper's on config; when that does not come up, Hop's own is
+// started again on rollbackConfig.
+func (s *TunService) moveToHelper(ctx context.Context, config []byte, rollbackConfig []byte) error {
+	if err := s.prepareHelperCore(ctx, config); err != nil {
 		return err
-	}
-	config, err := s.configs.StartupConfigTun(true)
-	if err != nil {
-		return fmt.Errorf("build the TUN config: %w", err)
-	}
-	return s.switchCore(ctx, config, nil)
-}
-
-// switchCore hands the traffic to the helper's core: it refreshes the
-// geodata in the helper, stops Hop's own and starts the helper's on config. rollbackConfig, when not nil, is what Hop's own core is started
-// on again when the helper's does not come up.
-func (s *TunService) switchCore(ctx context.Context, config []byte, rollbackConfig []byte) error {
-	if err := s.validator.Validate(ctx, config); err != nil {
-		return fmt.Errorf("the core's config test rejected the TUN config: %w", err)
-	}
-	// An app update may have replaced Hop's databases while TUN was off.
-	// Overwrite the helper's with the current ones before its core reads them.
-	if err := s.helper.InstallGeodata(ctx, s.geodata); err != nil {
-		return fmt.Errorf("refresh the geodata in the helper: %w", err)
 	}
 	if err := s.runner.Stop(); err != nil {
 		return fmt.Errorf("stop Hop's own core: %w", err)
 	}
 	if err := s.helper.StartCore(ctx, config); err != nil {
 		startErr := fmt.Errorf("start the core under the helper: %w", err)
-		if rollbackConfig == nil {
-			return startErr
-		}
 		if err := s.runner.Start(rollbackConfig); err != nil {
 			return errors.Join(startErr, fmt.Errorf("start Hop's own core again: %w", err))
 		}
 		return startErr
 	}
+	s.placement.Set(true)
 	s.state.Set(true)
+	return nil
+}
+
+// prepareHelperCore gets the helper ready to start a core on config: the core
+// itself tests the config, and the helper's geodata is replaced with Hop's
+// current copy, which an app update may have replaced since.
+func (s *TunService) prepareHelperCore(ctx context.Context, config []byte) error {
+	if err := s.validator.Validate(ctx, config); err != nil {
+		return fmt.Errorf("the core's config test rejected the config for the helper: %w", err)
+	}
+	if err := s.helper.InstallGeodata(ctx, s.geodata); err != nil {
+		return fmt.Errorf("refresh the geodata in the helper: %w", err)
+	}
 	return nil
 }
 
@@ -345,88 +416,100 @@ func (s *TunService) refuseTaken(ctx context.Context) error {
 	return nil
 }
 
-// Disable turns TUN off: the helper's core is stopped and Hop's own runs
-// again on the config with TUN off, keeping the mode the core runs in.
+// Disable turns TUN off from the user's click: one reload of the core the
+// helper runs, which goes on running there (reloadTun). TUN runs only there,
+// so with Hop's own core running there is nothing to turn off.
 func (s *TunService) Disable(ctx context.Context) error {
-	// The config is built while a core still answers the mode read.
-	config, err := s.configs.LiveConfigTun(ctx, false)
-	if err != nil {
-		return fmt.Errorf("build the config without TUN: %w", err)
+	if !s.placement.On() {
+		s.state.Set(false)
+		return nil
 	}
-	if err := s.stopHelperCore(ctx); err != nil {
-		return fmt.Errorf("stop the helper's core: %w", err)
-	}
-	s.state.Set(false)
-	if err := s.runner.Start(config); err != nil {
-		return fmt.Errorf("start Hop's own core: %w", err)
-	}
-	return nil
+	return s.reloadTun(ctx, false)
 }
 
-// Startup brings TUN to the state the saved setting asks for, before Hop's
-// own core starts. A helper core left running by a Hop that crashed is
-// adopted when the setting says TUN on, and stopped when it does not.
-// Turning TUN on never installs anything here: an administrator password is
-// asked for only on the user's click. It returns whether TUN is on now.
+// Startup settles where the core runs before Hop starts one, and returns
+// whether it runs under the helper; when it does not, the caller starts Hop's
+// own. With the helper installed in this app's version the core runs there,
+// with TUN on when the saved setting asks for it and no other client's TUN
+// holds the routes: a core a crashed Hop left running there is adopted as it
+// is, and otherwise one is started. A helper of another version speaks
+// another protocol and cannot be trusted with the core: its core, which may
+// hold the ports and the routes, is stopped, and the user updates the helper
+// by turning TUN on. Nothing is installed here: an administrator password is
+// asked for only on the user's click.
 func (s *TunService) Startup(ctx context.Context, wanted bool) (bool, error) {
-	version, versionErr := s.install.InstalledVersion(ctx)
-	installed := versionErr == nil
-	if installed && version != helper.Version {
-		// The daemon speaks another protocol, so it cannot be trusted with
-		// TUN. Its core may hold the ports and the routes: stop it and leave
-		// TUN off; the user updates the helper by turning TUN on.
-		slog.Warn("the installed helper is another version; leaving TUN off until it is updated", "installed", version, "want", helper.Version)
+	version, err := s.install.InstalledVersion(ctx)
+	if err != nil {
+		return false, nil
+	}
+	if version != helper.Version {
+		slog.Warn("the installed helper is another version; running Hop's own core until it is updated", "installed", version, "want", helper.Version)
 		if err := s.stopHelperCore(ctx); err != nil {
 			return false, fmt.Errorf("stop the helper's core before updating it: %w", err)
 		}
 		return false, nil
 	}
 	core, err := s.helper.Status(ctx)
-	if err != nil && installed {
+	if err != nil {
 		return false, fmt.Errorf("read the helper's state: %w", err)
 	}
-	if installed && core.Running {
-		if wanted {
-			slog.Info("adopting the helper's core left running at start")
-			s.state.Set(true)
-			return true, nil
-		}
-		slog.Info("stopping the helper's core at start: TUN is off in the settings")
-		if err := s.stopHelperCore(ctx); err != nil {
-			return false, fmt.Errorf("stop the helper's leftover core: %w", err)
-		}
+	if core.Running {
+		slog.Info("adopting the helper's core left running at start", "tun", core.Tun)
+		s.placement.Set(true)
+		s.state.Set(core.Tun)
+		return true, nil
+	}
+	tun, err := s.startupTun(ctx, wanted)
+	if err != nil {
+		return false, err
+	}
+	config, err := s.configs.StartupConfigTun(tun)
+	if err != nil {
+		return false, fmt.Errorf("build the startup config (tun=%t): %w", tun, err)
+	}
+	if err := s.prepareHelperCore(ctx, config); err != nil {
+		return false, err
+	}
+	// A core an earlier Hop ran itself would hold the ports.
+	if err := s.runner.ReapLeftover(); err != nil {
+		return false, err
+	}
+	if err := s.helper.StartCore(ctx, config); err != nil {
+		return false, fmt.Errorf("start the core under the helper (tun=%t): %w", tun, err)
+	}
+	s.placement.Set(true)
+	s.state.Set(tun)
+	return true, nil
+}
+
+// startupTun says whether the core starts with TUN on: when the saved
+// setting asks for it, unless another client's TUN holds the default routes,
+// the refusal the switch applies too.
+func (s *TunService) startupTun(ctx context.Context, wanted bool) (bool, error) {
+	if !wanted {
 		return false, nil
 	}
-	if !wanted || !installed {
-		return false, nil
-	}
-	// The refusal rules of the pill apply at start too: another TUN holding
-	// the routes leaves TUN off, and so does an enable that fails.
 	taken, err := s.taken(ctx)
 	if err != nil {
 		return false, err
 	}
 	if taken {
-		slog.Warn("another TUN holds the default routes; leaving TUN off at start")
+		slog.Warn("another TUN holds the default routes; starting with TUN off")
 		return false, nil
-	}
-	// Cold start: Hop's own core is not running yet, so a failure has no
-	// proxy to put back — the caller starts its own core.
-	if err := s.enableCold(ctx); err != nil {
-		return false, err
 	}
 	return true, nil
 }
 
-// Release stops the helper's core at quit, when TUN is on: the TUN device
-// goes away with it and apps fall back to their direct routes.
+// Release stops the helper's core at quit: a TUN device goes away with it,
+// and apps fall back to their direct routes.
 func (s *TunService) Release(ctx context.Context) error {
-	if !s.state.On() {
+	if !s.placement.On() {
 		return nil
 	}
 	if err := s.stopHelperCore(ctx); err != nil {
 		return fmt.Errorf("stop the helper's core: %w", err)
 	}
+	s.placement.Set(false)
 	s.state.Set(false)
 	return nil
 }
@@ -441,18 +524,38 @@ func (s *TunService) stopHelperCore(ctx context.Context) error {
 	return s.helper.StopCore(ctx)
 }
 
-// Uninstall removes the helper entirely. A TUN that is on is turned off
-// first, so Hop's own core carries the traffic again before the helper goes.
+// Uninstall removes the helper entirely. The core moves out of it first, TUN
+// off, so Hop's own core carries the traffic again before the helper goes.
 func (s *TunService) Uninstall(ctx context.Context) error {
-	if s.state.On() {
-		if err := s.Disable(ctx); err != nil {
-			return fmt.Errorf("turn TUN off before uninstalling: %w", err)
+	if s.placement.On() {
+		if err := s.moveToOwn(ctx); err != nil {
+			return fmt.Errorf("move the core out of the helper before uninstalling it: %w", err)
 		}
 	}
 	if err := s.install.Uninstall(ctx); err != nil {
 		return fmt.Errorf("uninstall the helper: %w", err)
 	}
+	return nil
+}
+
+// moveToOwn hands the core back to Hop's own process with TUN off, keeping
+// the mode it runs in: the one move from root to the user. Connections root's
+// core closed hold its ports from a core the user runs for TIME_WAIT, so the
+// start can wait up to 30 s (two minutes on Windows).
+func (s *TunService) moveToOwn(ctx context.Context) error {
+	// The config is built while a core still answers the mode read.
+	config, err := s.configs.LiveConfigTun(ctx, false)
+	if err != nil {
+		return fmt.Errorf("build the config without TUN: %w", err)
+	}
+	if err := s.stopHelperCore(ctx); err != nil {
+		return fmt.Errorf("stop the helper's core: %w", err)
+	}
+	s.placement.Set(false)
 	s.state.Set(false)
+	if err := s.runner.Start(config); err != nil {
+		return fmt.Errorf("start Hop's own core: %w", err)
+	}
 	return nil
 }
 

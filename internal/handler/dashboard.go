@@ -182,12 +182,15 @@ type SystemProxyService interface {
 	Disable(ctx context.Context) error
 }
 
-// TunService turns TUN mode on and off through the privileged helper, and
-// removes the helper when the user asks.
+// TunService turns TUN mode on and off in the core the privileged helper
+// runs, keeps that core on the release Hop chose, and removes the helper when
+// the user asks.
 type TunService interface {
 	Status(ctx context.Context) (model.TunStatus, error)
 	Enable(ctx context.Context) error
 	Disable(ctx context.Context) error
+	CoreBehind(ctx context.Context) (bool, error)
+	FollowCore(ctx context.Context) error
 	Uninstall(ctx context.Context) error
 }
 
@@ -902,6 +905,7 @@ var (
 	actionCheckCore           = action{"check-core", locales.ActionCheckCore}
 	actionUpgradeCore         = action{"upgrade-core", locales.ActionUpgradeCore}
 	actionRestoreCore         = action{"restore-core", locales.ActionRestoreCore}
+	actionFollowCore          = action{"follow-core", locales.ActionFollowCore}
 	actionCoreRestarted       = action{"core-restarted", locales.ActionCoreRestarted}
 	actionCoreGaveUp          = action{"core-gave-up", locales.ActionCoreGaveUp}
 	actionSaveSettings        = action{"save-settings", locales.ActionSaveSettings}
@@ -1097,7 +1101,7 @@ func (d *Dashboard) conditionInput() model.ConditionInput {
 		SystemProxy:      d.sysProxy.status,
 		SystemProxyKnown: d.sysProxy.loaded && !d.sysProxy.busy,
 		WantTun:          d.settings.settings.Tun,
-		Tun:              model.TunStatus{Taken: d.tun.taken, TakenBy: d.tun.takenBy, CoreRunning: d.tun.on},
+		Tun:              model.TunStatus{Taken: d.tun.taken, TakenBy: d.tun.takenBy, On: d.tun.on},
 		TunKnown:         d.tun.loaded && !d.tun.busy,
 	}
 }

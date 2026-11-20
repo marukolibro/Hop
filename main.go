@@ -170,6 +170,8 @@ func run() (err error) {
 	client := mihomo.NewClient(cfg.ControllerAddr, cfg.Secret, mihomo.ConfigPath(cfg.HomeDir), &http.Client{}, controllerTimeout)
 	helperClient, geodataHelper, helperInstaller := helperAccess(instance)
 	tunFlag := service.NewTunFlag()
+	// Once the helper is installed the core runs under it, TUN on or off.
+	helperCore := service.NewHelperCoreFlag()
 	lanState := service.NewLANState()
 	fakeIPState := service.NewFakeIPExceptionsState()
 	if err := service.StartupFakeIPExceptions(store, fakeIPState); err != nil {
@@ -181,8 +183,8 @@ func run() (err error) {
 		// The custom rules go ahead of every config the service builds.
 		store,
 		// Configs go to whichever core serves the controller: the helper's
-		// while TUN is on, Hop's own otherwise.
-		service.NewCoreApplier(client, helperClient, tunFlag),
+		// once the core runs there, Hop's own otherwise.
+		service.NewCoreApplier(client, helperClient, helperCore),
 		// Config checks borrow the core's own -t, in an isolated directory.
 		mihomo.NewConfigValidator(cfg.MihomoBinary, validateDir, validationTimeout),
 		client,
@@ -233,11 +235,14 @@ func run() (err error) {
 		corerelease.NewSource(hopProxyClient(portState), corerelease.ReleasesAPI),
 		corestore.New(cfg.AppDir),
 		runner,
-		mihomo.NewCoreChecker(mihomo.ConfigPath(cfg.HomeDir), validateDir, validationTimeout),
+		mihomo.NewCoreChecker(validateDir, validationTimeout),
+		profiles,
+		helperClient,
 		cfg.MihomoBinary,
 		cfg.BundledBinary,
 		cfg.CoreOrigin,
-		tunFlag,
+		helperCore,
+		portState,
 	)
 
 	appUpdateService := service.NewAppUpdateService(appUpdateSource(portState))
@@ -250,7 +255,7 @@ func run() (err error) {
 		store,
 		geodataHelper,
 		runner,
-		tunFlag,
+		helperCore,
 		profiles,
 		appGeodataDir,
 		cfg.HomeDir,
@@ -276,6 +281,7 @@ func run() (err error) {
 		appGeodataDir,
 		helperTool,
 		tunFlag,
+		helperCore,
 		client,
 	)
 	// Apps must not be left sending traffic to a core that is gone. This runs
@@ -305,13 +311,13 @@ func run() (err error) {
 	}
 	mygo.App.OnQuit(release)
 	defer release()
-	// TUN settles before Hop's own core starts, whatever the setting says:
-	// a helper core a crashed Hop left running is adopted (TUN on) or
-	// stopped (TUN off) — left alone it would hold the ports Hop's own core
-	// needs. A failure runs Hop's own core rather than none.
-	tunOn, tunErr := tun.Startup(ctx, userSettings.Tun)
-	if tunErr != nil {
-		slog.Error("could not settle TUN at start; running Hop's own core", "error", tunErr)
+	// Where the core runs settles before any starts: under the helper when
+	// it is installed in this app's version (a core a crashed Hop left
+	// running there is adopted), with TUN as the setting asks. A failure runs
+	// Hop's own core rather than none.
+	underHelper, helperErr := tun.Startup(ctx, userSettings.Tun)
+	if helperErr != nil {
+		slog.Error("could not start the core under the helper; running Hop's own core", "error", helperErr)
 	}
 	portService := service.NewMixedPortService(portState, store, mihomo.PortProbe{}, profiles, systemProxy, runner, ownPorts)
 	dashboard := handler.NewDashboard(handler.Services{
@@ -340,7 +346,7 @@ func run() (err error) {
 	// The dashboard hears what supervision does after a crash before the
 	// core starts, so the first crash cannot go unreported.
 	runner.OnRestart(dashboard.ReportCoreRestart)
-	if !tunOn {
+	if !underHelper {
 		if err := startCore(ctx, runner, profiles, portService, mihomo.PortProbe{}, instance.MixedPort, startupConfig); err != nil {
 			return err
 		}

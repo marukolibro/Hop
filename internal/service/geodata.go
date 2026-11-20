@@ -78,7 +78,9 @@ type GeodataService struct {
 	store     GeodataStore
 	helper    HelperGeodata
 	core      CoreRestarter
-	tun       *TunFlag
+	// placement says whether the core runs under the helper, which then
+	// restarts it on the new databases itself.
+	placement *HelperCoreFlag
 	runtime   RuntimeLocker
 	// appDir is Hop's own copy of the databases, which the helper is seeded
 	// from; homeDir is the core's working directory; validateDir is where
@@ -98,10 +100,10 @@ type GeodataService struct {
 // with validator, taking the running config from configs, keeping the last
 // success in store, and reaching the helper and Hop's own core through helper
 // and core. The databases live in appDir, homeDir and validateDir.
-func NewGeodataService(source GeodataDownloader, validator GeodataValidator, configs GeodataConfigs, store GeodataStore, helper HelperGeodata, core CoreRestarter, tun *TunFlag, runtime RuntimeLocker, appDir string, homeDir string, validateDir string) *GeodataService {
+func NewGeodataService(source GeodataDownloader, validator GeodataValidator, configs GeodataConfigs, store GeodataStore, helper HelperGeodata, core CoreRestarter, placement *HelperCoreFlag, runtime RuntimeLocker, appDir string, homeDir string, validateDir string) *GeodataService {
 	return &GeodataService{
 		source: source, validator: validator, configs: configs, store: store,
-		helper: helper, core: core, tun: tun, runtime: runtime,
+		helper: helper, core: core, placement: placement, runtime: runtime,
 		appDir: appDir, homeDir: homeDir, validateDir: validateDir,
 	}
 }
@@ -212,7 +214,7 @@ func (s *GeodataService) updateLocked(ctx context.Context) error {
 			return err
 		}
 	}
-	if s.tun.On() {
+	if s.placement.On() {
 		// The helper's core is root's; only the helper may write its files
 		// and restart it, which it does over its socket.
 		if err := s.helper.InstallGeodata(ctx, s.appDir); err != nil {

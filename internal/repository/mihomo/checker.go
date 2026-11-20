@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -20,32 +19,32 @@ const versionTimeout = 10 * time.Second
 // one: it runs, and the config the running core uses passes its own config
 // test.
 type CoreChecker struct {
-	configPath string
-	dir        string
-	timeout    time.Duration
+	dir     string
+	timeout time.Duration
 }
 
-// NewCoreChecker returns a checker that tests the config at configPath in
-// dir, each test bounded by timeout.
-func NewCoreChecker(configPath string, dir string, timeout time.Duration) *CoreChecker {
-	return &CoreChecker{configPath: configPath, dir: dir, timeout: timeout}
+// NewCoreChecker returns a checker that tests configs in dir, each test
+// bounded by timeout.
+func NewCoreChecker(dir string, timeout time.Duration) *CoreChecker {
+	return &CoreChecker{dir: dir, timeout: timeout}
 }
 
-// Check returns the version binary reports once it ran and accepted the
-// running config.
-func (c *CoreChecker) Check(ctx context.Context, binary string) (string, error) {
+// Check returns the version binary reports once it ran and accepted config,
+// the one the running core runs.
+func (c *CoreChecker) Check(ctx context.Context, binary string, config []byte) (string, error) {
 	version, err := BinaryVersion(ctx, binary)
 	if err != nil {
 		return "", err
-	}
-	config, err := os.ReadFile(c.configPath)
-	if err != nil {
-		return "", fmt.Errorf("read the running config (path=%q): %w", c.configPath, err)
 	}
 	if err := NewConfigValidator(binary, c.dir, c.timeout).Validate(ctx, config); err != nil {
 		return "", fmt.Errorf("core %s rejected the running config: %w", version, err)
 	}
 	return version, nil
+}
+
+// Version returns the release binary reports (BinaryVersion).
+func (c *CoreChecker) Version(ctx context.Context, binary string) (string, error) {
+	return BinaryVersion(ctx, binary)
 }
 
 // BinaryVersion runs binary with -v and returns the release it reports.

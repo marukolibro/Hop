@@ -11,7 +11,7 @@ func Conditions(in model.ConditionInput) []model.Condition {
 	if in.WantSystemProxy && in.SystemProxyKnown && in.SystemProxy.Owner == model.ProxyOwnerOther {
 		found = append(found, model.Condition{Kind: model.ConditionSystemProxyTaken, Holder: in.SystemProxy.Other})
 	}
-	if in.WantTun && in.TunKnown && in.Tun.Taken && !in.Tun.CoreRunning {
+	if in.WantTun && in.TunKnown && in.Tun.Taken && !in.Tun.On {
 		found = append(found, model.Condition{Kind: model.ConditionTunTaken, Holder: in.Tun.TakenBy})
 	}
 	return found
