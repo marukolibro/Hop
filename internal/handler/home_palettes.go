@@ -65,29 +65,17 @@ func (d *Dashboard) nodePickerHeader(c *ui.Context, t *ui.Theme, group model.Gro
 	groupName := group.Name
 	total := len(group.Others) + len(groupRealNodes(group))
 	ui.Row(c.Key("npHead")).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-		if wide {
-			if len(d.view.Groups) > 1 {
-				d.nodePickerGroupMenu(c, t, group)
+		if wide && len(d.view.Groups) > 1 {
+			d.nodePickerGroupMenu(c, t, group)
+			if dest := groupDestination(group); dest != "" {
+				mutedText(c, t, dest).Grow(1).Basis(0).MinWidth(0).MaxLines(1)
+			} else {
+				ui.Box(c).Grow(1)
 			}
-			ui.TextInput(c.Key("npSearch"), &d.nodePickerQuery).
-				Placeholder(locales.HomeNodeSearch()).Grow(1).Basis(0).MinWidth(130)
 		} else {
 			ui.Text(c, groupTitle(group)).FontSize(fontEmphasis).FontWeight(weightSemibold).MaxLines(1)
 			badge(c, t, locales.HomeNodeCount(total))
 			ui.Box(c).Grow(1)
-		}
-		if wide {
-			byDelay := d.nodeOrder == nodeOrderDelay
-			d.paletteToggleChip(c, t, "npOrder", locales.NodesByLatency(), byDelay, func() {
-				if d.nodeOrder == nodeOrderDelay {
-					d.nodeOrder = nodeOrderSubscription
-				} else {
-					d.nodeOrder = nodeOrderDelay
-				}
-			})
-			d.paletteToggleChip(c, t, "npHideTimeout", locales.HomeHideTimeout(), d.nodeHideTimeout, func() {
-				d.nodeHideTimeout = !d.nodeHideTimeout
-			})
 		}
 		if fastest, ok := fastestNodeInGroup(group); ok && group.Selectable {
 			button(c, buttonSpec{
@@ -146,8 +134,8 @@ func (d *Dashboard) nodePickerGroupMenu(c *ui.Context, t *ui.Theme, active model
 }
 
 func (d *Dashboard) paletteToggleChip(c *ui.Context, t *ui.Theme, key, label string, active bool, onClick func()) {
-	b := ui.ButtonBase(c.Key(key)).Label(label).Height(switchHeight).Padding(0, 10).
-		Radius(switchHeight / 2).AlignItems(ui.Center).Cursor(ui.CursorPointer)
+	b := ui.ButtonBase(c.Key(key)).Label(label).Height(homeInlinePillHeight).Padding(0, 9).
+		Radius(homeInlinePillHeight / 2).AlignItems(ui.Center).Cursor(ui.CursorPointer)
 	fill, ink := horizonPillIdle(t), t.TextMuted
 	switch {
 	case active:
@@ -162,36 +150,58 @@ func (d *Dashboard) paletteToggleChip(c *ui.Context, t *ui.Theme, key, label str
 		if active {
 			weight = weightSemibold
 		}
-		ui.Text(c, label).FontSize(fontSecondary).FontWeight(weight).TextColor(ink).NoWrap().Translate(0, -opticalLift)
+		ui.Text(c, label).FontSize(fontCaption).FontWeight(weight).TextColor(ink).NoWrap().Translate(0, -opticalLift)
 	})
 }
 
-// nodePickerRegions renders region filter capsules strictly on a single clean
-// row; overflow regions tuck into a compact "More" menu pill.
+// nodePickerRegions renders the unified filter-and-sort bar on a single clean
+// row: region filter capsules on the left (overflow tucked into "More") and
+// view-filter toggles (sort by latency, hide timed out) aligned on the right.
 func (d *Dashboard) nodePickerRegions(c *ui.Context, t *ui.Theme, group model.GroupView, availW float32) {
+	orderLabel := locales.NodesByLatency()
+	hideLabel := locales.HomeHideTimeout()
+	ow, _ := c.MeasureText(0, ui.Span{Text: orderLabel, Size: fontCaption, Weight: weightSemibold})
+	hw, _ := c.MeasureText(0, ui.Span{Text: hideLabel, Size: fontCaption, Weight: weightSemibold})
+	// Reserve room on the right for the two toggle pills plus gap.
+	rightW := (ow + 18) + gapTight + (hw + 18) + gapMedium
 	chips := regionChips(group)
-	if len(chips) <= 2 {
-		return
-	}
-	current := activeFilter(group, d.nodeRegion)
-	shown, more := fitPaletteRegionChips(c, chips, current, availW)
+	total := len(group.Others) + len(groupRealNodes(group))
+
 	ui.Row(c.Key("npRegions")).Gap(gapTight).AlignItems(ui.Center).Children(func() {
-		for _, ch := range shown {
-			key := ch.key
-			d.paletteRegionPill(c, t, "npReg-"+key, ch.label, ch.count, key == current, false).OnClick(func() {
-				d.nodeRegion = key
-			})
-		}
-		if len(more) > 0 {
-			d.paletteRegionPill(c, t, "npReg-more", locales.NodesMore(), len(more), false, true).Menu(func(m *ui.Menu) {
-				for _, ch := range more {
-					key := ch.key
-					if m.Item(fmt.Sprintf("%s  %d", ch.label, ch.count)).Checked(key == current).Chosen() {
-						d.nodeRegion = key
+		if len(chips) > 2 {
+			current := activeFilter(group, d.nodeRegion)
+			shown, more := fitPaletteRegionChips(c, chips, current, max(0, availW-rightW))
+			for _, ch := range shown {
+				key := ch.key
+				d.paletteRegionPill(c, t, "npReg-"+key, ch.label, ch.count, key == current, false).OnClick(func() {
+					d.nodeRegion = key
+				})
+			}
+			if len(more) > 0 {
+				d.paletteRegionPill(c, t, "npReg-more", locales.NodesMore(), len(more), false, true).Menu(func(m *ui.Menu) {
+					for _, ch := range more {
+						key := ch.key
+						if m.Item(fmt.Sprintf("%s  %d", ch.label, ch.count)).Checked(key == current).Chosen() {
+							d.nodeRegion = key
+						}
 					}
-				}
-			})
+				})
+			}
+		} else {
+			captionText(c, t, locales.HomeNodeCount(total)).FontFeatures("tnum").NoWrap()
 		}
+		ui.Box(c).Grow(1)
+		byDelay := d.nodeOrder == nodeOrderDelay
+		d.paletteToggleChip(c, t, "npOrder", orderLabel, byDelay, func() {
+			if d.nodeOrder == nodeOrderDelay {
+				d.nodeOrder = nodeOrderSubscription
+			} else {
+				d.nodeOrder = nodeOrderDelay
+			}
+		})
+		d.paletteToggleChip(c, t, "npHideTimeout", hideLabel, d.nodeHideTimeout, func() {
+			d.nodeHideTimeout = !d.nodeHideTimeout
+		})
 	})
 }
 
@@ -267,13 +277,9 @@ func fitPaletteRegionChips(c *ui.Context, chips []regionChip, current string, av
 // nodePickerList renders the scrollable filtered node options (1 column when
 // compact, 2 columns when wide).
 func (d *Dashboard) nodePickerList(c *ui.Context, t *ui.Theme, group model.GroupView, wide bool) {
-	query := strings.ToLower(strings.TrimSpace(d.nodePickerQuery))
 	filter := activeFilter(group, d.nodeRegion)
-	if query != "" {
-		filter = nodeFilterAll
-	}
 	sections := visibleSections(group, filter, d.nodeOrder == nodeOrderDelay, d.orderDelay)
-	filtered := filterNodeSections(sections, query, d.nodeHideTimeout, group.Selected)
+	filtered := filterNodeSections(sections, d.nodeHideTimeout, group.Selected)
 
 	cols := 1
 	if wide {
@@ -314,23 +320,20 @@ func (d *Dashboard) nodePickerList(c *ui.Context, t *ui.Theme, group model.Group
 	})
 }
 
-// filterNodeSections keeps only nodes matching query (case-insensitive) across
-// name, region, title, and protocol tags, and optionally omits timed-out nodes
-// (while always keeping the currently selected node visible).
-func filterNodeSections(sections []nodeSection, query string, hideTimeout bool, selected string) []nodeSection {
-	if query == "" && !hideTimeout {
+// filterNodeSections optionally omits timed-out nodes while always keeping the
+// currently selected node visible.
+func filterNodeSections(sections []nodeSection, hideTimeout bool, selected string) []nodeSection {
+	if !hideTimeout {
 		return sections
 	}
 	var out []nodeSection
 	for _, sec := range sections {
 		var matched []model.NodeView
 		for _, node := range sec.nodes {
-			if hideTimeout && node.Name != selected && node.Via == "" && node.Delay.Measured && node.Delay.Millis == 0 {
+			if node.Name != selected && node.Via == "" && node.Delay.Measured && node.Delay.Millis == 0 {
 				continue
 			}
-			if query == "" || nodeMatchesQuery(node, query) {
-				matched = append(matched, node)
-			}
+			matched = append(matched, node)
 		}
 		if len(matched) > 0 {
 			out = append(out, nodeSection{title: sec.title, nodes: matched})
@@ -353,20 +356,6 @@ func fastestNodeInGroup(group model.GroupView) (string, bool) {
 		}
 	}
 	return bestName, bestName != ""
-}
-
-func nodeMatchesQuery(node model.NodeView, query string) bool {
-	if strings.Contains(strings.ToLower(node.Name), query) ||
-		strings.Contains(strings.ToLower(node.Region), query) ||
-		strings.Contains(strings.ToLower(node.Title), query) {
-		return true
-	}
-	for _, label := range nodeLabels(node) {
-		if strings.Contains(strings.ToLower(label), query) {
-			return true
-		}
-	}
-	return false
 }
 
 // nodePaletteRow is one borderless rounded option inside the Node Picker.

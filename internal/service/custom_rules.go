@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -399,4 +401,107 @@ func customRuleLines(rules []model.CustomRule, mainGroup string, availableGroups
 		}
 	}
 	return lines, nil
+}
+
+type exportedCustomRules struct {
+	Version int                  `json:"version"`
+	Rules   []exportedCustomRule `json:"rules"`
+}
+
+type exportedCustomRule struct {
+	Type     string `json:"type"`
+	Value    string `json:"value"`
+	Target   string `json:"target"`
+	Disabled bool   `json:"disabled,omitempty"`
+}
+
+// ExportCustomRulesJSON serializes rules into pretty-printed, versioned JSON
+// for backup and sharing across machines.
+func ExportCustomRulesJSON(rules []model.CustomRule) ([]byte, error) {
+	normalized, err := NormalizeCustomRules(rules)
+	if err != nil {
+		return nil, err
+	}
+	payload := exportedCustomRules{
+		Version: 1,
+		Rules:   make([]exportedCustomRule, 0, len(normalized)),
+	}
+	for _, r := range normalized {
+		payload.Rules = append(payload.Rules, exportedCustomRule{
+			Type:     r.Type,
+			Value:    r.Value,
+			Target:   r.Target,
+			Disabled: r.Disabled,
+		})
+	}
+	raw, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode custom rules JSON: %w", err)
+	}
+	return append(raw, '\n'), nil
+}
+
+// ParseCustomRulesJSON reads custom rules from either Hop's versioned export
+// object ({"version": 1, "rules": [...]}) or a bare JSON array ([...]) and
+// validates every entry with NormalizeCustomRules.
+func ParseCustomRulesJSON(raw []byte) ([]model.CustomRule, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return nil, errors.New("the JSON file is empty")
+	}
+	var items []exportedCustomRule
+	if trimmed[0] == '[' {
+		if err := json.Unmarshal(trimmed, &items); err != nil {
+			return nil, fmt.Errorf("parse custom rules array: %w", err)
+		}
+	} else {
+		var wrapper exportedCustomRules
+		if err := json.Unmarshal(trimmed, &wrapper); err != nil {
+			return nil, fmt.Errorf("parse custom rules JSON: %w", err)
+		}
+		if wrapper.Rules == nil {
+			return nil, errors.New("the JSON file has no rules array")
+		}
+		items = wrapper.Rules
+	}
+	rules := make([]model.CustomRule, 0, len(items))
+	for _, r := range items {
+		rules = append(rules, model.CustomRule{
+			Type:     r.Type,
+			Value:    r.Value,
+			Target:   r.Target,
+			Disabled: r.Disabled,
+		})
+	}
+	return NormalizeCustomRules(rules)
+}
+
+// MergeCustomRules merges imported rules into existing rules without dropping
+// existing entries: matching (type, value) rules are updated in place, and new
+// rules are appended in order. It returns the merged slice plus counts of
+// newly added and updated rules.
+func MergeCustomRules(existing, imported []model.CustomRule) ([]model.CustomRule, int, int) {
+	merged := slices.Clone(existing)
+	keyOf := func(r model.CustomRule) string {
+		return strings.ToLower(r.Type) + "\x00" + strings.ToLower(r.Value)
+	}
+	indexByKey := make(map[string]int, len(merged))
+	for i, r := range merged {
+		indexByKey[keyOf(r)] = i
+	}
+	added, updated := 0, 0
+	for _, r := range imported {
+		k := keyOf(r)
+		if idx, exists := indexByKey[k]; exists {
+			if merged[idx] != r {
+				merged[idx] = r
+				updated++
+			}
+			continue
+		}
+		indexByKey[k] = len(merged)
+		merged = append(merged, r)
+		added++
+	}
+	return merged, added, updated
 }

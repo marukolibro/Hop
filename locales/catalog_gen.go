@@ -4554,16 +4554,6 @@ func (msgs Messages) HomeNoAutoRefresh() string {
 	return Catalog.Format(msgs.locale, "homeNoAutoRefresh", nil)
 }
 
-// HomeNodeSearch says "Search nodes, regions or protocol…"
-// in the language the app shows.
-func HomeNodeSearch() string { return In(i18n.Locale()).HomeNodeSearch() }
-
-// HomeNodeSearch says "Search nodes, regions or protocol…"
-// in the language of msgs.
-func (msgs Messages) HomeNodeSearch() string {
-	return Catalog.Format(msgs.locale, "homeNodeSearch", nil)
-}
-
 // HomePaletteApplyHint says "Click to switch immediately"
 // in the language the app shows.
 func HomePaletteApplyHint() string { return In(i18n.Locale()).HomePaletteApplyHint() }
@@ -5254,4 +5244,198 @@ func ActionGlobalShortcuts() string { return In(i18n.Locale()).ActionGlobalShort
 // in the language of msgs.
 func (msgs Messages) ActionGlobalShortcuts() string {
 	return Catalog.Format(msgs.locale, "actionGlobalShortcuts", nil)
+}
+
+// ConnectionsPause says "Pause"
+// in the language the app shows.
+func ConnectionsPause() string { return In(i18n.Locale()).ConnectionsPause() }
+
+// ConnectionsPause says "Pause"
+// in the language of msgs.
+func (msgs Messages) ConnectionsPause() string {
+	return Catalog.Format(msgs.locale, "connectionsPause", nil)
+}
+
+// ConnectionsResume says "Resume"
+// in the language the app shows.
+func ConnectionsResume() string { return In(i18n.Locale()).ConnectionsResume() }
+
+// ConnectionsResume says "Resume"
+// in the language of msgs.
+func (msgs Messages) ConnectionsResume() string {
+	return Catalog.Format(msgs.locale, "connectionsResume", nil)
+}
+
+// ConnectionsPausedBadge says "Paused"
+// in the language the app shows.
+func ConnectionsPausedBadge() string { return In(i18n.Locale()).ConnectionsPausedBadge() }
+
+// ConnectionsPausedBadge says "Paused"
+// in the language of msgs.
+func (msgs Messages) ConnectionsPausedBadge() string {
+	return Catalog.Format(msgs.locale, "connectionsPausedBadge", nil)
+}
+
+// ConnectionsSortNewest says "Newest"
+// in the language the app shows.
+func ConnectionsSortNewest() string { return In(i18n.Locale()).ConnectionsSortNewest() }
+
+// ConnectionsSortNewest says "Newest"
+// in the language of msgs.
+func (msgs Messages) ConnectionsSortNewest() string {
+	return Catalog.Format(msgs.locale, "connectionsSortNewest", nil)
+}
+
+// ConnectionsSortTraffic says "Traffic"
+// in the language the app shows.
+func ConnectionsSortTraffic() string { return In(i18n.Locale()).ConnectionsSortTraffic() }
+
+// ConnectionsSortTraffic says "Traffic"
+// in the language of msgs.
+func (msgs Messages) ConnectionsSortTraffic() string {
+	return Catalog.Format(msgs.locale, "connectionsSortTraffic", nil)
+}
+
+// ConnectionsSortHost says "Host"
+// in the language the app shows.
+func ConnectionsSortHost() string { return In(i18n.Locale()).ConnectionsSortHost() }
+
+// ConnectionsSortHost says "Host"
+// in the language of msgs.
+func (msgs Messages) ConnectionsSortHost() string {
+	return Catalog.Format(msgs.locale, "connectionsSortHost", nil)
+}
+
+// ConnectionsCloseFiltered says "Close filtered ({count})"
+// in the language the app shows.
+func ConnectionsCloseFiltered(count int) string {
+	return In(i18n.Locale()).ConnectionsCloseFiltered(count)
+}
+
+// ConnectionsCloseFiltered says "Close filtered ({count})"
+// in the language of msgs.
+func (msgs Messages) ConnectionsCloseFiltered(count int) string {
+	return Catalog.Format(msgs.locale, "connectionsCloseFiltered", map[string]any{"count": count})
+}
+
+// RuleEdit says "Edit rule"
+// in the language the app shows.
+func RuleEdit() string { return In(i18n.Locale()).RuleEdit() }
+
+// RuleEdit says "Edit rule"
+// in the language of msgs.
+func (msgs Messages) RuleEdit() string {
+	return Catalog.Format(msgs.locale, "ruleEdit", nil)
+}
+
+// RuleEditLabel says "Edit rule {value}"
+// in the language the app shows.
+func RuleEditLabel(value string) string { return In(i18n.Locale()).RuleEditLabel(value) }
+
+// RuleEditLabel says "Edit rule {value}"
+// in the language of msgs.
+func (msgs Messages) RuleEditLabel(value string) string {
+	return Catalog.Format(msgs.locale, "ruleEditLabel", map[string]any{"value": value})
+}
+
+// RulesExport says "Export"
+// in the language the app shows.
+func RulesExport() string { return In(i18n.Locale()).RulesExport() }
+
+// RulesExport says "Export"
+// in the language of msgs.
+func (msgs Messages) RulesExport() string {
+	return Catalog.Format(msgs.locale, "rulesExport", nil)
+}
+
+// RulesImport says "Import"
+// in the language the app shows.
+func RulesImport() string { return In(i18n.Locale()).RulesImport() }
+
+// RulesImport says "Import"
+// in the language of msgs.
+func (msgs Messages) RulesImport() string {
+	return Catalog.Format(msgs.locale, "rulesImport", nil)
+}
+
+// RulesExportTitle says "Export custom rules"
+// in the language the app shows.
+func RulesExportTitle() string { return In(i18n.Locale()).RulesExportTitle() }
+
+// RulesExportTitle says "Export custom rules"
+// in the language of msgs.
+func (msgs Messages) RulesExportTitle() string {
+	return Catalog.Format(msgs.locale, "rulesExportTitle", nil)
+}
+
+// RulesImportTitle says "Import custom rules"
+// in the language the app shows.
+func RulesImportTitle() string { return In(i18n.Locale()).RulesImportTitle() }
+
+// RulesImportTitle says "Import custom rules"
+// in the language of msgs.
+func (msgs Messages) RulesImportTitle() string {
+	return Catalog.Format(msgs.locale, "rulesImportTitle", nil)
+}
+
+// RulesFileFilterJson says "JSON files"
+// in the language the app shows.
+func RulesFileFilterJson() string { return In(i18n.Locale()).RulesFileFilterJson() }
+
+// RulesFileFilterJson says "JSON files"
+// in the language of msgs.
+func (msgs Messages) RulesFileFilterJson() string {
+	return Catalog.Format(msgs.locale, "rulesFileFilterJson", nil)
+}
+
+// RulesExported says "{count, plural, one {Exported # rule} other {Exported # rules}}"
+// in the language the app shows.
+func RulesExported(count int) string { return In(i18n.Locale()).RulesExported(count) }
+
+// RulesExported says "{count, plural, one {Exported # rule} other {Exported # rules}}"
+// in the language of msgs.
+func (msgs Messages) RulesExported(count int) string {
+	return Catalog.Format(msgs.locale, "rulesExported", map[string]any{"count": count})
+}
+
+// RulesImported says "Imported rules ({added} added, {updated} updated)"
+// in the language the app shows.
+func RulesImported(added int, updated int) string {
+	return In(i18n.Locale()).RulesImported(added, updated)
+}
+
+// RulesImported says "Imported rules ({added} added, {updated} updated)"
+// in the language of msgs.
+func (msgs Messages) RulesImported(added int, updated int) string {
+	return Catalog.Format(msgs.locale, "rulesImported", map[string]any{"added": added, "updated": updated})
+}
+
+// ActionExportRules says "Couldn't export rules"
+// in the language the app shows.
+func ActionExportRules() string { return In(i18n.Locale()).ActionExportRules() }
+
+// ActionExportRules says "Couldn't export rules"
+// in the language of msgs.
+func (msgs Messages) ActionExportRules() string {
+	return Catalog.Format(msgs.locale, "actionExportRules", nil)
+}
+
+// ActionImportRules says "Couldn't import rules"
+// in the language the app shows.
+func ActionImportRules() string { return In(i18n.Locale()).ActionImportRules() }
+
+// ActionImportRules says "Couldn't import rules"
+// in the language of msgs.
+func (msgs Messages) ActionImportRules() string {
+	return Catalog.Format(msgs.locale, "actionImportRules", nil)
+}
+
+// ActionOpenUrl says "Couldn't import subscription link"
+// in the language the app shows.
+func ActionOpenUrl() string { return In(i18n.Locale()).ActionOpenUrl() }
+
+// ActionOpenUrl says "Couldn't import subscription link"
+// in the language of msgs.
+func (msgs Messages) ActionOpenUrl() string {
+	return Catalog.Format(msgs.locale, "actionOpenUrl", nil)
 }

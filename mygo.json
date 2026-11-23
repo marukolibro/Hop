@@ -4,6 +4,7 @@
   "publisher": "marukolibro",
   "version": "0.5.6",
   "out": "build",
+  "urlSchemes": ["clash", "mihomo", "hop"],
   "updates": {
     "publicKey": "qIKeKUovG7mr/iygM3lK+eFJU9DIyyFkHYAbV73GcVU=",
     "github": "marukolibro/Hop",

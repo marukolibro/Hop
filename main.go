@@ -91,6 +91,12 @@ func (e startupError) Error() string { return e.err.Error() }
 func (e startupError) Unwrap() error { return e.err }
 
 func run() (err error) {
+	// On Windows and Linux a deep link launches a second process; forward its
+	// arguments to the running release instance and exit cleanly before opening
+	// logs or ports. Dev builds stay independent so they run beside release.
+	if !mygo.IsDev() && !mygo.App.RequestSingleInstanceLock() {
+		return nil
+	}
 	// uiStarted is set once the app's run loop takes over; an error before
 	// that is a startupError.
 	uiStarted := false
@@ -356,6 +362,25 @@ func run() (err error) {
 		}
 	}
 
+	// Register OnOpenURL before App.Run so cold-launch clash:// deep links are
+	// captured and delivered once the window and menu bar are ready.
+	var (
+		urlMu       sync.Mutex
+		readyMenu   *handler.MenuBar
+		pendingURLs []string
+	)
+	mygo.App.OnOpenURL(func(raw string) {
+		urlMu.Lock()
+		mb := readyMenu
+		if mb == nil {
+			pendingURLs = append(pendingURLs, raw)
+			urlMu.Unlock()
+			return
+		}
+		urlMu.Unlock()
+		mb.HandleOpenURL(raw)
+	})
+
 	// readyErr is set on the main thread when the UI cannot be built; Run
 	// returns after the Quit that follows it.
 	var readyErr error
@@ -396,6 +421,14 @@ func run() (err error) {
 			return
 		}
 		dashboard.Start(ctx, menuBar)
+		urlMu.Lock()
+		readyMenu = menuBar
+		queued := pendingURLs
+		pendingURLs = nil
+		urlMu.Unlock()
+		for _, raw := range queued {
+			menuBar.HandleOpenURL(raw)
+		}
 	})
 	uiStarted = true
 	runErr := mygo.App.Run()

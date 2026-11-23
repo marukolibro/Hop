@@ -250,6 +250,14 @@ type SubscriptionsView struct {
 	ActiveID string
 }
 
+// DeepLinkSubscription is a subscription pre-filled from a clash://, mihomo://
+// or hop:// install-config deep link. The URL is a credential and is never
+// logged or stored until the user confirms in the add-subscription dialog.
+type DeepLinkSubscription struct {
+	Name string
+	URL  string
+}
+
 // Delay is a proxy's latest delay test. Millis is 0 when a test ran and got
 // no answer.
 type Delay struct {

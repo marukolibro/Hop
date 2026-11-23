@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/internal/service"
 	"hop/locales"
 )
 
@@ -128,6 +129,25 @@ func (m *MenuBar) toggleWindow() {
 		return
 	}
 	m.showWindow()
+}
+
+// HandleOpenURL processes a deep-link URL delivered by the OS (such as
+// clash://install-config?url=...&name=...), bringing the main window forward
+// and pre-filling the add-subscription dialog for user confirmation.
+func (m *MenuBar) HandleOpenURL(raw string) {
+	sub, ok, err := service.ParseInstallConfigURL(raw)
+	if !ok {
+		return
+	}
+	m.showWindow()
+	m.Update(func() {
+		if err != nil {
+			m.d.fail(actionOpenURL, err)
+			return
+		}
+		slog.Info("opening subscription import from deep link", "host", service.RedactDeepLinkHost(sub.URL))
+		m.d.openEditorWithImport(sub.Name, sub.URL)
+	})
 }
 
 // Update runs fn on the main thread and redraws the window and, when it is

@@ -340,6 +340,12 @@ type connectionsState struct {
 	filter string
 	// routeFilter narrows connections: 0 = all, 1 = proxy, 2 = direct.
 	routeFilter int
+	// sort orders visible connections: 0 = newest, 1 = traffic, 2 = host.
+	sort int
+	// paused freezes the rendered table on pausedSnapshot while live traffic
+	// recording continues in the background.
+	paused         bool
+	pausedSnapshot model.Connections
 }
 
 // logsState is what the log page shows and edits.
@@ -422,10 +428,9 @@ type Dashboard struct {
 	delayCancel context.CancelFunc
 	// activeGroup is the group whose nodes the grid shows.
 	activeGroup string
-	// nodePickerOpen, nodePickerQuery and nodeHideTimeout drive the centered
-	// Node Picker palette on the Horizon home.
+	// nodePickerOpen and nodeHideTimeout drive the centered Node Picker
+	// palette on the Horizon home.
 	nodePickerOpen  bool
-	nodePickerQuery string
 	nodeHideTimeout bool
 	// testingNode names one node currently being probed individually.
 	testingNode string
@@ -497,12 +502,17 @@ type Dashboard struct {
 	refreshSubscription     func(id string)
 	refreshAllSubscriptions func()
 	// openEditor opens the editor for an intent, "" id to add.
-	openEditor      func(intent editorIntent, id string)
-	submitEditor    func()
-	openDelete      func(id string)
-	submitDelete    func()
-	closeConnection func(id string)
-	closeAll        func()
+	openEditor   func(intent editorIntent, id string)
+	submitEditor func()
+	// pendingToast is a one-shot toast message queued by background work to be
+	// shown on the next UI frame.
+	pendingToast string
+
+	openDelete       func(id string)
+	submitDelete     func()
+	closeConnection  func(id string)
+	closeConnections func(ids []string)
+	closeAll         func()
 }
 
 // NewDashboard returns a dashboard that has not started loading yet, on the
@@ -701,6 +711,7 @@ func (d *Dashboard) Start(ctx context.Context, win Updater) {
 	}
 	d.submitDelete = func() { d.beginDeleteSubmit() }
 	d.closeConnection = func(id string) { go d.runClose(ctx, win, id) }
+	d.closeConnections = func(ids []string) { go d.runCloseMany(ctx, win, ids) }
 	d.closeAll = func() { go d.runCloseAll(ctx, win) }
 	go d.loadSubscriptions(ctx, win)
 	go d.loadRules(ctx, win)
@@ -965,6 +976,18 @@ func (d *Dashboard) runClose(ctx context.Context, win Updater, id string) {
 	}
 }
 
+func (d *Dashboard) runCloseMany(ctx context.Context, win Updater, ids []string) {
+	var firstErr error
+	for _, id := range ids {
+		if err := d.services.Monitor.CloseConnection(ctx, id); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if firstErr != nil {
+		win.Update(func() { d.fail(actionCloseConnection, firstErr) })
+	}
+}
+
 func (d *Dashboard) runCloseAll(ctx context.Context, win Updater) {
 	if err := d.services.Monitor.CloseAllConnections(ctx); err != nil {
 		win.Update(func() { d.fail(actionCloseConnection, err) })
@@ -1009,6 +1032,9 @@ var (
 	actionSaveSettings        = action{"save-settings", locales.ActionSaveSettings}
 	actionReadRules           = action{"read-rules", locales.ActionReadRules}
 	actionSaveRules           = action{"save-rules", locales.ActionSaveRules}
+	actionExportRules         = action{"export-rules", locales.ActionExportRules}
+	actionImportRules         = action{"import-rules", locales.ActionImportRules}
+	actionOpenURL             = action{"open-url", locales.ActionOpenUrl}
 	actionLoadRulesInspect    = action{"load-rules-inspect", locales.ActionLoadRulesInspect}
 	actionUpdateProvider      = action{"update-provider", locales.ActionUpdateProvider}
 	actionGlobalShortcuts     = action{"global-shortcuts", locales.ActionGlobalShortcuts}
@@ -1043,6 +1069,10 @@ func (d *Dashboard) failConnection(a action, err error) {
 
 // View builds one frame of the main window.
 func (d *Dashboard) View(c *ui.Context) {
+	if d.pendingToast != "" {
+		c.Toast(d.pendingToast)
+		d.pendingToast = ""
+	}
 	c.SetTheme(d.windowTheme(c))
 	t := c.Theme()
 	// The material paints the themed backdrop and veil before any controls.
@@ -1107,13 +1137,12 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 		headerGap = 30
 	}
 	isHorizon := d.page == pageNodes && !d.subscription.managing && !hackTheme(t)
-	barFill := headerFill(t)
-	if isHorizon {
-		if onGlass(t) {
-			barFill = ui.Transparent
-		} else {
-			barFill = t.Background.Mix(t.Accent, glassHorizonSkyTint)
-		}
+	barFill := ui.Transparent
+	switch {
+	case hackTheme(t):
+		barFill = headerFill(t)
+	case isHorizon && !onGlass(t):
+		barFill = t.Background.Mix(t.Accent, glassHorizonSkyTint)
 	}
 	ui.Column(c).Background(barFill).Children(func() {
 		if controls.Right > 0 && width-controls.Right < headerMinContentWidth {
@@ -1146,11 +1175,6 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 				})
 			})
 		})
-		// The Hack theme and the Horizon home flow directly from the title bar
-		// without a harsh horizontal divider.
-		if !hackTheme(t) && !isHorizon {
-			horizontalHairline(c, t)
-		}
 	})
 }
 

@@ -2,16 +2,24 @@ package handler
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
 	"hop/internal/service"
 	"hop/locales"
 )
+
+const maxRuleImportBytes = 1 << 20
 
 // ruleTypeLabels name service.CustomRuleTypes, index for index; ruleTypeHints
 // say what each matches, in the same order.
@@ -30,21 +38,24 @@ func ruleTargetLabels() []string {
 	return []string{locales.RouteDirect(), locales.RouteProxy(), locales.RouteReject()}
 }
 
-// customRulesState is the stored rules and the add dialog.
+// customRulesState is the stored rules and the add/edit dialog.
 type customRulesState struct {
 	rules  []model.CustomRule
 	loaded bool
 	failed bool
 	busy   bool
-	// editorOpen and editor hold the add dialog between frames.
+	ioBusy bool
+	// editorOpen and editor hold the add/edit dialog between frames.
 	editorOpen bool
 	editor     ruleEditor
 }
 
-// ruleEditor is the add dialog's fields. When customTarget is non-empty, it
-// names a specific policy group from the active profile instead of one of the
-// built-in targets indexed by targetIndex.
+// ruleEditor is the add/edit dialog's fields. editingIndex is -1 when adding a
+// new rule and >= 0 when editing r.rules[editingIndex]. When customTarget is
+// non-empty, it names a specific policy group from the active profile instead
+// of one of the built-in targets indexed by targetIndex.
 type ruleEditor struct {
+	editingIndex int
 	typeIndex    int
 	targetIndex  int
 	customTarget string
@@ -72,10 +83,45 @@ func (d *Dashboard) loadRules(ctx context.Context, win Updater) {
 // proxy is the one most people add, so that is the default.
 func (d *Dashboard) openRuleEditor() {
 	r := &d.rules
-	if r.busy || d.controlsLocked() {
+	if r.busy || r.ioBusy || d.controlsLocked() {
 		return
 	}
-	r.editor = ruleEditor{targetIndex: slices.Index(service.CustomRuleTargets, model.CustomRuleProxy)}
+	r.editor = ruleEditor{
+		editingIndex: -1,
+		targetIndex:  slices.Index(service.CustomRuleTargets, model.CustomRuleProxy),
+	}
+	r.editorOpen = true
+}
+
+// openRuleEditorEdit opens the rule dialog pre-filled with the rule at index
+// for in-place editing.
+func (d *Dashboard) openRuleEditorEdit(index int) {
+	r := &d.rules
+	if r.busy || r.ioBusy || d.controlsLocked() || index < 0 || index >= len(r.rules) {
+		return
+	}
+	rule := r.rules[index]
+	typeIdx := slices.Index(service.CustomRuleTypes, rule.Type)
+	if typeIdx < 0 {
+		typeIdx = 0
+	}
+	targetIdx := slices.Index(service.CustomRuleTargets, rule.Target)
+	customTarget := ""
+	if targetIdx < 0 {
+		if len(d.view.Groups) > 0 {
+			targetIdx = len(service.CustomRuleTargets)
+			customTarget = rule.Target
+		} else {
+			targetIdx = slices.Index(service.CustomRuleTargets, model.CustomRuleProxy)
+		}
+	}
+	r.editor = ruleEditor{
+		editingIndex: index,
+		typeIndex:    typeIdx,
+		targetIndex:  targetIdx,
+		customTarget: customTarget,
+		value:        rule.Value,
+	}
 	r.editorOpen = true
 }
 
@@ -96,11 +142,12 @@ func (d *Dashboard) openRuleEditorFor(conn model.Connection) {
 	}
 }
 
-// submitRuleEditor begins saving the list with the dialog's rule added.
+// submitRuleEditor begins saving the list with the dialog's rule added or
+// updated in place.
 func (d *Dashboard) submitRuleEditor() {
 	r := &d.rules
 	e := &r.editor
-	if r.busy || d.controlsLocked() {
+	if r.busy || r.ioBusy || d.controlsLocked() {
 		return
 	}
 	value := strings.TrimSpace(e.value)
@@ -126,12 +173,19 @@ func (d *Dashboard) submitRuleEditor() {
 		return
 	}
 	e.err = ""
+	next := slices.Clone(r.rules)
 	rule := model.CustomRule{
 		Type:   service.CustomRuleTypes[e.typeIndex],
 		Value:  value,
 		Target: target,
 	}
-	d.beginRuleSave(append(slices.Clone(r.rules), rule), true)
+	if e.editingIndex >= 0 && e.editingIndex < len(next) {
+		rule.Disabled = next[e.editingIndex].Disabled
+		next[e.editingIndex] = rule
+	} else {
+		next = append(next, rule)
+	}
+	d.beginRuleSave(next, true, "")
 }
 
 // toggleRule enables or disables the rule at index and reapplies the config.
@@ -142,7 +196,7 @@ func (d *Dashboard) toggleRule(index int) {
 	}
 	next := slices.Clone(r.rules)
 	next[index].Disabled = !next[index].Disabled
-	d.beginRuleSave(next, false)
+	d.beginRuleSave(next, false, "")
 }
 
 // moveRule shifts the rule at index by delta (-1 up, +1 down) to adjust match
@@ -155,7 +209,7 @@ func (d *Dashboard) moveRule(index int, delta int) {
 	}
 	next := slices.Clone(r.rules)
 	next[index], next[dest] = next[dest], next[index]
-	d.beginRuleSave(next, false)
+	d.beginRuleSave(next, false, "")
 }
 
 // deleteRule begins saving the list without the rule at index.
@@ -164,14 +218,119 @@ func (d *Dashboard) deleteRule(index int) {
 	if index < 0 || index >= len(r.rules) {
 		return
 	}
-	d.beginRuleSave(slices.Delete(slices.Clone(r.rules), index, index+1), false)
+	d.beginRuleSave(slices.Delete(slices.Clone(r.rules), index, index+1), false, "")
+}
+
+// exportCustomRules writes the stored custom rules to a user-chosen JSON file.
+func (d *Dashboard) exportCustomRules() {
+	r := &d.rules
+	if r.busy || r.ioBusy || d.controlsLocked() || len(r.rules) == 0 || d.opWin == nil {
+		return
+	}
+	r.ioBusy = true
+	snapshot := slices.Clone(r.rules)
+	win := d.opWin
+	go func() {
+		raw, err := service.ExportCustomRulesJSON(snapshot)
+		var saved bool
+		if err == nil {
+			path, dlgErr := mygo.Dialog.Save(mygo.SaveDialogOptions{
+				Title:       locales.RulesExportTitle(),
+				DefaultPath: "hop-rules.json",
+				Filters: []mygo.FileFilter{
+					{Name: locales.RulesFileFilterJson(), Extensions: []string{"json"}},
+				},
+			})
+			switch {
+			case dlgErr != nil:
+				err = dlgErr
+			case path != "":
+				if writeErr := os.WriteFile(path, raw, 0o600); writeErr != nil {
+					err = fmt.Errorf("%s: %w", filepath.Base(path), fileCause(writeErr))
+				} else {
+					saved = true
+				}
+			}
+		}
+		win.Update(func() {
+			r.ioBusy = false
+			if err != nil {
+				d.fail(actionExportRules, err)
+				return
+			}
+			if saved {
+				d.pendingToast = locales.RulesExported(len(snapshot))
+			}
+		})
+	}()
+}
+
+// importCustomRules reads custom rules from a user-chosen JSON file, merges
+// them with existing rules, and applies them to the running core.
+func (d *Dashboard) importCustomRules() {
+	r := &d.rules
+	if r.busy || r.ioBusy || d.controlsLocked() || !r.loaded || d.opWin == nil {
+		return
+	}
+	r.ioBusy = true
+	win := d.opWin
+	go func() {
+		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
+			Title:       locales.RulesImportTitle(),
+			ButtonLabel: locales.Choose(),
+			Filters: []mygo.FileFilter{
+				{Name: locales.RulesFileFilterJson(), Extensions: []string{"json"}},
+				{Name: locales.SubFileFilterAll(), Extensions: []string{"*"}},
+			},
+		})
+		var imported []model.CustomRule
+		var chosen bool
+		if err == nil && len(paths) > 0 {
+			chosen = true
+			raw, readErr := readBoundedJSON(paths[0])
+			if readErr != nil {
+				err = readErr
+			} else {
+				imported, err = service.ParseCustomRulesJSON(raw)
+			}
+		}
+		win.Update(func() {
+			r.ioBusy = false
+			if err != nil {
+				d.fail(actionImportRules, err)
+				return
+			}
+			if !chosen {
+				return
+			}
+			merged, added, updated := service.MergeCustomRules(r.rules, imported)
+			d.beginRuleSave(merged, false, locales.RulesImported(added, updated))
+		})
+	}()
+}
+
+func readBoundedJSON(path string) ([]byte, error) {
+	name := filepath.Base(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", name, fileCause(err))
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, maxRuleImportBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", name, fileCause(err))
+	}
+	if len(raw) > maxRuleImportBytes {
+		return nil, errors.New("the JSON file is larger than 1 MB")
+	}
+	return raw, nil
 }
 
 // beginRuleSave validates and applies next in the background, then reads the
 // stored list back. The service keeps the previous list when the core rejects
 // the rebuilt config; the dialog shows the error when it started the change,
 // and the window's notice does otherwise.
-func (d *Dashboard) beginRuleSave(next []model.CustomRule, fromEditor bool) {
+func (d *Dashboard) beginRuleSave(next []model.CustomRule, fromEditor bool, successToast string) {
 	r := &d.rules
 	if r.busy || d.controlsLocked() {
 		return
@@ -200,6 +359,9 @@ func (d *Dashboard) beginRuleSave(next []model.CustomRule, fromEditor bool) {
 			if fromEditor {
 				r.editorOpen = false
 			}
+			if successToast != "" {
+				d.pendingToast = successToast
+			}
 			d.invalidateRuleInspect()
 			gen := d.nextViewGen()
 			go d.loadView(ctx, win, gen)
@@ -208,7 +370,7 @@ func (d *Dashboard) beginRuleSave(next []model.CustomRule, fromEditor bool) {
 }
 
 // customRulesRows are the settings rows of the custom rules: one per rule,
-// then the add row, which carries the empty state when there are none.
+// then the footer row carrying import/export and the add button.
 func (d *Dashboard) customRulesRows(c *ui.Context, t *ui.Theme) []func() {
 	r := &d.rules
 	rows := make([]func(), 0, len(r.rules)+1)
@@ -216,7 +378,7 @@ func (d *Dashboard) customRulesRows(c *ui.Context, t *ui.Theme) []func() {
 		rows = append(rows, d.customRuleRow(c, t, i, rule))
 	}
 	rows = append(rows, func() {
-		ui.Row(c.Key("rules-add")).Gap(gapLarge).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
+		ui.Row(c.Key("rules-add")).Gap(gapMedium).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
 			note := locales.RulesOrderNote()
 			switch {
 			case r.failed:
@@ -226,19 +388,25 @@ func (d *Dashboard) customRulesRows(c *ui.Context, t *ui.Theme) []func() {
 			case len(r.rules) == 0:
 				note = locales.RulesEmpty()
 			}
-			mutedText(c, t, note).Grow(1)
-			button(c, buttonSpec{label: locales.RuleAdd(), icon: iconPlus, style: primaryButton(t),
-				disabled: d.controlsLocked() || !r.loaded, busy: r.busy}, d.openRuleEditor)
+			mutedText(c, t, note).Grow(1).Basis(0)
+			ui.Row(c).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+				button(c, buttonSpec{label: locales.RulesImport(), icon: iconUpload, style: mainSoftButton(t),
+					disabled: d.controlsLocked() || !r.loaded || r.busy || r.ioBusy}, d.importCustomRules)
+				button(c, buttonSpec{label: locales.RulesExport(), icon: iconDownload, style: mainSoftButton(t),
+					disabled: d.controlsLocked() || !r.loaded || r.busy || r.ioBusy || len(r.rules) == 0}, d.exportCustomRules)
+				button(c, buttonSpec{label: locales.RuleAdd(), icon: iconPlus, style: primaryButton(t),
+					disabled: d.controlsLocked() || !r.loaded || r.ioBusy, busy: r.busy}, d.openRuleEditor)
+			})
 		})
 	})
 	return rows
 }
 
 // customRuleRow is one stored rule: its enable switch, type and value, target
-// chip, priority reorder buttons, and delete button.
+// chip, edit button, priority reorder buttons, and delete button.
 func (d *Dashboard) customRuleRow(c *ui.Context, t *ui.Theme, index int, rule model.CustomRule) func() {
 	return func() {
-		locked := d.controlsLocked() || d.rules.busy
+		locked := d.controlsLocked() || d.rules.busy || d.rules.ioBusy
 		total := len(d.rules.rules)
 		ui.Row(c.Key("rule:" + strconv.Itoa(index))).Gap(gapMedium).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
 			enabled := !rule.Disabled
@@ -264,6 +432,9 @@ func (d *Dashboard) customRuleRow(c *ui.Context, t *ui.Theme, index int, rule mo
 			}
 			chip(c, t, ruleTargetLabel(rule.Target), targetColor)
 			ui.Row(c).Gap(gapTight).AlignItems(ui.Center).Children(func() {
+				ui.Box(c).Disabled(locked).Children(func() {
+					iconButton(c, locales.RuleEditLabel(rule.Value), iconEdit, softButton(t), func() { d.openRuleEditorEdit(index) })
+				})
 				if total > 1 {
 					ui.Box(c).Disabled(locked || index == 0).Children(func() {
 						iconButton(c, locales.RuleMoveUp(), iconArrowUp, softButton(t), func() { d.moveRule(index, -1) })
@@ -307,10 +478,16 @@ func (d *Dashboard) customRuleForm(c *ui.Context, t *ui.Theme) {
 		e.targetIndex = slices.Index(service.CustomRuleTargets, model.CustomRuleProxy)
 		e.customTarget = ""
 	}
+	title := locales.RuleAdd()
+	submitLabel := locales.Add()
+	if e.editingIndex >= 0 {
+		title = locales.RuleEdit()
+		submitLabel = locales.SaveChanges()
+	}
 	ui.Column(c).Gap(gapSection).Children(func() {
 		ui.Column(c).Gap(gapSmall).Children(func() {
 			ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, locales.RuleAdd()).FontSize(fontHeadline).FontWeight(weightSemibold).Grow(1)
+				ui.Text(c, title).FontSize(fontHeadline).FontWeight(weightSemibold).Grow(1)
 				iconButton(c, locales.Close(), iconClose, softButton(t), func() { r.editorOpen = false })
 			})
 			mutedText(c, t, locales.RuleDialogNote())
@@ -346,7 +523,7 @@ func (d *Dashboard) customRuleForm(c *ui.Context, t *ui.Theme) {
 		})
 		ui.Row(c).Gap(gapSmall).Justify(ui.End).Children(func() {
 			button(c, buttonSpec{label: locales.Cancel(), style: softButton(t), disabled: r.busy}, func() { r.editorOpen = false })
-			button(c, buttonSpec{label: locales.Add(), style: primaryButton(t), busy: r.busy,
+			button(c, buttonSpec{label: submitLabel, style: primaryButton(t), busy: r.busy,
 				disabled: r.busy || strings.TrimSpace(e.value) == ""}, d.submitRuleEditor)
 		})
 	})

@@ -907,7 +907,6 @@
   "homeRefreshCurrent": "Refresh current",
   "homeManageAllSubs": "Manage all",
   "homeNoAutoRefresh": "Manual",
-  "homeNodeSearch": "Search nodes, regions or protocol…",
   "homePaletteApplyHint": "Click to switch immediately",
   "homeCurrentExitLabel": "Exit: {name}",
   "@homeCurrentExitLabel": {
@@ -1083,5 +1082,55 @@
       }
     }
   },
-  "actionGlobalShortcuts": "Couldn't register global shortcuts"
+  "actionGlobalShortcuts": "Couldn't register global shortcuts",
+  "connectionsPause": "Pause",
+  "connectionsResume": "Resume",
+  "connectionsPausedBadge": "Paused",
+  "connectionsSortNewest": "Newest",
+  "connectionsSortTraffic": "Traffic",
+  "connectionsSortHost": "Host",
+  "connectionsCloseFiltered": "Close filtered ({count})",
+  "@connectionsCloseFiltered": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleEdit": "Edit rule",
+  "ruleEditLabel": "Edit rule {value}",
+  "@ruleEditLabel": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "rulesExport": "Export",
+  "rulesImport": "Import",
+  "rulesExportTitle": "Export custom rules",
+  "rulesImportTitle": "Import custom rules",
+  "rulesFileFilterJson": "JSON files",
+  "rulesExported": "{count, plural, one {Exported # rule} other {Exported # rules}}",
+  "@rulesExported": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesImported": "Imported rules ({added} added, {updated} updated)",
+  "@rulesImported": {
+    "placeholders": {
+      "added": {
+        "type": "int"
+      },
+      "updated": {
+        "type": "int"
+      }
+    }
+  },
+  "actionExportRules": "Couldn't export rules",
+  "actionImportRules": "Couldn't import rules",
+  "actionOpenUrl": "Couldn't import subscription link"
 }

@@ -262,7 +262,6 @@ func (d *Dashboard) horizonActions(c *ui.Context, t *ui.Theme, tier homeTier) {
 			})
 		default:
 			horizonPillButton(c, t, "switchNode", locales.HomeSwitchNode(), nil, iconChevron, true, locked, false, func() {
-				d.nodePickerQuery = ""
 				d.nodePickerOpen = true
 			})
 			d.horizonTestButton(c, t, false)
@@ -753,7 +752,6 @@ func (d *Dashboard) shelfLeftFewNodes(c *ui.Context, t *ui.Theme) {
 	nodes := groupRealNodes(group)
 	shelfSectionHeader(c, t, "fewHead", locales.HomeAvailableNodes(len(nodes)), locales.HomeExpandList(), func() {
 		d.activeGroup = group.Name
-		d.nodePickerQuery = ""
 		d.nodePickerOpen = true
 	})
 	ui.Column(c.Key("fewNodesList")).Gap(4).Disabled(d.controlsLocked()).Children(func() {
@@ -820,7 +818,6 @@ func (d *Dashboard) shelfNodeRow(c *ui.Context, t *ui.Theme, group model.GroupVi
 func (d *Dashboard) shelfLeftMultiAirport(c *ui.Context, t *ui.Theme) {
 	totalNodes := d.totalProfileNodes()
 	shelfSectionHeader(c, t, "groupsHead", locales.HomeRouteGroups(), locales.HomeAllNodesCount(totalNodes), func() {
-		d.nodePickerQuery = ""
 		d.nodePickerOpen = true
 	})
 	groups := d.homePreviewGroups()
@@ -870,7 +867,6 @@ func (d *Dashboard) shelfGroupRow(c *ui.Context, t *ui.Theme, group model.GroupV
 	row.OnClick(func() {
 		d.activeGroup = groupName
 		d.nodeRegion = nodeFilterDefault
-		d.nodePickerQuery = ""
 		d.nodePickerOpen = true
 	})
 	row.Children(func() {

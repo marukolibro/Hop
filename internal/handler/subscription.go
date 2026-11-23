@@ -205,6 +205,24 @@ func (d *Dashboard) openEditorDialog(intent editorIntent, id string) int {
 	return s.editor.seq
 }
 
+// openEditorWithImport opens the add-subscription dialog pre-filled with a
+// remote link received from a clash://, mihomo://, or hop:// deep link. The
+// user still reviews and confirms before Hop fetches or saves anything.
+func (d *Dashboard) openEditorWithImport(name string, rawURL string) {
+	d.nodePickerOpen = false
+	d.subPickerOpen = false
+	s := &d.subscription
+	s.editor = subscriptionEditor{
+		seq:          s.editor.seq + 1,
+		intent:       editorAdd,
+		sourceLoaded: true,
+		sourceIndex:  slices.Index(service.ProfileSources, model.SourceRemote),
+		name:         name,
+		url:          rawURL,
+	}
+	s.editorOpen = true
+}
+
 // beginEditorSubmit validates the form and begins Add or Edit; the busy mark
 // starts here, synchronously, before any work runs.
 func (d *Dashboard) beginEditorSubmit() {

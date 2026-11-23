@@ -167,7 +167,6 @@ const (
 	homeSubPaletteScrollH float32 = 290
 	homePalettePad        float32 = 16
 	homePaletteRowRadius  float32 = 12
-	homePaletteSearchW    float32 = 280
 	homeServicesPreview           = 6
 	homeLiveConnsPreview          = 5
 	homeFewNodesLimit             = 4

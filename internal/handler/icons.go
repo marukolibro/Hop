@@ -51,6 +51,10 @@ var (
 	iconDirect       = parseIcon(`<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.4"/>`)
 	iconWifi         = parseIcon(`<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/>`)
 	iconFile         = parseIcon(`<path d="M13.5 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13.5 3.5V9H19"/>`)
+	iconPause        = parseIcon(`<path d="M9 6v12M15 6v12"/>`)
+	iconPlay         = parseIcon(`<path d="M8 5.5v13l11-6.5z"/>`)
+	iconEdit         = parseIcon(`<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>`)
+	iconUpload       = parseIcon(`<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 19.5h14"/>`)
 )
 
 func parseIcon(paths string) *ui.SVG {
