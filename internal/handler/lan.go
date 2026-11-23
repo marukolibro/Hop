@@ -93,6 +93,7 @@ func (d *Dashboard) beginLANReset() {
 // reloadViewAfterCore reads the node view again after the core reloaded its
 // config. It runs on the UI thread.
 func (d *Dashboard) reloadViewAfterCore(ctx context.Context, win Updater) {
+	d.invalidateRuleInspect()
 	gen := d.nextViewGen()
 	go d.loadView(ctx, win, gen)
 }

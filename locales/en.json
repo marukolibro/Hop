@@ -847,5 +847,241 @@
   "statsMemoryCore": "Core",
   "servicesAll": "All services",
   "servicesAllWork": "All work",
-  "servicesIdle": "Not checked"
+  "servicesIdle": "Not checked",
+  "homeSwitchNode": "Switch node",
+  "homeAvailableNodes": "Available nodes · {count}",
+  "@homeAvailableNodes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeRouteGroups": "Routing groups",
+  "homeExpandList": "Expand list",
+  "homeAllNodesCount": "All {count} nodes",
+  "@homeAllNodesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeCurrentLine": "Current route",
+  "homeProtocol": "Protocol",
+  "homeExitLocation": "Exit",
+  "homeCurrentConfig": "Profile",
+  "homeSingleNodeLocal": "Single-node config",
+  "homeSplitRules": "Split",
+  "homeTabServices": "Services",
+  "homeTabLive": "Live",
+  "homeAllServicesCount": "All {count}",
+  "@homeAllServicesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeAutoCheckNote": "Checks every 10 min",
+  "homeTodaySummary": "Today {size} · {count} active",
+  "@homeTodaySummary": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homePeakRate": "Peak {rate}",
+  "@homePeakRate": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "homeSwitchSubscription": "Switch subscription",
+  "homeRefreshCurrent": "Refresh current",
+  "homeManageAllSubs": "Manage all",
+  "homeNoAutoRefresh": "Manual",
+  "homeNodeSearch": "Search nodes, regions or protocol…",
+  "homePaletteApplyHint": "Click to switch immediately",
+  "homeCurrentExitLabel": "Exit: {name}",
+  "@homeCurrentExitLabel": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "homeServicesDock": "Services {summary}",
+  "@homeServicesDock": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "homeNoMatchNodes": "No matching nodes",
+  "homeNodeCount": "{count, plural, one {# node} other {# nodes}}",
+  "@homeNodeCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statsRange7": "7d",
+  "statsRange30": "30d",
+  "statsLast7": "Last 7 days",
+  "statsDailyAvg": "Daily average",
+  "statsPeakDay": "Peak {date} · {size}",
+  "@statsPeakDay": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "statsShareTitle": "Traffic mix",
+  "statsProxyRatio": "Proxy share",
+  "statsDownloadRatio": "Download share",
+  "statsModeRoute": "Proxy · Direct",
+  "statsModeDirection": "Down · Up",
+  "statsAvgTag": "Avg",
+  "statsTotalValue": "Total {size}",
+  "@statsTotalValue": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "statsDownValue": "Down {size}",
+  "@statsDownValue": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "statsUpValue": "Up {size}",
+  "@statsUpValue": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "statsSessionScope": "This session",
+  "statsTabApps": "By app",
+  "statsTabNodes": "By node",
+  "statsSessionEmpty": "Rankings appear as traffic flows this session",
+  "statsOtherProcess": "Other",
+  "activityActiveConns": "Active connections",
+  "activityLiveRate": "Live throughput",
+  "activityConnTraffic": "Active traffic",
+  "activityLoggedLines": "Recorded lines",
+  "logsFilter": "Filter log messages…",
+  "proxyBypassTitle": "Proxy bypass list",
+  "proxyBypassNote": "Local and LAN addresses always bypass the system proxy. Add extra domains or CIDRs here.",
+  "proxyBypassDefaultOnly": "Defaults only",
+  "proxyBypassCount": "{count, plural, one {# custom entry} other {# custom entries}}",
+  "@proxyBypassCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "proxyBypassEdit": "Edit",
+  "proxyBypassDialogNote": "One per line: domains (example.com), wildcards (*.corp.local), or IPs/CIDRs (10.0.0.0/8). Built-in localhost and private LAN ranges are always included.",
+  "proxyBypassPlaceholder": "*.corp.internal\n10.20.0.0/16\nintranet.example.com",
+  "actionSaveProxyBypass": "Couldn't save proxy bypass list",
+  "ruleTargetGroup": "Choose group",
+  "ruleMoveUp": "Move rule up",
+  "ruleMoveDown": "Move rule down",
+  "ruleToggleLabel": "Toggle rule {value}",
+  "@ruleToggleLabel": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ruleDisabledTag": "Disabled",
+  "homePaletteAutoPinHint": "Auto · click to pin a node",
+  "homePaletteResetAuto": "Back to auto",
+  "settingsDelayUrl": "Speed test URL",
+  "settingsDelayUrlNote": "Lightweight endpoint used to measure node latency",
+  "homeHideTimeout": "Hide timed out",
+  "homePickFastest": "Fastest",
+  "homeTestNodeTip": "Click to test this node",
+  "pageRules": "Rules",
+  "rulesDiagnosePlaceholder": "Enter a domain, URL, or IP to test routing, e.g. api.openai.com",
+  "rulesFilterPlaceholder": "Filter rules by type, value, or target…",
+  "rulesMatchedBadge": "Matched rule #{index}",
+  "@rulesMatchedBadge": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesDynamicNote": "{count, plural, one {# Geo/rule-set rule precedes this and may match first at runtime} other {# Geo/rule-set rules precede this and may match first at runtime}}",
+  "@rulesDynamicNote": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesNoMatch": "No matching rule",
+  "rulesRefresh": "Refresh",
+  "rulesCount": "{count, plural, one {# rule} other {# rules}}",
+  "@rulesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rulesInspectEmpty": "No active rules",
+  "rulesInspectEmptyHint": "Active routing rules appear here once the core is connected.",
+  "rulesProvidersTitle": "External providers",
+  "rulesProvidersUpdateAll": "Update all",
+  "rulesProviderProxy": "Proxy set",
+  "rulesProviderRule": "Rule set",
+  "rulesProviderCount": "{count, plural, one {# item} other {# items}}",
+  "@rulesProviderCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "actionLoadRulesInspect": "Couldn't read active rules",
+  "actionUpdateProvider": "Couldn't update provider",
+  "settingsGlobalShortcuts": "Global shortcuts",
+  "settingsGlobalShortcutsNote": "{show} show/hide window · {proxy} toggle proxy · {mode} cycle mode",
+  "@settingsGlobalShortcutsNote": {
+    "placeholders": {
+      "show": {
+        "type": "String"
+      },
+      "proxy": {
+        "type": "String"
+      },
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "actionGlobalShortcuts": "Couldn't register global shortcuts"
 }

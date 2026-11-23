@@ -52,6 +52,9 @@ const (
 	glassNoticeTint        float32 = 0.10
 	glassToggleOnTint      float32 = 0.10
 	glassBadgeTint         float32 = 0.08
+	glassShelfLightAlpha   float32 = 0.36
+	glassShelfDarkAlpha    float32 = 0.40
+	glassHorizonSkyTint    float32 = 0.07
 )
 
 var (
@@ -279,6 +282,69 @@ func glassButtonShadow(t *ui.Theme) ui.Color {
 // glassSelectedBorder is the accent edge of the chosen node.
 func glassSelectedBorder(t *ui.Theme) ui.Color {
 	return t.Accent.Alpha(glassAccentLine)
+}
+
+// floatingDockFill is the frosted face used for primary horizon pills and
+// open header states.
+func floatingDockFill(t *ui.Theme) ui.Color {
+	if !onGlass(t) {
+		return t.Surface
+	}
+	if t.Dark {
+		return overlaySurface(t).Alpha(0.72)
+	}
+	return ui.RGB(255, 255, 255).Alpha(0.76)
+}
+
+// floatingDockGlassTint softly tints the floating dock's Liquid Glass material
+// so controls stay crisp over both light and dark backdrops.
+func floatingDockGlassTint(t *ui.Theme) ui.Color {
+	if t.Dark {
+		return overlaySurface(t).Alpha(0.28)
+	}
+	return ui.RGB(255, 255, 255).Alpha(0.24)
+}
+
+// horizonShelfFill is the soft tonal frosted lower shelf below the horizon
+// seam, staying in the window's own theme hue rather than turning stark white.
+func horizonShelfFill(t *ui.Theme) ui.Color {
+	if !onGlass(t) {
+		return t.Surface
+	}
+	if t.Dark {
+		return glassFill(t, glassShelfDarkAlpha)
+	}
+	return ui.RGB(t.Surface.R, t.Surface.G, t.Surface.B).Mix(ui.RGB(255, 255, 255), 0.35).Alpha(glassShelfLightAlpha)
+}
+
+// horizonSkyFace is the subtle sky tint behind the upper horizon stage on
+// solid themes; glass themes let the window's luminous backdrop shine through.
+func horizonSkyFace(t *ui.Theme) ui.LinearGradient {
+	from := t.Background.Mix(t.Accent, glassHorizonSkyTint)
+	to := t.Background
+	return ui.LinearGradient{Angle: 155, From: from, To: to}
+}
+
+// horizonPillIdle is the quiet translucent pill fill for header capsules and
+// unobtrusive home actions.
+func horizonPillIdle(t *ui.Theme) ui.Color {
+	if onGlass(t) {
+		return t.Text.Alpha(softFillAlpha)
+	}
+	return t.Text.Alpha(softFillAlpha)
+}
+
+// horizonPillHover is the hovered face of a quiet translucent pill.
+func horizonPillHover(t *ui.Theme) ui.Color {
+	return t.Text.Alpha(softHoverAlpha)
+}
+
+// floatingDockShadow lifts the floating full-pill dock over the horizon seam.
+func floatingDockShadow(t *ui.Theme) ui.Color {
+	if t.Dark {
+		return ui.RGBA(0, 0, 0, 0.34)
+	}
+	return ui.RGBA(24, 52, 92, 0.11)
 }
 
 // themedWindowMaterial paints the wallpaper and the glass veil in one pass,

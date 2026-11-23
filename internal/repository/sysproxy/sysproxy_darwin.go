@@ -49,19 +49,25 @@ func parseScutil(out string) model.SystemProxyState {
 }
 
 // Set points the web, secure web and SOCKS proxies of every enabled network
-// service at host:port, so apps use it whichever network is in use.
-func (c *Controller) Set(ctx context.Context, host string, port int) error {
+// service at host:port, and configures bypass domains so local and LAN traffic
+// skips the proxy.
+func (c *Controller) Set(ctx context.Context, host string, port int, bypass []string) error {
 	services, err := netservice.List(ctx)
 	if err != nil {
 		return err
 	}
 	p := strconv.Itoa(port)
 	for _, service := range services {
-		for _, args := range [][]string{
+		commands := [][]string{
 			{"-setwebproxy", service, host, p},
 			{"-setsecurewebproxy", service, host, p},
 			{"-setsocksfirewallproxy", service, host, p},
-		} {
+		}
+		if len(bypass) > 0 {
+			bypassArgs := append([]string{"-setproxybypassdomains", service}, bypass...)
+			commands = append(commands, bypassArgs)
+		}
+		for _, args := range commands {
 			if err := netservice.Run(ctx, args); err != nil {
 				return err
 			}

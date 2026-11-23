@@ -106,6 +106,7 @@ type proxiesResponse struct {
 type proxyEntry struct {
 	Type    string       `json:"type"`
 	Now     string       `json:"now"`
+	Fixed   string       `json:"fixed"`
 	All     []string     `json:"all"`
 	History []delayEntry `json:"history"`
 	UDP     bool         `json:"udp"`
@@ -116,8 +117,40 @@ type delayEntry struct {
 }
 
 type ruleEntry struct {
-	Type  string `json:"type"`
-	Proxy string `json:"proxy"`
+	Index   int        `json:"index"`
+	Type    string     `json:"type"`
+	Payload string     `json:"payload"`
+	Proxy   string     `json:"proxy"`
+	Size    int        `json:"size"`
+	Extra   *ruleExtra `json:"extra"`
+}
+
+type ruleExtra struct {
+	Disabled bool   `json:"disabled"`
+	HitCount uint64 `json:"hitCount"`
+}
+
+type proxyProvidersResponse struct {
+	Providers map[string]proxyProviderEntry `json:"providers"`
+}
+
+type proxyProviderEntry struct {
+	Name        string            `json:"name"`
+	VehicleType string            `json:"vehicleType"`
+	Proxies     []json.RawMessage `json:"proxies"`
+	UpdatedAt   time.Time         `json:"updatedAt"`
+}
+
+type ruleProvidersResponse struct {
+	Providers map[string]ruleProviderEntry `json:"providers"`
+}
+
+type ruleProviderEntry struct {
+	Name        string    `json:"name"`
+	VehicleType string    `json:"vehicleType"`
+	Behavior    string    `json:"behavior"`
+	RuleCount   int       `json:"ruleCount"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 // builtinTypes are the core's own outbounds, which are no proxy.
@@ -188,7 +221,7 @@ func (c *Client) Snapshot(ctx context.Context) (model.Snapshot, error) {
 		if name == globalGroup || !slices.Contains(groupTypes, entry.Type) {
 			continue
 		}
-		groups = append(groups, model.ProxyGroup{Name: name, Type: entry.Type, Selected: entry.Now, Options: entry.All})
+		groups = append(groups, model.ProxyGroup{Name: name, Type: entry.Type, Selected: entry.Now, Fixed: entry.Fixed, Options: entry.All})
 	}
 	delays := make(map[string]int, len(out.Proxies))
 	facts := make(map[string]model.ProxyFacts, len(out.Proxies))
@@ -283,6 +316,169 @@ func readCatchAll(body io.Reader) (string, error) {
 	return "", nil
 }
 
+// Rules returns all active routing rules from the core, streamed from /rules
+// so large rule sets never hit maxBodySize.
+func (c *Client) Rules(ctx context.Context) ([]model.ActiveRule, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	resp, err := c.send(ctx, http.MethodGet, "/rules", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiError(http.MethodGet, "/rules", resp)
+	}
+	rules, err := readAllRules(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("decode mihomo rules (method=GET path=\"/rules\"): %w", err)
+	}
+	return rules, nil
+}
+
+func readAllRules(body io.Reader) ([]model.ActiveRule, error) {
+	decoder := json.NewDecoder(body)
+	token, err := decoder.Token()
+	if err != nil {
+		return nil, err
+	}
+	if token != json.Delim('{') {
+		return nil, errors.New("mihomo rules response is not an object")
+	}
+	var out []model.ActiveRule
+	found := false
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		if key != "rules" {
+			var ignored json.RawMessage
+			if err := decoder.Decode(&ignored); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		if token != json.Delim('[') {
+			return nil, errors.New("mihomo rules response has no rules array")
+		}
+		found = true
+		idx := 0
+		for decoder.More() {
+			var entry ruleEntry
+			if err := decoder.Decode(&entry); err != nil {
+				return nil, err
+			}
+			r := model.ActiveRule{
+				Index:   idx,
+				Type:    entry.Type,
+				Payload: entry.Payload,
+				Proxy:   entry.Proxy,
+				Size:    entry.Size,
+			}
+			if entry.Extra != nil {
+				r.Disabled = entry.Extra.Disabled
+				r.HitCount = entry.Extra.HitCount
+			}
+			out = append(out, r)
+			idx++
+		}
+		if _, err := decoder.Token(); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := decoder.Token(); err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, errors.New("mihomo rules response has no rules array")
+	}
+	return out, nil
+}
+
+// ProxyProviders lists external (HTTP or File) proxy providers loaded by the
+// core, sorted by name. Built-in Compatible/Inline providers are omitted.
+func (c *Client) ProxyProviders(ctx context.Context) ([]model.ProviderSummary, error) {
+	raw, err := c.do(ctx, c.timeout, http.MethodGet, "/providers/proxies", nil, http.StatusOK)
+	if err != nil {
+		return nil, err
+	}
+	var resp proxyProvidersResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("decode mihomo proxy providers: %w", err)
+	}
+	var out []model.ProviderSummary
+	for name, entry := range resp.Providers {
+		if entry.VehicleType != "HTTP" && entry.VehicleType != "File" {
+			continue
+		}
+		n := entry.Name
+		if n == "" {
+			n = name
+		}
+		out = append(out, model.ProviderSummary{
+			Kind:        model.ProviderKindProxy,
+			Name:        n,
+			VehicleType: entry.VehicleType,
+			Count:       len(entry.Proxies),
+			UpdatedAt:   entry.UpdatedAt,
+		})
+	}
+	slices.SortFunc(out, func(a, b model.ProviderSummary) int { return strings.Compare(a.Name, b.Name) })
+	return out, nil
+}
+
+// RuleProviders lists external (HTTP or File) rule providers loaded by the
+// core, sorted by name.
+func (c *Client) RuleProviders(ctx context.Context) ([]model.ProviderSummary, error) {
+	raw, err := c.do(ctx, c.timeout, http.MethodGet, "/providers/rules", nil, http.StatusOK)
+	if err != nil {
+		return nil, err
+	}
+	var resp ruleProvidersResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("decode mihomo rule providers: %w", err)
+	}
+	var out []model.ProviderSummary
+	for name, entry := range resp.Providers {
+		if entry.VehicleType != "HTTP" && entry.VehicleType != "File" {
+			continue
+		}
+		n := entry.Name
+		if n == "" {
+			n = name
+		}
+		out = append(out, model.ProviderSummary{
+			Kind:        model.ProviderKindRule,
+			Name:        n,
+			VehicleType: entry.VehicleType,
+			Behavior:    entry.Behavior,
+			Count:       entry.RuleCount,
+			UpdatedAt:   entry.UpdatedAt,
+		})
+	}
+	slices.SortFunc(out, func(a, b model.ProviderSummary) int { return strings.Compare(a.Name, b.Name) })
+	return out, nil
+}
+
+// UpdateProxyProvider asks the core to refresh one proxy provider.
+func (c *Client) UpdateProxyProvider(ctx context.Context, name string) error {
+	path := "/providers/proxies/" + url.PathEscape(name)
+	_, err := c.do(ctx, reloadTimeout, http.MethodPut, path, nil, http.StatusNoContent)
+	return err
+}
+
+// UpdateRuleProvider asks the core to refresh one rule provider.
+func (c *Client) UpdateRuleProvider(ctx context.Context, name string) error {
+	path := "/providers/rules/" + url.PathEscape(name)
+	_, err := c.do(ctx, reloadTimeout, http.MethodPut, path, nil, http.StatusNoContent)
+	return err
+}
+
 // TestProxyDelay measures one proxy against testURL and returns its delay in
 // milliseconds. A proxy that failed the test or did not answer within timeout
 // returns 0: that is the answer of the test, not an error. The core keeps the
@@ -321,7 +517,8 @@ func (c *Client) SelectedProxy(ctx context.Context, group string) (string, error
 	return out.Now, nil
 }
 
-// SelectProxy makes group use proxy.
+// SelectProxy makes group use proxy. On URLTest and Fallback groups, mihomo
+// pins the chosen proxy until ResetProxy clears it.
 func (c *Client) SelectProxy(ctx context.Context, group string, proxy string) error {
 	body, err := json.Marshal(selectRequest{Name: proxy})
 	if err != nil {
@@ -329,6 +526,21 @@ func (c *Client) SelectProxy(ctx context.Context, group string, proxy string) er
 	}
 	path := "/proxies/" + url.PathEscape(group)
 	_, err = c.do(ctx, c.timeout, http.MethodPut, path, body, http.StatusNoContent)
+	return err
+}
+
+// ResetProxy clears a manually pinned proxy on a URLTest or Fallback group so
+// it returns to automatic selection.
+func (c *Client) ResetProxy(ctx context.Context, group string) error {
+	path := "/proxies/" + url.PathEscape(group)
+	_, err := c.do(ctx, c.timeout, http.MethodDelete, path, nil, http.StatusNoContent)
+	return err
+}
+
+// FlushDNSCache clears the core's in-memory DNS cache so lookups on a newly
+// joined network resolve freshly.
+func (c *Client) FlushDNSCache(ctx context.Context) error {
+	_, err := c.do(ctx, c.timeout, http.MethodPost, "/cache/dns/flush", nil, http.StatusNoContent)
 	return err
 }
 

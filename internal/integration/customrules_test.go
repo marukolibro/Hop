@@ -66,6 +66,59 @@ func TestCustomRulesPrecedeProfileRules(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "no proxy group") {
 		t.Fatalf("config without a proxy group = %v, want a clear error", err)
 	}
+
+	// Verify profile.store-selected and profile.store-fake-ip are always enabled.
+	rawCfg, err := service.RuntimeConfig([]byte(profileA), model.RulesHop, custom, settings)
+	if err != nil {
+		t.Fatalf("build config for profile check: %v", err)
+	}
+	var profileDoc struct {
+		Profile struct {
+			StoreSelected bool `yaml:"store-selected"`
+			StoreFakeIP   bool `yaml:"store-fake-ip"`
+		} `yaml:"profile"`
+	}
+	if err := yaml.Unmarshal(rawCfg, &profileDoc); err != nil {
+		t.Fatalf("parse profile section: %v", err)
+	}
+	if !profileDoc.Profile.StoreSelected || !profileDoc.Profile.StoreFakeIP {
+		t.Fatalf("profile = %+v, want store-selected and store-fake-ip both true", profileDoc.Profile)
+	}
+
+	// Verify disabled rules are omitted, named groups are preserved when
+	// present, and missing named groups fall back to the main group.
+	enhanced := []model.CustomRule{
+		{Type: model.CustomRuleDomainSuffix, Value: "claude.ai", Target: "AI"},
+		{Type: model.CustomRuleDomain, Value: "disabled.example.com", Target: model.CustomRuleDirect, Disabled: true},
+		{Type: model.CustomRuleDomain, Value: "missing-group.example.com", Target: "NonExistentGroup"},
+	}
+	gotEnhanced := rulesOf(t, []byte(profileA), model.RulesHop, enhanced, settings)
+	wantEnhanced := []string{
+		"GEOSITE,private,DIRECT",
+		"GEOIP,private,DIRECT,no-resolve",
+		"DOMAIN-SUFFIX,claude.ai,AI",
+		"DOMAIN,missing-group.example.com,节点选择",
+	}
+	if len(gotEnhanced) < len(wantEnhanced) || !slices.Equal(gotEnhanced[:len(wantEnhanced)], wantEnhanced) {
+		t.Fatalf("enhanced Hop rules = %v, want prefix %v", gotEnhanced, wantEnhanced)
+	}
+
+	// Verify MatchingRuleConnections picks only connections matching the rules.
+	conns := model.Connections{Active: []model.Connection{
+		{ID: "c1", Host: "api.claude.ai", Process: "Chrome"},
+		{ID: "c2", Host: "github.com", Process: "git"},
+		{ID: "c3", Host: "192.0.2.42", Process: "curl"},
+		{ID: "c4", Host: "chat.example.org", Process: "Telegram"},
+	}}
+	matched := service.MatchingRuleConnections(conns, []model.CustomRule{
+		{Type: model.CustomRuleDomainSuffix, Value: "claude.ai", Target: "AI"},
+		{Type: model.CustomRuleIPCIDR, Value: "192.0.2.0/24", Target: model.CustomRuleDirect},
+		{Type: model.CustomRuleProcessName, Value: "Telegram", Target: model.CustomRuleProxy},
+	})
+	wantMatched := []string{"c1", "c3", "c4"}
+	if !slices.Equal(matched, wantMatched) {
+		t.Fatalf("MatchingRuleConnections = %v, want %v", matched, wantMatched)
+	}
 }
 
 func rulesOf(t *testing.T, subscription []byte, source model.RuleSource, custom []model.CustomRule, settings service.RuntimeSettings) []string {

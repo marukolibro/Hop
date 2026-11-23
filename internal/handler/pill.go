@@ -49,28 +49,23 @@ type pillSpec struct {
 	hint bool
 }
 
-// togglePill is a capsule that takes the accent's tint while its choice is
-// on, with lead drawn before its label: the outbound modes, one of which is
-// always on, and the traffic switches, which are on or off. Its fill and
-// outline ease between the two.
+// togglePill is a capsule that takes the emerald success tint while its traffic
+// switch is on, matching the main window's floating dock.
 func togglePill(c *ui.Context, t *ui.Theme, spec pillSpec, lead func(), onClick func()) ui.Element {
-	b := ui.ButtonBase(c.Key(spec.label)).Label(spec.label).Height(switchHeight).Padding(0, 12).Gap(gapTight).
-		Radius(switchHeight / 2).AlignItems(ui.Center).Justify(ui.Center).Disabled(spec.disabled || spec.busy)
-	// Off, a pill is only a faint fill; on, it takes the accent's tint and
-	// outline, so the choices that are on stand out of the row. On glass
-	// both sit on a near-opaque backing, so their text never meets the
-	// desktop.
-	fill, line, ink := t.Text.Alpha(softFillAlpha), ui.Transparent, t.TextMuted
+	const h float32 = 34
+	b := ui.ButtonBase(c.Key(spec.label)).Label(spec.label).Height(h).Padding(0, 12).Gap(gapSmall).
+		Radius(h / 2).AlignItems(ui.Center).Justify(ui.Center).Disabled(spec.disabled || spec.busy)
+	fill, line, ink, weight := t.Text.Alpha(softFillAlpha), ui.Transparent, t.Text, weightMedium
 	if onGlass(t) {
 		backing := controlBacking(t)
-		fill, line = backing, t.Text.Alpha(0.24)
+		fill, line = backing, t.Border
 		if spec.on {
-			fill, line, ink = t.Accent.Alpha(pillOnFillAlpha).Over(backing), t.Accent.Alpha(pillOnLineAlpha), t.Text
+			fill, line, weight = t.Success.Alpha(statusOnFillAlpha).Over(backing), t.Success.Alpha(statusOnLineAlpha), weightSemibold
 		} else if b.Hovered() && !spec.disabled {
 			fill = backing.Mix(t.Text, softFillAlpha)
 		}
 	} else if spec.on {
-		fill, line, ink = t.Accent.Alpha(pillOnFillAlpha), t.Accent.Alpha(pillOnLineAlpha), t.Text
+		fill, line, weight = t.Success.Alpha(statusOnFillAlpha), t.Success.Alpha(statusOnLineAlpha), weightSemibold
 	} else if b.Hovered() && !spec.disabled {
 		fill = t.Text.Alpha(softHoverAlpha)
 	}
@@ -89,14 +84,14 @@ func togglePill(c *ui.Context, t *ui.Theme, spec pillSpec, lead func(), onClick 
 	b.OnClick(onClick)
 	b.Children(func() {
 		if spec.hint {
-			hintRing(c, t.Accent, switchHeight/2)
+			hintRing(c, t.Success, h/2)
 		}
 		if spec.busy {
-			spinner(c, iconInline, t.Accent)
+			spinner(c, iconInline, t.Success)
 		} else {
 			lead()
 		}
-		ui.Text(c, spec.label).FontSize(fontSecondary).FontWeight(weightMedium).TextColor(ink).
+		ui.Text(c, spec.label).FontSize(fontSecondary).FontWeight(weight).TextColor(ink).
 			NoWrap().Translate(0, -opticalLift)
 	})
 	return b
@@ -181,7 +176,7 @@ func (d *Dashboard) systemProxyPill(c *ui.Context, t *ui.Theme) ui.Element {
 	return togglePill(c, t, pillSpec{
 		label: locales.SystemProxy(), on: s.on, busy: s.busy, hint: d.trafficHint(),
 		disabled: !s.loaded || (taken && !s.on),
-	}, func() { miniSwitch(c, t, s.on, t.Accent) }, func() { d.beginSystemProxy(!s.on) })
+	}, func() { miniSwitch(c, t, s.on, t.Success) }, func() { d.beginSystemProxy(!s.on) })
 }
 
 // tunPill turns TUN mode on and off. While another client's TUN holds the
@@ -191,7 +186,7 @@ func (d *Dashboard) tunPill(c *ui.Context, t *ui.Theme) ui.Element {
 	return togglePill(c, t, pillSpec{
 		label: locales.Tun(), on: s.on, busy: s.busy,
 		disabled: !s.loaded || d.controlsLocked() || (s.taken && !s.on),
-	}, func() { miniSwitch(c, t, s.on, t.Accent) }, func() { d.beginTun(!s.on) })
+	}, func() { miniSwitch(c, t, s.on, t.Success) }, func() { d.beginTun(!s.on) })
 }
 
 // trafficHint says whether to point at the system proxy switch: the core

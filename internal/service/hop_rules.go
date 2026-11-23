@@ -195,10 +195,15 @@ var hopRules = []string{
 // left out.
 func applyHopTemplate(cfg *runtimeConfig, p subscriptionProfile, custom []model.CustomRule) error {
 	cfg.Proxies, cfg.ProxyProviders = p.proxies, p.providers
-	if err := cfg.ProxyGroups.Encode(hopGroups(p.nodeNames, p.providerNames)); err != nil {
+	groups := hopGroups(p.nodeNames, p.providerNames)
+	if err := cfg.ProxyGroups.Encode(groups); err != nil {
 		return fmt.Errorf("build the template's proxy groups: %w", err)
 	}
-	lines, err := customRuleLines(custom, groupSelect)
+	groupNames := make([]string, 0, len(groups))
+	for _, g := range groups {
+		groupNames = append(groupNames, g.Name)
+	}
+	lines, err := customRuleLines(custom, groupSelect, groupNames)
 	if err != nil {
 		return err
 	}

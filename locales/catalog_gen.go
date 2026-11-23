@@ -4341,3 +4341,917 @@ func ServicesIdle() string { return In(i18n.Locale()).ServicesIdle() }
 func (msgs Messages) ServicesIdle() string {
 	return Catalog.Format(msgs.locale, "servicesIdle", nil)
 }
+
+// HomeSwitchNode says "Switch node"
+// in the language the app shows.
+func HomeSwitchNode() string { return In(i18n.Locale()).HomeSwitchNode() }
+
+// HomeSwitchNode says "Switch node"
+// in the language of msgs.
+func (msgs Messages) HomeSwitchNode() string {
+	return Catalog.Format(msgs.locale, "homeSwitchNode", nil)
+}
+
+// HomeAvailableNodes says "Available nodes · {count}"
+// in the language the app shows.
+func HomeAvailableNodes(count int) string { return In(i18n.Locale()).HomeAvailableNodes(count) }
+
+// HomeAvailableNodes says "Available nodes · {count}"
+// in the language of msgs.
+func (msgs Messages) HomeAvailableNodes(count int) string {
+	return Catalog.Format(msgs.locale, "homeAvailableNodes", map[string]any{"count": count})
+}
+
+// HomeRouteGroups says "Routing groups"
+// in the language the app shows.
+func HomeRouteGroups() string { return In(i18n.Locale()).HomeRouteGroups() }
+
+// HomeRouteGroups says "Routing groups"
+// in the language of msgs.
+func (msgs Messages) HomeRouteGroups() string {
+	return Catalog.Format(msgs.locale, "homeRouteGroups", nil)
+}
+
+// HomeExpandList says "Expand list"
+// in the language the app shows.
+func HomeExpandList() string { return In(i18n.Locale()).HomeExpandList() }
+
+// HomeExpandList says "Expand list"
+// in the language of msgs.
+func (msgs Messages) HomeExpandList() string {
+	return Catalog.Format(msgs.locale, "homeExpandList", nil)
+}
+
+// HomeAllNodesCount says "All {count} nodes"
+// in the language the app shows.
+func HomeAllNodesCount(count int) string { return In(i18n.Locale()).HomeAllNodesCount(count) }
+
+// HomeAllNodesCount says "All {count} nodes"
+// in the language of msgs.
+func (msgs Messages) HomeAllNodesCount(count int) string {
+	return Catalog.Format(msgs.locale, "homeAllNodesCount", map[string]any{"count": count})
+}
+
+// HomeCurrentLine says "Current route"
+// in the language the app shows.
+func HomeCurrentLine() string { return In(i18n.Locale()).HomeCurrentLine() }
+
+// HomeCurrentLine says "Current route"
+// in the language of msgs.
+func (msgs Messages) HomeCurrentLine() string {
+	return Catalog.Format(msgs.locale, "homeCurrentLine", nil)
+}
+
+// HomeProtocol says "Protocol"
+// in the language the app shows.
+func HomeProtocol() string { return In(i18n.Locale()).HomeProtocol() }
+
+// HomeProtocol says "Protocol"
+// in the language of msgs.
+func (msgs Messages) HomeProtocol() string {
+	return Catalog.Format(msgs.locale, "homeProtocol", nil)
+}
+
+// HomeExitLocation says "Exit"
+// in the language the app shows.
+func HomeExitLocation() string { return In(i18n.Locale()).HomeExitLocation() }
+
+// HomeExitLocation says "Exit"
+// in the language of msgs.
+func (msgs Messages) HomeExitLocation() string {
+	return Catalog.Format(msgs.locale, "homeExitLocation", nil)
+}
+
+// HomeCurrentConfig says "Profile"
+// in the language the app shows.
+func HomeCurrentConfig() string { return In(i18n.Locale()).HomeCurrentConfig() }
+
+// HomeCurrentConfig says "Profile"
+// in the language of msgs.
+func (msgs Messages) HomeCurrentConfig() string {
+	return Catalog.Format(msgs.locale, "homeCurrentConfig", nil)
+}
+
+// HomeSingleNodeLocal says "Single-node config"
+// in the language the app shows.
+func HomeSingleNodeLocal() string { return In(i18n.Locale()).HomeSingleNodeLocal() }
+
+// HomeSingleNodeLocal says "Single-node config"
+// in the language of msgs.
+func (msgs Messages) HomeSingleNodeLocal() string {
+	return Catalog.Format(msgs.locale, "homeSingleNodeLocal", nil)
+}
+
+// HomeSplitRules says "Split"
+// in the language the app shows.
+func HomeSplitRules() string { return In(i18n.Locale()).HomeSplitRules() }
+
+// HomeSplitRules says "Split"
+// in the language of msgs.
+func (msgs Messages) HomeSplitRules() string {
+	return Catalog.Format(msgs.locale, "homeSplitRules", nil)
+}
+
+// HomeTabServices says "Services"
+// in the language the app shows.
+func HomeTabServices() string { return In(i18n.Locale()).HomeTabServices() }
+
+// HomeTabServices says "Services"
+// in the language of msgs.
+func (msgs Messages) HomeTabServices() string {
+	return Catalog.Format(msgs.locale, "homeTabServices", nil)
+}
+
+// HomeTabLive says "Live"
+// in the language the app shows.
+func HomeTabLive() string { return In(i18n.Locale()).HomeTabLive() }
+
+// HomeTabLive says "Live"
+// in the language of msgs.
+func (msgs Messages) HomeTabLive() string {
+	return Catalog.Format(msgs.locale, "homeTabLive", nil)
+}
+
+// HomeAllServicesCount says "All {count}"
+// in the language the app shows.
+func HomeAllServicesCount(count int) string { return In(i18n.Locale()).HomeAllServicesCount(count) }
+
+// HomeAllServicesCount says "All {count}"
+// in the language of msgs.
+func (msgs Messages) HomeAllServicesCount(count int) string {
+	return Catalog.Format(msgs.locale, "homeAllServicesCount", map[string]any{"count": count})
+}
+
+// HomeAutoCheckNote says "Checks every 10 min"
+// in the language the app shows.
+func HomeAutoCheckNote() string { return In(i18n.Locale()).HomeAutoCheckNote() }
+
+// HomeAutoCheckNote says "Checks every 10 min"
+// in the language of msgs.
+func (msgs Messages) HomeAutoCheckNote() string {
+	return Catalog.Format(msgs.locale, "homeAutoCheckNote", nil)
+}
+
+// HomeTodaySummary says "Today {size} · {count} active"
+// in the language the app shows.
+func HomeTodaySummary(size string, count int) string {
+	return In(i18n.Locale()).HomeTodaySummary(size, count)
+}
+
+// HomeTodaySummary says "Today {size} · {count} active"
+// in the language of msgs.
+func (msgs Messages) HomeTodaySummary(size string, count int) string {
+	return Catalog.Format(msgs.locale, "homeTodaySummary", map[string]any{"size": size, "count": count})
+}
+
+// HomePeakRate says "Peak {rate}"
+// in the language the app shows.
+func HomePeakRate(rate string) string { return In(i18n.Locale()).HomePeakRate(rate) }
+
+// HomePeakRate says "Peak {rate}"
+// in the language of msgs.
+func (msgs Messages) HomePeakRate(rate string) string {
+	return Catalog.Format(msgs.locale, "homePeakRate", map[string]any{"rate": rate})
+}
+
+// HomeSwitchSubscription says "Switch subscription"
+// in the language the app shows.
+func HomeSwitchSubscription() string { return In(i18n.Locale()).HomeSwitchSubscription() }
+
+// HomeSwitchSubscription says "Switch subscription"
+// in the language of msgs.
+func (msgs Messages) HomeSwitchSubscription() string {
+	return Catalog.Format(msgs.locale, "homeSwitchSubscription", nil)
+}
+
+// HomeRefreshCurrent says "Refresh current"
+// in the language the app shows.
+func HomeRefreshCurrent() string { return In(i18n.Locale()).HomeRefreshCurrent() }
+
+// HomeRefreshCurrent says "Refresh current"
+// in the language of msgs.
+func (msgs Messages) HomeRefreshCurrent() string {
+	return Catalog.Format(msgs.locale, "homeRefreshCurrent", nil)
+}
+
+// HomeManageAllSubs says "Manage all"
+// in the language the app shows.
+func HomeManageAllSubs() string { return In(i18n.Locale()).HomeManageAllSubs() }
+
+// HomeManageAllSubs says "Manage all"
+// in the language of msgs.
+func (msgs Messages) HomeManageAllSubs() string {
+	return Catalog.Format(msgs.locale, "homeManageAllSubs", nil)
+}
+
+// HomeNoAutoRefresh says "Manual"
+// in the language the app shows.
+func HomeNoAutoRefresh() string { return In(i18n.Locale()).HomeNoAutoRefresh() }
+
+// HomeNoAutoRefresh says "Manual"
+// in the language of msgs.
+func (msgs Messages) HomeNoAutoRefresh() string {
+	return Catalog.Format(msgs.locale, "homeNoAutoRefresh", nil)
+}
+
+// HomeNodeSearch says "Search nodes, regions or protocol…"
+// in the language the app shows.
+func HomeNodeSearch() string { return In(i18n.Locale()).HomeNodeSearch() }
+
+// HomeNodeSearch says "Search nodes, regions or protocol…"
+// in the language of msgs.
+func (msgs Messages) HomeNodeSearch() string {
+	return Catalog.Format(msgs.locale, "homeNodeSearch", nil)
+}
+
+// HomePaletteApplyHint says "Click to switch immediately"
+// in the language the app shows.
+func HomePaletteApplyHint() string { return In(i18n.Locale()).HomePaletteApplyHint() }
+
+// HomePaletteApplyHint says "Click to switch immediately"
+// in the language of msgs.
+func (msgs Messages) HomePaletteApplyHint() string {
+	return Catalog.Format(msgs.locale, "homePaletteApplyHint", nil)
+}
+
+// HomeCurrentExitLabel says "Exit: {name}"
+// in the language the app shows.
+func HomeCurrentExitLabel(name string) string { return In(i18n.Locale()).HomeCurrentExitLabel(name) }
+
+// HomeCurrentExitLabel says "Exit: {name}"
+// in the language of msgs.
+func (msgs Messages) HomeCurrentExitLabel(name string) string {
+	return Catalog.Format(msgs.locale, "homeCurrentExitLabel", map[string]any{"name": name})
+}
+
+// HomeServicesDock says "Services {summary}"
+// in the language the app shows.
+func HomeServicesDock(summary string) string { return In(i18n.Locale()).HomeServicesDock(summary) }
+
+// HomeServicesDock says "Services {summary}"
+// in the language of msgs.
+func (msgs Messages) HomeServicesDock(summary string) string {
+	return Catalog.Format(msgs.locale, "homeServicesDock", map[string]any{"summary": summary})
+}
+
+// HomeNoMatchNodes says "No matching nodes"
+// in the language the app shows.
+func HomeNoMatchNodes() string { return In(i18n.Locale()).HomeNoMatchNodes() }
+
+// HomeNoMatchNodes says "No matching nodes"
+// in the language of msgs.
+func (msgs Messages) HomeNoMatchNodes() string {
+	return Catalog.Format(msgs.locale, "homeNoMatchNodes", nil)
+}
+
+// HomeNodeCount says "{count, plural, one {# node} other {# nodes}}"
+// in the language the app shows.
+func HomeNodeCount(count int) string { return In(i18n.Locale()).HomeNodeCount(count) }
+
+// HomeNodeCount says "{count, plural, one {# node} other {# nodes}}"
+// in the language of msgs.
+func (msgs Messages) HomeNodeCount(count int) string {
+	return Catalog.Format(msgs.locale, "homeNodeCount", map[string]any{"count": count})
+}
+
+// StatsRange7 says "7d"
+// in the language the app shows.
+func StatsRange7() string { return In(i18n.Locale()).StatsRange7() }
+
+// StatsRange7 says "7d"
+// in the language of msgs.
+func (msgs Messages) StatsRange7() string {
+	return Catalog.Format(msgs.locale, "statsRange7", nil)
+}
+
+// StatsRange30 says "30d"
+// in the language the app shows.
+func StatsRange30() string { return In(i18n.Locale()).StatsRange30() }
+
+// StatsRange30 says "30d"
+// in the language of msgs.
+func (msgs Messages) StatsRange30() string {
+	return Catalog.Format(msgs.locale, "statsRange30", nil)
+}
+
+// StatsLast7 says "Last 7 days"
+// in the language the app shows.
+func StatsLast7() string { return In(i18n.Locale()).StatsLast7() }
+
+// StatsLast7 says "Last 7 days"
+// in the language of msgs.
+func (msgs Messages) StatsLast7() string {
+	return Catalog.Format(msgs.locale, "statsLast7", nil)
+}
+
+// StatsDailyAvg says "Daily average"
+// in the language the app shows.
+func StatsDailyAvg() string { return In(i18n.Locale()).StatsDailyAvg() }
+
+// StatsDailyAvg says "Daily average"
+// in the language of msgs.
+func (msgs Messages) StatsDailyAvg() string {
+	return Catalog.Format(msgs.locale, "statsDailyAvg", nil)
+}
+
+// StatsPeakDay says "Peak {date} · {size}"
+// in the language the app shows.
+func StatsPeakDay(date string, size string) string { return In(i18n.Locale()).StatsPeakDay(date, size) }
+
+// StatsPeakDay says "Peak {date} · {size}"
+// in the language of msgs.
+func (msgs Messages) StatsPeakDay(date string, size string) string {
+	return Catalog.Format(msgs.locale, "statsPeakDay", map[string]any{"date": date, "size": size})
+}
+
+// StatsShareTitle says "Traffic mix"
+// in the language the app shows.
+func StatsShareTitle() string { return In(i18n.Locale()).StatsShareTitle() }
+
+// StatsShareTitle says "Traffic mix"
+// in the language of msgs.
+func (msgs Messages) StatsShareTitle() string {
+	return Catalog.Format(msgs.locale, "statsShareTitle", nil)
+}
+
+// StatsProxyRatio says "Proxy share"
+// in the language the app shows.
+func StatsProxyRatio() string { return In(i18n.Locale()).StatsProxyRatio() }
+
+// StatsProxyRatio says "Proxy share"
+// in the language of msgs.
+func (msgs Messages) StatsProxyRatio() string {
+	return Catalog.Format(msgs.locale, "statsProxyRatio", nil)
+}
+
+// StatsDownloadRatio says "Download share"
+// in the language the app shows.
+func StatsDownloadRatio() string { return In(i18n.Locale()).StatsDownloadRatio() }
+
+// StatsDownloadRatio says "Download share"
+// in the language of msgs.
+func (msgs Messages) StatsDownloadRatio() string {
+	return Catalog.Format(msgs.locale, "statsDownloadRatio", nil)
+}
+
+// StatsModeRoute says "Proxy · Direct"
+// in the language the app shows.
+func StatsModeRoute() string { return In(i18n.Locale()).StatsModeRoute() }
+
+// StatsModeRoute says "Proxy · Direct"
+// in the language of msgs.
+func (msgs Messages) StatsModeRoute() string {
+	return Catalog.Format(msgs.locale, "statsModeRoute", nil)
+}
+
+// StatsModeDirection says "Down · Up"
+// in the language the app shows.
+func StatsModeDirection() string { return In(i18n.Locale()).StatsModeDirection() }
+
+// StatsModeDirection says "Down · Up"
+// in the language of msgs.
+func (msgs Messages) StatsModeDirection() string {
+	return Catalog.Format(msgs.locale, "statsModeDirection", nil)
+}
+
+// StatsAvgTag says "Avg"
+// in the language the app shows.
+func StatsAvgTag() string { return In(i18n.Locale()).StatsAvgTag() }
+
+// StatsAvgTag says "Avg"
+// in the language of msgs.
+func (msgs Messages) StatsAvgTag() string {
+	return Catalog.Format(msgs.locale, "statsAvgTag", nil)
+}
+
+// StatsTotalValue says "Total {size}"
+// in the language the app shows.
+func StatsTotalValue(size string) string { return In(i18n.Locale()).StatsTotalValue(size) }
+
+// StatsTotalValue says "Total {size}"
+// in the language of msgs.
+func (msgs Messages) StatsTotalValue(size string) string {
+	return Catalog.Format(msgs.locale, "statsTotalValue", map[string]any{"size": size})
+}
+
+// StatsDownValue says "Down {size}"
+// in the language the app shows.
+func StatsDownValue(size string) string { return In(i18n.Locale()).StatsDownValue(size) }
+
+// StatsDownValue says "Down {size}"
+// in the language of msgs.
+func (msgs Messages) StatsDownValue(size string) string {
+	return Catalog.Format(msgs.locale, "statsDownValue", map[string]any{"size": size})
+}
+
+// StatsUpValue says "Up {size}"
+// in the language the app shows.
+func StatsUpValue(size string) string { return In(i18n.Locale()).StatsUpValue(size) }
+
+// StatsUpValue says "Up {size}"
+// in the language of msgs.
+func (msgs Messages) StatsUpValue(size string) string {
+	return Catalog.Format(msgs.locale, "statsUpValue", map[string]any{"size": size})
+}
+
+// StatsSessionScope says "This session"
+// in the language the app shows.
+func StatsSessionScope() string { return In(i18n.Locale()).StatsSessionScope() }
+
+// StatsSessionScope says "This session"
+// in the language of msgs.
+func (msgs Messages) StatsSessionScope() string {
+	return Catalog.Format(msgs.locale, "statsSessionScope", nil)
+}
+
+// StatsTabApps says "By app"
+// in the language the app shows.
+func StatsTabApps() string { return In(i18n.Locale()).StatsTabApps() }
+
+// StatsTabApps says "By app"
+// in the language of msgs.
+func (msgs Messages) StatsTabApps() string {
+	return Catalog.Format(msgs.locale, "statsTabApps", nil)
+}
+
+// StatsTabNodes says "By node"
+// in the language the app shows.
+func StatsTabNodes() string { return In(i18n.Locale()).StatsTabNodes() }
+
+// StatsTabNodes says "By node"
+// in the language of msgs.
+func (msgs Messages) StatsTabNodes() string {
+	return Catalog.Format(msgs.locale, "statsTabNodes", nil)
+}
+
+// StatsSessionEmpty says "Rankings appear as traffic flows this session"
+// in the language the app shows.
+func StatsSessionEmpty() string { return In(i18n.Locale()).StatsSessionEmpty() }
+
+// StatsSessionEmpty says "Rankings appear as traffic flows this session"
+// in the language of msgs.
+func (msgs Messages) StatsSessionEmpty() string {
+	return Catalog.Format(msgs.locale, "statsSessionEmpty", nil)
+}
+
+// StatsOtherProcess says "Other"
+// in the language the app shows.
+func StatsOtherProcess() string { return In(i18n.Locale()).StatsOtherProcess() }
+
+// StatsOtherProcess says "Other"
+// in the language of msgs.
+func (msgs Messages) StatsOtherProcess() string {
+	return Catalog.Format(msgs.locale, "statsOtherProcess", nil)
+}
+
+// ActivityActiveConns says "Active connections"
+// in the language the app shows.
+func ActivityActiveConns() string { return In(i18n.Locale()).ActivityActiveConns() }
+
+// ActivityActiveConns says "Active connections"
+// in the language of msgs.
+func (msgs Messages) ActivityActiveConns() string {
+	return Catalog.Format(msgs.locale, "activityActiveConns", nil)
+}
+
+// ActivityLiveRate says "Live throughput"
+// in the language the app shows.
+func ActivityLiveRate() string { return In(i18n.Locale()).ActivityLiveRate() }
+
+// ActivityLiveRate says "Live throughput"
+// in the language of msgs.
+func (msgs Messages) ActivityLiveRate() string {
+	return Catalog.Format(msgs.locale, "activityLiveRate", nil)
+}
+
+// ActivityConnTraffic says "Active traffic"
+// in the language the app shows.
+func ActivityConnTraffic() string { return In(i18n.Locale()).ActivityConnTraffic() }
+
+// ActivityConnTraffic says "Active traffic"
+// in the language of msgs.
+func (msgs Messages) ActivityConnTraffic() string {
+	return Catalog.Format(msgs.locale, "activityConnTraffic", nil)
+}
+
+// ActivityLoggedLines says "Recorded lines"
+// in the language the app shows.
+func ActivityLoggedLines() string { return In(i18n.Locale()).ActivityLoggedLines() }
+
+// ActivityLoggedLines says "Recorded lines"
+// in the language of msgs.
+func (msgs Messages) ActivityLoggedLines() string {
+	return Catalog.Format(msgs.locale, "activityLoggedLines", nil)
+}
+
+// LogsFilter says "Filter log messages…"
+// in the language the app shows.
+func LogsFilter() string { return In(i18n.Locale()).LogsFilter() }
+
+// LogsFilter says "Filter log messages…"
+// in the language of msgs.
+func (msgs Messages) LogsFilter() string {
+	return Catalog.Format(msgs.locale, "logsFilter", nil)
+}
+
+// ProxyBypassTitle says "Proxy bypass list"
+// in the language the app shows.
+func ProxyBypassTitle() string { return In(i18n.Locale()).ProxyBypassTitle() }
+
+// ProxyBypassTitle says "Proxy bypass list"
+// in the language of msgs.
+func (msgs Messages) ProxyBypassTitle() string {
+	return Catalog.Format(msgs.locale, "proxyBypassTitle", nil)
+}
+
+// ProxyBypassNote says "Local and LAN addresses always bypass the system proxy. Add extra domains or CIDRs here."
+// in the language the app shows.
+func ProxyBypassNote() string { return In(i18n.Locale()).ProxyBypassNote() }
+
+// ProxyBypassNote says "Local and LAN addresses always bypass the system proxy. Add extra domains or CIDRs here."
+// in the language of msgs.
+func (msgs Messages) ProxyBypassNote() string {
+	return Catalog.Format(msgs.locale, "proxyBypassNote", nil)
+}
+
+// ProxyBypassDefaultOnly says "Defaults only"
+// in the language the app shows.
+func ProxyBypassDefaultOnly() string { return In(i18n.Locale()).ProxyBypassDefaultOnly() }
+
+// ProxyBypassDefaultOnly says "Defaults only"
+// in the language of msgs.
+func (msgs Messages) ProxyBypassDefaultOnly() string {
+	return Catalog.Format(msgs.locale, "proxyBypassDefaultOnly", nil)
+}
+
+// ProxyBypassCount says "{count, plural, one {# custom entry} other {# custom entries}}"
+// in the language the app shows.
+func ProxyBypassCount(count int) string { return In(i18n.Locale()).ProxyBypassCount(count) }
+
+// ProxyBypassCount says "{count, plural, one {# custom entry} other {# custom entries}}"
+// in the language of msgs.
+func (msgs Messages) ProxyBypassCount(count int) string {
+	return Catalog.Format(msgs.locale, "proxyBypassCount", map[string]any{"count": count})
+}
+
+// ProxyBypassEdit says "Edit"
+// in the language the app shows.
+func ProxyBypassEdit() string { return In(i18n.Locale()).ProxyBypassEdit() }
+
+// ProxyBypassEdit says "Edit"
+// in the language of msgs.
+func (msgs Messages) ProxyBypassEdit() string {
+	return Catalog.Format(msgs.locale, "proxyBypassEdit", nil)
+}
+
+// ProxyBypassDialogNote says "One per line: domains (example.com), wildcards (*.corp.local), or IPs/CIDRs (10.0.0.0/8). Built-in localhost and priv…"
+// in the language the app shows.
+func ProxyBypassDialogNote() string { return In(i18n.Locale()).ProxyBypassDialogNote() }
+
+// ProxyBypassDialogNote says "One per line: domains (example.com), wildcards (*.corp.local), or IPs/CIDRs (10.0.0.0/8). Built-in localhost and priv…"
+// in the language of msgs.
+func (msgs Messages) ProxyBypassDialogNote() string {
+	return Catalog.Format(msgs.locale, "proxyBypassDialogNote", nil)
+}
+
+// ProxyBypassPlaceholder says "*.corp.internal\n10.20.0.0/16\nintranet.example.com"
+// in the language the app shows.
+func ProxyBypassPlaceholder() string { return In(i18n.Locale()).ProxyBypassPlaceholder() }
+
+// ProxyBypassPlaceholder says "*.corp.internal\n10.20.0.0/16\nintranet.example.com"
+// in the language of msgs.
+func (msgs Messages) ProxyBypassPlaceholder() string {
+	return Catalog.Format(msgs.locale, "proxyBypassPlaceholder", nil)
+}
+
+// ActionSaveProxyBypass says "Couldn't save proxy bypass list"
+// in the language the app shows.
+func ActionSaveProxyBypass() string { return In(i18n.Locale()).ActionSaveProxyBypass() }
+
+// ActionSaveProxyBypass says "Couldn't save proxy bypass list"
+// in the language of msgs.
+func (msgs Messages) ActionSaveProxyBypass() string {
+	return Catalog.Format(msgs.locale, "actionSaveProxyBypass", nil)
+}
+
+// RuleTargetGroup says "Choose group"
+// in the language the app shows.
+func RuleTargetGroup() string { return In(i18n.Locale()).RuleTargetGroup() }
+
+// RuleTargetGroup says "Choose group"
+// in the language of msgs.
+func (msgs Messages) RuleTargetGroup() string {
+	return Catalog.Format(msgs.locale, "ruleTargetGroup", nil)
+}
+
+// RuleMoveUp says "Move rule up"
+// in the language the app shows.
+func RuleMoveUp() string { return In(i18n.Locale()).RuleMoveUp() }
+
+// RuleMoveUp says "Move rule up"
+// in the language of msgs.
+func (msgs Messages) RuleMoveUp() string {
+	return Catalog.Format(msgs.locale, "ruleMoveUp", nil)
+}
+
+// RuleMoveDown says "Move rule down"
+// in the language the app shows.
+func RuleMoveDown() string { return In(i18n.Locale()).RuleMoveDown() }
+
+// RuleMoveDown says "Move rule down"
+// in the language of msgs.
+func (msgs Messages) RuleMoveDown() string {
+	return Catalog.Format(msgs.locale, "ruleMoveDown", nil)
+}
+
+// RuleToggleLabel says "Toggle rule {value}"
+// in the language the app shows.
+func RuleToggleLabel(value string) string { return In(i18n.Locale()).RuleToggleLabel(value) }
+
+// RuleToggleLabel says "Toggle rule {value}"
+// in the language of msgs.
+func (msgs Messages) RuleToggleLabel(value string) string {
+	return Catalog.Format(msgs.locale, "ruleToggleLabel", map[string]any{"value": value})
+}
+
+// RuleDisabledTag says "Disabled"
+// in the language the app shows.
+func RuleDisabledTag() string { return In(i18n.Locale()).RuleDisabledTag() }
+
+// RuleDisabledTag says "Disabled"
+// in the language of msgs.
+func (msgs Messages) RuleDisabledTag() string {
+	return Catalog.Format(msgs.locale, "ruleDisabledTag", nil)
+}
+
+// HomePaletteAutoPinHint says "Auto · click to pin a node"
+// in the language the app shows.
+func HomePaletteAutoPinHint() string { return In(i18n.Locale()).HomePaletteAutoPinHint() }
+
+// HomePaletteAutoPinHint says "Auto · click to pin a node"
+// in the language of msgs.
+func (msgs Messages) HomePaletteAutoPinHint() string {
+	return Catalog.Format(msgs.locale, "homePaletteAutoPinHint", nil)
+}
+
+// HomePaletteResetAuto says "Back to auto"
+// in the language the app shows.
+func HomePaletteResetAuto() string { return In(i18n.Locale()).HomePaletteResetAuto() }
+
+// HomePaletteResetAuto says "Back to auto"
+// in the language of msgs.
+func (msgs Messages) HomePaletteResetAuto() string {
+	return Catalog.Format(msgs.locale, "homePaletteResetAuto", nil)
+}
+
+// SettingsDelayUrl says "Speed test URL"
+// in the language the app shows.
+func SettingsDelayUrl() string { return In(i18n.Locale()).SettingsDelayUrl() }
+
+// SettingsDelayUrl says "Speed test URL"
+// in the language of msgs.
+func (msgs Messages) SettingsDelayUrl() string {
+	return Catalog.Format(msgs.locale, "settingsDelayUrl", nil)
+}
+
+// SettingsDelayUrlNote says "Lightweight endpoint used to measure node latency"
+// in the language the app shows.
+func SettingsDelayUrlNote() string { return In(i18n.Locale()).SettingsDelayUrlNote() }
+
+// SettingsDelayUrlNote says "Lightweight endpoint used to measure node latency"
+// in the language of msgs.
+func (msgs Messages) SettingsDelayUrlNote() string {
+	return Catalog.Format(msgs.locale, "settingsDelayUrlNote", nil)
+}
+
+// HomeHideTimeout says "Hide timed out"
+// in the language the app shows.
+func HomeHideTimeout() string { return In(i18n.Locale()).HomeHideTimeout() }
+
+// HomeHideTimeout says "Hide timed out"
+// in the language of msgs.
+func (msgs Messages) HomeHideTimeout() string {
+	return Catalog.Format(msgs.locale, "homeHideTimeout", nil)
+}
+
+// HomePickFastest says "Fastest"
+// in the language the app shows.
+func HomePickFastest() string { return In(i18n.Locale()).HomePickFastest() }
+
+// HomePickFastest says "Fastest"
+// in the language of msgs.
+func (msgs Messages) HomePickFastest() string {
+	return Catalog.Format(msgs.locale, "homePickFastest", nil)
+}
+
+// HomeTestNodeTip says "Click to test this node"
+// in the language the app shows.
+func HomeTestNodeTip() string { return In(i18n.Locale()).HomeTestNodeTip() }
+
+// HomeTestNodeTip says "Click to test this node"
+// in the language of msgs.
+func (msgs Messages) HomeTestNodeTip() string {
+	return Catalog.Format(msgs.locale, "homeTestNodeTip", nil)
+}
+
+// PageRules says "Rules"
+// in the language the app shows.
+func PageRules() string { return In(i18n.Locale()).PageRules() }
+
+// PageRules says "Rules"
+// in the language of msgs.
+func (msgs Messages) PageRules() string {
+	return Catalog.Format(msgs.locale, "pageRules", nil)
+}
+
+// RulesDiagnosePlaceholder says "Enter a domain, URL, or IP to test routing, e.g. api.openai.com"
+// in the language the app shows.
+func RulesDiagnosePlaceholder() string { return In(i18n.Locale()).RulesDiagnosePlaceholder() }
+
+// RulesDiagnosePlaceholder says "Enter a domain, URL, or IP to test routing, e.g. api.openai.com"
+// in the language of msgs.
+func (msgs Messages) RulesDiagnosePlaceholder() string {
+	return Catalog.Format(msgs.locale, "rulesDiagnosePlaceholder", nil)
+}
+
+// RulesFilterPlaceholder says "Filter rules by type, value, or target…"
+// in the language the app shows.
+func RulesFilterPlaceholder() string { return In(i18n.Locale()).RulesFilterPlaceholder() }
+
+// RulesFilterPlaceholder says "Filter rules by type, value, or target…"
+// in the language of msgs.
+func (msgs Messages) RulesFilterPlaceholder() string {
+	return Catalog.Format(msgs.locale, "rulesFilterPlaceholder", nil)
+}
+
+// RulesMatchedBadge says "Matched rule #{index}"
+// in the language the app shows.
+func RulesMatchedBadge(index int) string { return In(i18n.Locale()).RulesMatchedBadge(index) }
+
+// RulesMatchedBadge says "Matched rule #{index}"
+// in the language of msgs.
+func (msgs Messages) RulesMatchedBadge(index int) string {
+	return Catalog.Format(msgs.locale, "rulesMatchedBadge", map[string]any{"index": index})
+}
+
+// RulesDynamicNote says "{count, plural, one {# Geo/rule-set rule precedes this and may match first at runtime} other {# Geo/rule-set rules pr…"
+// in the language the app shows.
+func RulesDynamicNote(count int) string { return In(i18n.Locale()).RulesDynamicNote(count) }
+
+// RulesDynamicNote says "{count, plural, one {# Geo/rule-set rule precedes this and may match first at runtime} other {# Geo/rule-set rules pr…"
+// in the language of msgs.
+func (msgs Messages) RulesDynamicNote(count int) string {
+	return Catalog.Format(msgs.locale, "rulesDynamicNote", map[string]any{"count": count})
+}
+
+// RulesNoMatch says "No matching rule"
+// in the language the app shows.
+func RulesNoMatch() string { return In(i18n.Locale()).RulesNoMatch() }
+
+// RulesNoMatch says "No matching rule"
+// in the language of msgs.
+func (msgs Messages) RulesNoMatch() string {
+	return Catalog.Format(msgs.locale, "rulesNoMatch", nil)
+}
+
+// RulesRefresh says "Refresh"
+// in the language the app shows.
+func RulesRefresh() string { return In(i18n.Locale()).RulesRefresh() }
+
+// RulesRefresh says "Refresh"
+// in the language of msgs.
+func (msgs Messages) RulesRefresh() string {
+	return Catalog.Format(msgs.locale, "rulesRefresh", nil)
+}
+
+// RulesCount says "{count, plural, one {# rule} other {# rules}}"
+// in the language the app shows.
+func RulesCount(count int) string { return In(i18n.Locale()).RulesCount(count) }
+
+// RulesCount says "{count, plural, one {# rule} other {# rules}}"
+// in the language of msgs.
+func (msgs Messages) RulesCount(count int) string {
+	return Catalog.Format(msgs.locale, "rulesCount", map[string]any{"count": count})
+}
+
+// RulesInspectEmpty says "No active rules"
+// in the language the app shows.
+func RulesInspectEmpty() string { return In(i18n.Locale()).RulesInspectEmpty() }
+
+// RulesInspectEmpty says "No active rules"
+// in the language of msgs.
+func (msgs Messages) RulesInspectEmpty() string {
+	return Catalog.Format(msgs.locale, "rulesInspectEmpty", nil)
+}
+
+// RulesInspectEmptyHint says "Active routing rules appear here once the core is connected."
+// in the language the app shows.
+func RulesInspectEmptyHint() string { return In(i18n.Locale()).RulesInspectEmptyHint() }
+
+// RulesInspectEmptyHint says "Active routing rules appear here once the core is connected."
+// in the language of msgs.
+func (msgs Messages) RulesInspectEmptyHint() string {
+	return Catalog.Format(msgs.locale, "rulesInspectEmptyHint", nil)
+}
+
+// RulesProvidersTitle says "External providers"
+// in the language the app shows.
+func RulesProvidersTitle() string { return In(i18n.Locale()).RulesProvidersTitle() }
+
+// RulesProvidersTitle says "External providers"
+// in the language of msgs.
+func (msgs Messages) RulesProvidersTitle() string {
+	return Catalog.Format(msgs.locale, "rulesProvidersTitle", nil)
+}
+
+// RulesProvidersUpdateAll says "Update all"
+// in the language the app shows.
+func RulesProvidersUpdateAll() string { return In(i18n.Locale()).RulesProvidersUpdateAll() }
+
+// RulesProvidersUpdateAll says "Update all"
+// in the language of msgs.
+func (msgs Messages) RulesProvidersUpdateAll() string {
+	return Catalog.Format(msgs.locale, "rulesProvidersUpdateAll", nil)
+}
+
+// RulesProviderProxy says "Proxy set"
+// in the language the app shows.
+func RulesProviderProxy() string { return In(i18n.Locale()).RulesProviderProxy() }
+
+// RulesProviderProxy says "Proxy set"
+// in the language of msgs.
+func (msgs Messages) RulesProviderProxy() string {
+	return Catalog.Format(msgs.locale, "rulesProviderProxy", nil)
+}
+
+// RulesProviderRule says "Rule set"
+// in the language the app shows.
+func RulesProviderRule() string { return In(i18n.Locale()).RulesProviderRule() }
+
+// RulesProviderRule says "Rule set"
+// in the language of msgs.
+func (msgs Messages) RulesProviderRule() string {
+	return Catalog.Format(msgs.locale, "rulesProviderRule", nil)
+}
+
+// RulesProviderCount says "{count, plural, one {# item} other {# items}}"
+// in the language the app shows.
+func RulesProviderCount(count int) string { return In(i18n.Locale()).RulesProviderCount(count) }
+
+// RulesProviderCount says "{count, plural, one {# item} other {# items}}"
+// in the language of msgs.
+func (msgs Messages) RulesProviderCount(count int) string {
+	return Catalog.Format(msgs.locale, "rulesProviderCount", map[string]any{"count": count})
+}
+
+// ActionLoadRulesInspect says "Couldn't read active rules"
+// in the language the app shows.
+func ActionLoadRulesInspect() string { return In(i18n.Locale()).ActionLoadRulesInspect() }
+
+// ActionLoadRulesInspect says "Couldn't read active rules"
+// in the language of msgs.
+func (msgs Messages) ActionLoadRulesInspect() string {
+	return Catalog.Format(msgs.locale, "actionLoadRulesInspect", nil)
+}
+
+// ActionUpdateProvider says "Couldn't update provider"
+// in the language the app shows.
+func ActionUpdateProvider() string { return In(i18n.Locale()).ActionUpdateProvider() }
+
+// ActionUpdateProvider says "Couldn't update provider"
+// in the language of msgs.
+func (msgs Messages) ActionUpdateProvider() string {
+	return Catalog.Format(msgs.locale, "actionUpdateProvider", nil)
+}
+
+// SettingsGlobalShortcuts says "Global shortcuts"
+// in the language the app shows.
+func SettingsGlobalShortcuts() string { return In(i18n.Locale()).SettingsGlobalShortcuts() }
+
+// SettingsGlobalShortcuts says "Global shortcuts"
+// in the language of msgs.
+func (msgs Messages) SettingsGlobalShortcuts() string {
+	return Catalog.Format(msgs.locale, "settingsGlobalShortcuts", nil)
+}
+
+// SettingsGlobalShortcutsNote says "{show} show/hide window · {proxy} toggle proxy · {mode} cycle mode"
+// in the language the app shows.
+func SettingsGlobalShortcutsNote(show string, proxy string, mode string) string {
+	return In(i18n.Locale()).SettingsGlobalShortcutsNote(show, proxy, mode)
+}
+
+// SettingsGlobalShortcutsNote says "{show} show/hide window · {proxy} toggle proxy · {mode} cycle mode"
+// in the language of msgs.
+func (msgs Messages) SettingsGlobalShortcutsNote(show string, proxy string, mode string) string {
+	return Catalog.Format(msgs.locale, "settingsGlobalShortcutsNote", map[string]any{"show": show, "proxy": proxy, "mode": mode})
+}
+
+// ActionGlobalShortcuts says "Couldn't register global shortcuts"
+// in the language the app shows.
+func ActionGlobalShortcuts() string { return In(i18n.Locale()).ActionGlobalShortcuts() }
+
+// ActionGlobalShortcuts says "Couldn't register global shortcuts"
+// in the language of msgs.
+func (msgs Messages) ActionGlobalShortcuts() string {
+	return Catalog.Format(msgs.locale, "actionGlobalShortcuts", nil)
+}

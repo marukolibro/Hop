@@ -84,9 +84,10 @@ type runtimeConfig struct {
 	Hosts map[string]yaml.Node `yaml:"hosts,omitempty"`
 	// Authentication, SkipAuthPrefixes and LanAllowedIPs are the LAN access,
 	// see applyLAN; a subscription's own are never taken.
-	Authentication   []string `yaml:"authentication,omitempty"`
-	SkipAuthPrefixes []string `yaml:"skip-auth-prefixes,omitempty"`
-	LanAllowedIPs    []string `yaml:"lan-allowed-ips,omitempty"`
+	Authentication   []string      `yaml:"authentication,omitempty"`
+	SkipAuthPrefixes []string      `yaml:"skip-auth-prefixes,omitempty"`
+	LanAllowedIPs    []string      `yaml:"lan-allowed-ips,omitempty"`
+	Profile          profileConfig `yaml:"profile"`
 
 	Proxies        yaml.Node `yaml:"proxies,omitempty"`
 	ProxyGroups    yaml.Node `yaml:"proxy-groups,omitempty"`
@@ -94,6 +95,13 @@ type runtimeConfig struct {
 	Rules          yaml.Node `yaml:"rules,omitempty"`
 	RuleProviders  yaml.Node `yaml:"rule-providers,omitempty"`
 	SubRules       yaml.Node `yaml:"sub-rules,omitempty"`
+}
+
+// profileConfig tells the core to persist manual group selections and fake-ip
+// mappings in its home cache across restarts and reloads.
+type profileConfig struct {
+	StoreSelected bool `yaml:"store-selected"`
+	StoreFakeIP   bool `yaml:"store-fake-ip"`
 }
 
 // baseConfig is the config under any subscription: Hop's own keys from s,
@@ -110,6 +118,10 @@ func baseConfig(s RuntimeSettings) runtimeConfig {
 		LogLevel:           s.LogLevel,
 		ExternalController: s.ControllerAddr,
 		Secret:             s.ControllerSecret,
+		Profile: profileConfig{
+			StoreSelected: true,
+			StoreFakeIP:   true,
+		},
 	}
 	applyLAN(&cfg, s.LAN)
 	if s.Tun {
@@ -339,11 +351,11 @@ func RuntimeConfig(subscription []byte, rules model.RuleSource, custom []model.C
 		cfg.ProxyProviders = p.doc["proxy-providers"]
 		cfg.RuleProviders = p.doc["rule-providers"]
 		cfg.SubRules = p.doc["sub-rules"]
-		mainGroup, err := providerMainGroup(p, custom)
+		mainGroup, groupNames, err := providerGroups(p, custom)
 		if err != nil {
 			return nil, err
 		}
-		lines, err := customRuleLines(custom, mainGroup)
+		lines, err := customRuleLines(custom, mainGroup, groupNames)
 		if err != nil {
 			return nil, err
 		}
@@ -362,26 +374,33 @@ func RuntimeConfig(subscription []byte, rules model.RuleSource, custom []model.C
 	return marshalConfig(cfg)
 }
 
-// providerMainGroup names the group the dashboard treats as the main route:
-// the first proxy group the profile declares, in the order the dashboard
-// reads them from the core (view.go's groupKind calls index 0 the main
-// group). It is asked for only when a custom rule targets 代理; a profile
-// without such a group is an error, never a guess.
-func providerMainGroup(p subscriptionProfile, custom []model.CustomRule) (string, error) {
-	if !slices.ContainsFunc(custom, func(rule model.CustomRule) bool { return rule.Target == model.CustomRuleProxy }) {
-		return "", nil
+// providerGroups returns the first proxy group (the dashboard's main route)
+// and every group name declared by the profile. It errors when an active
+// custom rule needs a group target and the profile declares none.
+func providerGroups(p subscriptionProfile, custom []model.CustomRule) (string, []string, error) {
+	needsGroup := slices.ContainsFunc(custom, func(rule model.CustomRule) bool {
+		return !rule.Disabled && rule.Target != model.CustomRuleDirect && rule.Target != model.CustomRuleReject
+	})
+	if !needsGroup {
+		return "", nil, nil
 	}
 	var groups []struct {
 		Name string `yaml:"name"`
 	}
 	node := p.doc["proxy-groups"]
 	if err := node.Decode(&groups); err != nil {
-		return "", fmt.Errorf("read the subscription's proxy groups for custom rules: %w", err)
+		return "", nil, fmt.Errorf("read the subscription's proxy groups for custom rules: %w", err)
 	}
 	if len(groups) == 0 || groups[0].Name == "" {
-		return "", errors.New("a custom rule targets 代理, but the subscription declares no proxy group to send it through")
+		return "", nil, errors.New("a custom rule targets proxy, but the subscription declares no proxy group to send it through")
 	}
-	return groups[0].Name, nil
+	names := make([]string, 0, len(groups))
+	for _, g := range groups {
+		if g.Name != "" {
+			names = append(names, g.Name)
+		}
+	}
+	return groups[0].Name, names, nil
 }
 
 // prependRuleLines puts lines ahead of a profile's own rules. A profile

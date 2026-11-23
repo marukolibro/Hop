@@ -85,6 +85,12 @@ func NewMenuBar(win *mygo.Window, d *Dashboard) (*MenuBar, error) {
 	tray.OnRightClick(m.popUpMenu)
 	d.OnTraffic(m.showSpeed)
 	d.OnHop(m.hop)
+	d.SetToggleWindow(m.toggleWindow)
+	if d.settings.settings.GlobalShortcuts {
+		if err := d.applyGlobalShortcuts(true); err != nil {
+			slog.Warn("could not register saved global shortcuts at startup", "error", err)
+		}
+	}
 	win.OnClose(func(e *mygo.CloseEvent) {
 		if !m.quitting {
 			e.PreventDefault()
@@ -102,8 +108,26 @@ func NewMenuBar(win *mygo.Window, d *Dashboard) (*MenuBar, error) {
 			m.showWindow()
 		}
 	})
-	mygo.App.OnWillQuit(func(*mygo.QuitEvent) { tray.Destroy() })
+	offResume := mygo.Power.OnResume(func() { m.Update(d.HandlePowerResume) })
+	offNet := mygo.Network.OnChanged(func(s mygo.NetworkStatus) { m.Update(func() { d.HandleNetworkChange(s) }) })
+	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
+		offResume()
+		offNet()
+		d.stopNetworkRecovery()
+		mygo.GlobalShortcut.UnregisterAll()
+		tray.Destroy()
+	})
 	return m, nil
+}
+
+// toggleWindow hides the main window when it is currently focused, or brings
+// it to the front otherwise.
+func (m *MenuBar) toggleWindow() {
+	if m.d.foreground {
+		m.hideWindow()
+		return
+	}
+	m.showWindow()
 }
 
 // Update runs fn on the main thread and redraws the window and, when it is

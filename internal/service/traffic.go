@@ -26,6 +26,9 @@ const (
 	trafficDateLayout = "2006-01-02"
 	// trafficChartDays is how many days the statistics page charts.
 	trafficChartDays = 30
+	// trafficSessionRankLimit caps how many in-memory session apps/nodes are
+	// returned to the UI.
+	trafficSessionRankLimit = 12
 )
 
 // TrafficStore keeps the daily traffic history across runs.
@@ -64,6 +67,9 @@ type TrafficService struct {
 	prevUp    int64
 	prevDown  int64
 	prevConns map[string]trafficConn
+	// In-memory session breakdowns, never persisted to disk.
+	sessionApps  map[string]model.TrafficSplit
+	sessionNodes map[string]model.TrafficSplit
 }
 
 // NewTrafficService returns a service on the stored history, dropping
@@ -75,9 +81,11 @@ func NewTrafficService(store TrafficStore) (*TrafficService, error) {
 	}
 	kept := pruneTraffic(loaded, time.Now())
 	s := &TrafficService{
-		store:     store,
-		buckets:   make(map[trafficKey]model.TrafficDay, len(kept)),
-		prevConns: make(map[string]trafficConn),
+		store:        store,
+		buckets:      make(map[trafficKey]model.TrafficDay, len(kept)),
+		prevConns:    make(map[string]trafficConn),
+		sessionApps:  make(map[string]model.TrafficSplit),
+		sessionNodes: make(map[string]model.TrafficSplit),
 	}
 	for _, day := range kept {
 		s.buckets[trafficKey{date: day.Date, sourceID: day.SourceID}] = day
@@ -127,6 +135,7 @@ func (s *TrafficService) Record(conns model.Connections, source model.TrafficSou
 		// A total going down means a new core started, counted from zero.
 		fromZero := upReset || downReset
 		proxyUp, proxyDown, directUp, directDown := estimateTraffic(conns.Active, s.prevConns, fromZero)
+		recordSessionTraffic(conns.Active, s.prevConns, fromZero, s.sessionApps, s.sessionNodes)
 		today := now.Format(trafficDateLayout)
 		if proxyUp+directUp == 0 {
 			// No connection says who carried it: keep today's ratio.
@@ -155,10 +164,13 @@ func (s *TrafficService) Record(conns model.Connections, source model.TrafficSou
 func (s *TrafficService) Summary(now time.Time) model.TrafficView {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return summarizeTraffic(s.snapshotLocked(), now)
+	view := summarizeTraffic(s.snapshotLocked(), now)
+	view.SessionApps = rankSessionEntries(s.sessionApps, false, trafficSessionRankLimit)
+	view.SessionNodes = rankSessionEntries(s.sessionNodes, true, trafficSessionRankLimit)
+	return view
 }
 
-// MonthlyProxyForSource 返回该订阅本月经过代理的本机上行和下行。/ MonthlyProxyForSource returns a source's local proxy upload and download this month.
+// MonthlyProxyForSource returns a source's local proxy upload and download this month.
 func MonthlyProxyForSource(view model.TrafficView, sourceID string) model.Usage {
 	for _, source := range view.Sources {
 		if source.ID == sourceID {
@@ -416,4 +428,83 @@ func proxyTotal(split model.TrafficSplit) int64 {
 
 func directTotal(split model.TrafficSplit) int64 {
 	return split.DirectUp + split.DirectDown
+}
+
+// recordSessionTraffic accumulates per-process and per-exit-node byte deltas
+// strictly in memory for the current run.
+func recordSessionTraffic(conns []model.Connection, prev map[string]trafficConn, fromZero bool, apps, nodes map[string]model.TrafficSplit) {
+	if apps == nil || nodes == nil {
+		return
+	}
+	for _, conn := range conns {
+		kind := trafficKindOf(conn.Chain)
+		if kind == trafficDropped {
+			continue
+		}
+		up, down := conn.Upload, conn.Download
+		if !fromZero {
+			if last, found := prev[conn.ID]; found {
+				up = conn.Upload - last.up
+				if up < 0 {
+					up = conn.Upload
+				}
+				down = conn.Download - last.down
+				if down < 0 {
+					down = conn.Download
+				}
+			}
+		}
+		if up == 0 && down == 0 {
+			continue
+		}
+		var delta model.TrafficSplit
+		exit := ""
+		if len(conn.Chain) > 0 {
+			exit = conn.Chain[len(conn.Chain)-1]
+		}
+		if kind == trafficDirect {
+			delta.DirectUp, delta.DirectDown = up, down
+			exit = "DIRECT"
+		} else {
+			delta.ProxyUp, delta.ProxyDown = up, down
+		}
+		appSplit := apps[conn.Process]
+		addTrafficSplit(&appSplit, delta)
+		apps[conn.Process] = appSplit
+		if exit != "" {
+			nodeSplit := nodes[exit]
+			addTrafficSplit(&nodeSplit, delta)
+			nodes[exit] = nodeSplit
+		}
+	}
+}
+
+// rankSessionEntries sorts accumulated in-memory buckets from highest total
+// bytes to lowest and returns at most limit entries.
+func rankSessionEntries(entries map[string]model.TrafficSplit, isNodes bool, limit int) []model.TrafficEntryView {
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make([]model.TrafficEntryView, 0, len(entries))
+	for name, split := range entries {
+		if trafficTotal(split) == 0 {
+			continue
+		}
+		out = append(out, model.TrafficEntryView{
+			Name:   name,
+			Direct: isNodes && name == "DIRECT",
+			Split:  split,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		lt, rt := trafficTotal(out[i].Split), trafficTotal(out[j].Split)
+		if lt != rt {
+			return lt > rt
+		}
+		return out[i].Name < out[j].Name
+	})
+	if len(out) > limit {
+		return out[:limit]
+	}
+	return out
 }

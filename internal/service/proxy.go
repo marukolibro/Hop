@@ -19,6 +19,8 @@ type Controller interface {
 	Mode(ctx context.Context) (string, error)
 	CatchAll(ctx context.Context) (string, error)
 	SelectProxy(ctx context.Context, group string, proxy string) error
+	ResetProxy(ctx context.Context, group string) error
+	FlushDNSCache(ctx context.Context) error
 	Connections(ctx context.Context) (model.Connections, error)
 	CloseConnection(ctx context.Context, id string) error
 	TestProxyDelay(ctx context.Context, proxy string, testURL string, timeout time.Duration) (int, error)
@@ -104,12 +106,25 @@ func (s *ProxyService) catchAllIn(ctx context.Context, epoch int) (string, error
 // too. The results show up in the next View, one node after the other as they
 // answer.
 // A node that has not answered within timeout counts as down.
-func (s *ProxyService) TestDelay(ctx context.Context, group string, timeout time.Duration) error {
+func (s *ProxyService) TestDelay(ctx context.Context, group string, testURL string, timeout time.Duration) error {
 	snapshot, err := s.controller.Snapshot(ctx)
 	if err != nil {
 		return err
 	}
-	return s.testNodes(ctx, leafNodes(snapshot, []string{group}), timeout)
+	return s.testNodes(ctx, leafNodes(snapshot, []string{group}), resolveTestURL(testURL), timeout)
+}
+
+// TestNode measures a single proxy node against testURL and returns its delay
+// in milliseconds (0 when timed out or unreachable).
+func (s *ProxyService) TestNode(ctx context.Context, node string, testURL string, timeout time.Duration) (int, error) {
+	return s.controller.TestProxyDelay(ctx, node, resolveTestURL(testURL), timeout)
+}
+
+func resolveTestURL(testURL string) string {
+	if testURL != "" {
+		return testURL
+	}
+	return delayTestURL
 }
 
 // autoGroupTypes pick their node from delay tests.
@@ -119,7 +134,7 @@ var autoGroupTypes = []string{model.GroupURLTest, model.GroupFallback, model.Gro
 // delay, so that they pick from fresh results. Before any test such a group
 // sits on its first option, which may not be a usable node. Without such
 // groups it measures the first group, so its nodes show a delay.
-func (s *ProxyService) TestAutoGroups(ctx context.Context, timeout time.Duration) error {
+func (s *ProxyService) TestAutoGroups(ctx context.Context, testURL string, timeout time.Duration) error {
 	snapshot, err := s.controller.Snapshot(ctx)
 	if err != nil {
 		return err
@@ -133,14 +148,14 @@ func (s *ProxyService) TestAutoGroups(ctx context.Context, timeout time.Duration
 	if len(targets) == 0 && len(snapshot.Groups) > 0 {
 		targets = []string{snapshot.Groups[0].Name}
 	}
-	return s.testNodes(ctx, leafNodes(snapshot, targets), timeout)
+	return s.testNodes(ctx, leafNodes(snapshot, targets), resolveTestURL(testURL), timeout)
 }
 
 // testNodes measures nodes concurrently, at most delayTestWorkers at a time.
 // A node that does not answer is a result, not a failure; only a request the
 // core could not take is, and the first of those is returned with how many
 // there were.
-func (s *ProxyService) testNodes(ctx context.Context, nodes []string, timeout time.Duration) error {
+func (s *ProxyService) testNodes(ctx context.Context, nodes []string, testURL string, timeout time.Duration) error {
 	var (
 		wg     sync.WaitGroup
 		mu     sync.Mutex
@@ -159,7 +174,7 @@ func (s *ProxyService) testNodes(ctx context.Context, nodes []string, timeout ti
 		go func() {
 			defer wg.Done()
 			defer func() { <-slots }()
-			if _, err := s.controller.TestProxyDelay(ctx, node, delayTestURL, timeout); err != nil && ctx.Err() == nil {
+			if _, err := s.controller.TestProxyDelay(ctx, node, testURL, timeout); err != nil && ctx.Err() == nil {
 				mu.Lock()
 				defer mu.Unlock()
 				failed++
@@ -234,6 +249,39 @@ func (s *ProxyService) Select(ctx context.Context, group string, proxy string) e
 	return errors.Join(errs...)
 }
 
+// Reset clears a manual pin on a URLTest or Fallback group so it resumes
+// automatic selection, then closes connections left on the old node.
+func (s *ProxyService) Reset(ctx context.Context, group string) error {
+	if err := s.controller.ResetProxy(ctx, group); err != nil {
+		return err
+	}
+	snapshot, err := s.controller.Snapshot(ctx)
+	if err != nil {
+		return nil
+	}
+	var now string
+	for _, g := range snapshot.Groups {
+		if g.Name == group {
+			now = g.Selected
+			break
+		}
+	}
+	if now == "" {
+		return nil
+	}
+	conns, err := s.controller.Connections(ctx)
+	if err != nil {
+		return fmt.Errorf("list the connections to move after resetting (group=%q): %w", group, err)
+	}
+	var errs []error
+	for _, id := range LeftBehind(conns, group, now) {
+		if err := s.controller.CloseConnection(ctx, id); err != nil {
+			errs = append(errs, fmt.Errorf("close a connection left on the old proxy (group=%q id=%q): %w", group, id, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // LeftBehind returns the IDs of the connections that pass through group but
 // leave it for something other than proxy.
 func LeftBehind(conns model.Connections, group string, proxy string) []string {
@@ -252,4 +300,9 @@ func LeftBehind(conns model.Connections, group string, proxy string) []string {
 // the stream fails.
 func (s *ProxyService) WatchTraffic(ctx context.Context, handle func(model.Traffic)) error {
 	return s.controller.StreamTraffic(ctx, handle)
+}
+
+// FlushDNSCache clears the core's in-memory DNS cache.
+func (s *ProxyService) FlushDNSCache(ctx context.Context) error {
+	return s.controller.FlushDNSCache(ctx)
 }

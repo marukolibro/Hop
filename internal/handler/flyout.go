@@ -2,6 +2,7 @@ package handler
 
 import (
 	"math"
+	"runtime"
 	"strings"
 	"time"
 
@@ -18,8 +19,8 @@ const (
 	flyoutHeight  = 640
 	flyoutPadding = gapLarge
 	fastestCount  = 5
-	quickRowH     = 32
-	quickRowGap   = 2
+	quickRowH     = 34
+	quickRowGap   = 3
 	// quickRowsMax is how many routes show before the list scrolls: the
 	// panel grows with the routes up to it.
 	quickRowsMax = 10
@@ -31,10 +32,11 @@ const (
 	compactSpeedWidth = 88
 	// flyoutGaugeSize is the exit gauge, smaller than the window's.
 	flyoutGaugeSize float32 = 52
-	// flyoutIdleOpacity is how much of the exit card shows while nothing sends
-	// traffic to Hop; flyoutLockedOpacity, the modes while they cannot change.
-	flyoutIdleOpacity   float32 = 0.5
+	// flyoutIdleOpacity softens the exit card gently while nothing sends
+	// traffic to Hop, staying legible instead of muddy.
+	flyoutIdleOpacity   float32 = 0.68
 	flyoutLockedOpacity float32 = 0.5
+	flyoutModeHeight    float32 = 34
 )
 
 // flyoutView is the menu bar panel: where traffic goes and how fast, the
@@ -82,27 +84,38 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 					openWindow()
 				})
 			}
-			statusDot(c, d.statusColor(t), d.proxying())
-			mutedText(c, t, d.statusText())
-			// What is rarely wanted is two small icons, not two buttons as wide
-			// as the routes: they say what they do on hover.
+			ui.Row(c.Key("flyoutStatus")).Height(24).Padding(0, 9).Gap(5).Radius(12).
+				AlignItems(ui.Center).Background(horizonPillIdle(t)).Children(func() {
+				statusDot(c, d.statusColor(t), d.proxying())
+				mutedText(c, t, d.statusText()).NoWrap()
+			})
+			// Compact quick actions in the flyout header: copy terminal proxy
+			// command, open the main window, and quit.
+			iconButton(c, locales.SettingsCopyCommand(), iconTerminal, softButton(t), func() {
+				c.WriteClipboard(service.TerminalProxyCommand(runtime.GOOS, d.proxyAddress()))
+				c.Toast(locales.SettingsCommandCopied())
+			}).Tooltip(locales.SettingsCopyCommand())
 			iconButton(c, locales.OpenMainWindow(), iconWindow, softButton(t), openWindow).Tooltip(locales.OpenMainWindow())
 			iconButton(c, locales.QuitHop(), iconPower, softButton(t), quit).Tooltip(locales.QuitHop())
 		})
 		d.notice(c, t)
-		// The exit and the traffic are one card, tinted with the theme's accent
-		// as the window's hero is.
+		// The exit and the traffic sit on a soft tinted frosted face aligned
+		// with the main window's Horizon aesthetic.
 		d.flyoutCard(c, t, func() {
-			entrance(ui.Column(c.Key("route")), 1).Gap(gapSmall).Padding(gapMedium).Radius(radiusPanel).
-				LinearGradient(heroFace(t, overlaySurface(t))).Border(1, t.Border).Children(func() {
+			card := entrance(ui.Column(c.Key("route")), 1).Gap(gapSmall).Padding(13, 14).Radius(radiusPanel + 2)
+			if c.Vibrancy() {
+				card.Background(overlaySurface(t).Alpha(0.56)).Border(hairlineWidth, t.Border)
+			} else {
+				card.LinearGradient(heroFace(t, overlaySurface(t))).Border(hairlineWidth, t.Border)
+			}
+			card.Children(func() {
 				d.flyoutRoute(c, t)
 			})
 		})
 		entrance(ui.Column(c.Key("mode")), 3).Gap(gapSmall).Children(func() {
-			// In the order it happens, as the window's control bar has them: what
-			// sends traffic to Hop, then how it is handled. The two switches split
-			// the first line and the three modes are one segmented control.
-			ui.Row(c.Key("switches")).Gap(gapTight).AlignItems(ui.Center).Children(func() {
+			// In the order it happens, matching the main window's floating dock:
+			// emerald capture switches on top, solid-blue sliding mode pills below.
+			ui.Row(c.Key("switches")).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
 				d.systemProxyPill(c, t).Grow(1).Basis(0)
 				d.tunPill(c, t).Grow(1).Basis(0)
 			})
@@ -113,6 +126,7 @@ func (d *Dashboard) flyoutContent(c *ui.Context, t *ui.Theme, content ui.Element
 				}
 			}
 		})
+		horizontalHairline(c, t)
 		entrance(ui.Column(c.Key("routes")), 4).Gap(gapSmall).
 			Disabled(d.controlsLocked()).Children(func() {
 			d.quickRoutes(c, t, openWindow)
@@ -131,45 +145,57 @@ func (d *Dashboard) flyoutCard(c *ui.Context, t *ui.Theme, card func()) {
 	wrap.Opacity(wrap.AnimateTo("opacity", target, ui.Smooth)).Children(card)
 }
 
-// flyoutModes is the three outbound modes as one segmented control across the
-// panel; it gives way while the mode cannot change.
+// flyoutModes renders the three outbound modes with the exact same filled blue
+// spring-sliding thumb as the main window's floating dock.
 func (d *Dashboard) flyoutModes(c *ui.Context, t *ui.Theme) {
+	const inset float32 = 3
 	width, _ := c.Size()
 	border := float32(0)
 	if !c.Vibrancy() {
 		border = 1 // the panel draws its own frame
 	}
-	segment := (width - 2*(flyoutPadding+border) - 2*switchInset) / float32(len(service.Modes))
+	labels := modeLabels()
+	hints := modeHints()
+	segW := (width - 2*(flyoutPadding+border) - 2*inset) / float32(len(labels))
+	inner := flyoutModeHeight - 2*inset
 	locked := d.modeLocked()
-	holder := ui.Row(c.Key("modes")).Disabled(locked)
+	track := ui.Box(c.Key("flyout-mode")).Label(locales.OutboundMode()).
+		Width(segW*float32(len(labels)) + 2*inset).Height(flyoutModeHeight).
+		Radius(flyoutModeHeight / 2).Background(horizonPillIdle(t)).Disabled(locked)
 	if locked {
-		holder.Opacity(flyoutLockedOpacity)
+		track.Opacity(flyoutLockedOpacity)
 	}
-	holder.Children(func() {
-		slidingSwitch(c, "flyout-mode", &d.modeIndex, modeLabels(), flyoutModeStyle(t, segment), func(i int) {
-			d.setMode(service.Modes[i])
+	x := track.AnimateTo("thumb", float32(d.modeIndex)*segW, ui.Snappy)
+	track.Children(func() {
+		ui.Box(c.Key("flyoutModeThumb")).Absolute().Left(inset+x).Top(inset).Width(segW).Height(inner).
+			Radius(inner/2).Background(t.Accent).Shadow(0, 1, 4, 0, t.Accent.Alpha(0.28))
+		ui.Row(c.Key("flyoutModeLabels")).Absolute().Left(inset).Top(inset).Children(func() {
+			for i, label := range labels {
+				idx := i
+				chosen := d.modeIndex == idx
+				seg := ui.ButtonBase(c.Key("flyoutMode-" + label)).Label(label).Tooltip(hints[idx]).
+					Width(segW).Height(inner).Radius(inner / 2).Center().
+					Background(ui.Transparent).Cursor(ui.CursorPointer)
+				ink, weight := t.TextMuted, weightMedium
+				switch {
+				case chosen:
+					ink, weight = t.AccentText, weightSemibold
+				case seg.Hovered():
+					ink = t.Text
+				}
+				color := seg.AnimateColor("ink", ink, ui.Smooth)
+				seg.OnClick(func() { d.chooseMode(idx) })
+				seg.Children(func() {
+					ui.Text(c, label).FontSize(fontSecondary).FontWeight(weight).TextColor(color).NoWrap().Translate(0, -opticalLift)
+				})
+			}
 		})
 	})
 }
 
-// flyoutModeStyle dresses the modes' control as the traffic switches above it
-// are dressed: the same backing and outline, and a thumb that takes the accent's
-// tint and outline as an "on" pill does.
-func flyoutModeStyle(t *ui.Theme, segmentWidth float32) switchStyle {
-	track, trackLine := t.Text.Alpha(softFillAlpha), ui.Transparent
-	thumb, thumbLine := t.Accent.Alpha(pillOnFillAlpha), t.Accent.Alpha(pillOnLineAlpha)
-	if onGlass(t) {
-		backing := controlBacking(t)
-		track, trackLine = backing, t.Text.Alpha(0.24)
-		thumb = t.Accent.Alpha(pillOnFillAlpha).Over(backing)
-	}
-	return switchStyle{track: track, trackLine: trackLine, thumb: thumb, thumbLine: thumbLine,
-		active: t.Text, inactive: t.TextMuted, segmentWidth: segmentWidth}
-}
-
-// flyoutRoute is the exit: the gauge with its flag, the exit's name and the
-// groups it passes, then the speeds with the exit's latency at the right end.
-// The window's hero carries the rest of its facts; here the name gets the room.
+// flyoutRoute is the exit: the gauge with its flag, the exit's name (without
+// repeating the flag already centered inside the gauge), the groups it passes,
+// then the live speeds with the latency pill at the right end.
 func (d *Dashboard) flyoutRoute(c *ui.Context, t *ui.Theme) {
 	route := d.view.Route
 	if len(route) == 0 {
@@ -179,8 +205,8 @@ func (d *Dashboard) flyoutRoute(c *ui.Context, t *ui.Theme) {
 	hop := route[len(route)-1]
 	ui.Row(c.Key("exitRow")).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
 		routeGauge(c, t, hop, flyoutGaugeSize, d.last)
-		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(gapTight).Children(func() {
-			ui.Text(c, heroExitName(hop)).FontSize(fontHeadline).FontWeight(weightSemibold).LetterSpacing(-0.2).MaxLines(1)
+		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(gapLine).Children(func() {
+			ui.Text(c, horizonExitTitle(hop)).FontSize(fontHeadline).FontWeight(weightSemibold).LetterSpacing(-0.3).MaxLines(1)
 			if via := heroVia(route, hop); via != "" {
 				mutedText(c, t, via).MaxLines(1)
 			}
@@ -233,16 +259,16 @@ func (d *Dashboard) flyoutSubscription(c *ui.Context, t *ui.Theme, openWindow fu
 	locked := d.controlsLocked()
 	row := ui.ButtonBase(c.Key("flyoutSubscription")).Label(locales.SubSelect()).
 		Value(pickerLabel(s.view.Items, active.ID)).
-		Height(switchHeight).Padding(0).Radius(radiusControl).Gap(gapTight).
-		Justify(ui.Start).Background(ui.Transparent).Disabled(locked)
+		Height(switchHeight).Padding(0, 10).Radius(switchHeight / 2).Gap(gapTight).
+		Justify(ui.Start).Disabled(locked)
+	fill := horizonPillIdle(t)
+	if !locked && row.Hovered() {
+		fill = horizonPillHover(t)
+	}
+	row.Background(row.AnimateColor("fill", fill, ui.Smooth))
 	if !locked {
 		row.Cursor(ui.CursorPointer)
 	}
-	ink := t.Text
-	if !locked && row.Hovered() {
-		ink = accentInk(t)
-	}
-	color := row.AnimateColor("ink", ink, ui.Smooth)
 	row.Menu(func(m *ui.Menu) {
 		for _, item := range s.view.Items {
 			if m.Item(pickerLabel(s.view.Items, item.ID)).Checked(item.ID == s.view.ActiveID).Chosen() {
@@ -256,19 +282,30 @@ func (d *Dashboard) flyoutSubscription(c *ui.Context, t *ui.Theme, openWindow fu
 			openWindow()
 		}
 	})
+	meta := d.subscriptionShortMeta(active)
 	row.Children(func() {
-		// The row shows the name alone; the menu carries the label that tells
-		// two same-named profiles apart by host.
-		ui.Icon(c, iconGlobe).Width(iconLead).Height(iconLead).TextColor(t.TextMuted)
-		ui.Text(c, flyoutSubName(active.Name)).FontSize(fontBody).
-			FontWeight(weightMedium).MaxLines(1).TextColor(color).Translate(0, -opticalLift)
+		ui.Text(c, flyoutSubName(active.Name)).FontSize(fontSecondary).
+			FontWeight(weightSemibold).MaxLines(1).TextColor(t.Text).Translate(0, -opticalLift)
+		if meta != "" {
+			captionText(c, t, meta).FontFeatures("tnum").NoWrap().Translate(0, -opticalLift)
+		}
 		ui.Icon(c, iconChevron).Width(iconInline).Height(iconInline).TextColor(t.TextMuted)
 	})
 }
 
-// quickGroup is the group the panel switches nodes in: the first that
-// takes a choice.
+// quickGroup is the group the panel switches nodes in: the main group first,
+// then the first manual selector, then any selectable group.
 func (d *Dashboard) quickGroup() (model.GroupView, bool) {
+	for _, g := range d.view.Groups {
+		if g.Kind == model.GroupKindMain {
+			return g, true
+		}
+	}
+	for _, g := range d.view.Groups {
+		if g.Type == model.GroupSelector {
+			return g, true
+		}
+	}
 	for _, g := range d.view.Groups {
 		if g.Selectable {
 			return g, true
@@ -342,13 +379,14 @@ func (d *Dashboard) quickRoutes(c *ui.Context, t *ui.Theme, openWindow func()) {
 func (d *Dashboard) quickRow(c *ui.Context, t *ui.Theme, group model.GroupView, node model.NodeView) {
 	isActive := node.Name == group.Selected
 	groupName, nodeName := group.Name, node.Name
-	row := ui.Row(c.Key(node.Name)).Height(quickRowH).Gap(10).AlignItems(ui.Center).Padding(0, 10).Radius(radiusControl).Cursor(ui.CursorPointer)
+	row := ui.Row(c.Key(node.Name)).Height(quickRowH).Gap(gapSmall).AlignItems(ui.Center).
+		Padding(0, 10).Radius(homeShelfRowRadius).Cursor(ui.CursorPointer)
 	fill := ui.Transparent
 	switch {
 	case isActive:
-		fill = t.Accent.Alpha(0.12)
+		fill = t.Accent.Alpha(0.11)
 	case row.Hovered():
-		fill = t.SurfaceHover
+		fill = horizonPillIdle(t)
 	}
 	row.Background(row.AnimateColor("fill", fill, ui.Smooth))
 	row.OnClick(func() {
@@ -361,17 +399,23 @@ func (d *Dashboard) quickRow(c *ui.Context, t *ui.Theme, group model.GroupView, 
 		if node.Via != "" {
 			name = shownName(node.Name)
 		}
-		label := ui.Text(c, name).FontSize(fontBody).MaxLines(1).Shrink(0)
+		titleInk, weight := t.Text, weightMedium
 		if isActive {
-			label.FontWeight(weightSemibold)
+			titleInk, weight = accentInk(t), weightSemibold
 		}
+		ui.Text(c, name).FontSize(fontBody).FontWeight(weight).TextColor(titleInk).MaxLines(1).Shrink(0)
 		ui.Row(c).Grow(1).Justify(ui.End).MinWidth(0).Children(func() {
 			if node.Via != "" {
-				mutedText(c, t, shownName(node.Via)).MaxLines(1)
+				captionText(c, t, shownName(node.Via)).MaxLines(1)
 			}
 		})
-		ui.Row(c).Width(56).Justify(ui.End).Children(func() {
+		ui.Row(c).Width(52).Justify(ui.End).Children(func() {
 			delayLabel(c, t, node.Delay, fontSecondary)
+		})
+		ui.Box(c.Key("mark")).Width(iconInline).Height(iconInline).Center().Children(func() {
+			if isActive {
+				ui.Icon(c, iconCheck).Width(iconInline).Height(iconInline).TextColor(accentInk(t))
+			}
 		})
 	})
 }

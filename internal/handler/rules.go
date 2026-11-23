@@ -41,12 +41,15 @@ type customRulesState struct {
 	editor     ruleEditor
 }
 
-// ruleEditor is the add dialog's fields.
+// ruleEditor is the add dialog's fields. When customTarget is non-empty, it
+// names a specific policy group from the active profile instead of one of the
+// built-in targets indexed by targetIndex.
 type ruleEditor struct {
-	typeIndex   int
-	targetIndex int
-	value       string
-	err         string
+	typeIndex    int
+	targetIndex  int
+	customTarget string
+	value        string
+	err          string
 	// suggestions are the rules offered for the connection the dialog was
 	// opened from; none when opened from the settings.
 	suggestions []ruleSuggestion
@@ -105,8 +108,20 @@ func (d *Dashboard) submitRuleEditor() {
 		e.err = locales.RuleEnterContent()
 		return
 	}
-	if e.typeIndex < 0 || e.typeIndex >= len(service.CustomRuleTypes) ||
-		e.targetIndex < 0 || e.targetIndex >= len(service.CustomRuleTargets) {
+	if e.typeIndex < 0 || e.typeIndex >= len(service.CustomRuleTypes) {
+		e.err = locales.RuleChooseTypeTarget()
+		return
+	}
+	var target string
+	if e.targetIndex == len(service.CustomRuleTargets) {
+		target = strings.TrimSpace(e.customTarget)
+		if target == "" {
+			e.err = locales.RuleChooseTypeTarget()
+			return
+		}
+	} else if e.targetIndex >= 0 && e.targetIndex < len(service.CustomRuleTargets) {
+		target = service.CustomRuleTargets[e.targetIndex]
+	} else {
 		e.err = locales.RuleChooseTypeTarget()
 		return
 	}
@@ -114,9 +129,33 @@ func (d *Dashboard) submitRuleEditor() {
 	rule := model.CustomRule{
 		Type:   service.CustomRuleTypes[e.typeIndex],
 		Value:  value,
-		Target: service.CustomRuleTargets[e.targetIndex],
+		Target: target,
 	}
 	d.beginRuleSave(append(slices.Clone(r.rules), rule), true)
+}
+
+// toggleRule enables or disables the rule at index and reapplies the config.
+func (d *Dashboard) toggleRule(index int) {
+	r := &d.rules
+	if index < 0 || index >= len(r.rules) {
+		return
+	}
+	next := slices.Clone(r.rules)
+	next[index].Disabled = !next[index].Disabled
+	d.beginRuleSave(next, false)
+}
+
+// moveRule shifts the rule at index by delta (-1 up, +1 down) to adjust match
+// priority, then reapplies the config.
+func (d *Dashboard) moveRule(index int, delta int) {
+	r := &d.rules
+	dest := index + delta
+	if index < 0 || index >= len(r.rules) || dest < 0 || dest >= len(r.rules) {
+		return
+	}
+	next := slices.Clone(r.rules)
+	next[index], next[dest] = next[dest], next[index]
+	d.beginRuleSave(next, false)
 }
 
 // deleteRule begins saving the list without the rule at index.
@@ -161,6 +200,7 @@ func (d *Dashboard) beginRuleSave(next []model.CustomRule, fromEditor bool) {
 			if fromEditor {
 				r.editorOpen = false
 			}
+			d.invalidateRuleInspect()
 			gen := d.nextViewGen()
 			go d.loadView(ctx, win, gen)
 		})
@@ -194,18 +234,47 @@ func (d *Dashboard) customRulesRows(c *ui.Context, t *ui.Theme) []func() {
 	return rows
 }
 
-// customRuleRow is one stored rule: its type, the value it matches, where it
-// sends traffic, and its delete button.
+// customRuleRow is one stored rule: its enable switch, type and value, target
+// chip, priority reorder buttons, and delete button.
 func (d *Dashboard) customRuleRow(c *ui.Context, t *ui.Theme, index int, rule model.CustomRule) func() {
 	return func() {
-		ui.Row(c.Key("rule:" + strconv.Itoa(index))).Gap(gapLarge).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
-			ui.Column(c).Grow(1).Basis(0).Gap(gapLine).Children(func() {
-				captionText(c, t, ruleTypeLabel(rule.Type))
-				ui.Text(c, rule.Value).FontSize(fontBody).FontWeight(weightMedium).MaxLines(1)
+		locked := d.controlsLocked() || d.rules.busy
+		total := len(d.rules.rules)
+		ui.Row(c.Key("rule:" + strconv.Itoa(index))).Gap(gapMedium).AlignItems(ui.Center).MinHeight(switchHeight).Children(func() {
+			enabled := !rule.Disabled
+			ui.Box(c).Disabled(locked).Children(func() {
+				ui.Switch(c.Key("rule-on:"+strconv.Itoa(index)), &enabled).
+					Label(locales.RuleToggleLabel(rule.Value)).
+					OnChange(func() { d.toggleRule(index) })
 			})
-			chip(c, t, ruleTargetLabel(rule.Target), ruleTargetColor(t, rule.Target))
-			ui.Box(c).Disabled(d.controlsLocked()).Children(func() {
-				iconButton(c, locales.RuleDelete(rule.Value), iconTrash, dangerButton(t), func() { d.deleteRule(index) })
+			ui.Column(c).Grow(1).Basis(0).Gap(gapLine).Children(func() {
+				meta := ruleTypeLabel(rule.Type)
+				if rule.Disabled {
+					meta += " · " + locales.RuleDisabledTag()
+				}
+				captionText(c, t, meta)
+				valText := ui.Text(c, rule.Value).FontSize(fontBody).FontWeight(weightMedium).MaxLines(1)
+				if rule.Disabled {
+					valText.TextColor(t.TextMuted)
+				}
+			})
+			targetColor := ruleTargetColor(t, rule.Target)
+			if rule.Disabled {
+				targetColor = t.TextMuted
+			}
+			chip(c, t, ruleTargetLabel(rule.Target), targetColor)
+			ui.Row(c).Gap(gapTight).AlignItems(ui.Center).Children(func() {
+				if total > 1 {
+					ui.Box(c).Disabled(locked || index == 0).Children(func() {
+						iconButton(c, locales.RuleMoveUp(), iconArrowUp, softButton(t), func() { d.moveRule(index, -1) })
+					})
+					ui.Box(c).Disabled(locked || index == total-1).Children(func() {
+						iconButton(c, locales.RuleMoveDown(), iconArrowDown, softButton(t), func() { d.moveRule(index, 1) })
+					})
+				}
+				ui.Box(c).Disabled(locked).Children(func() {
+					iconButton(c, locales.RuleDelete(rule.Value), iconTrash, dangerButton(t), func() { d.deleteRule(index) })
+				})
 			})
 		})
 	}
@@ -228,6 +297,16 @@ func (d *Dashboard) customRuleForm(c *ui.Context, t *ui.Theme) {
 	typeIndex := max(0, min(e.typeIndex, len(ruleTypeLabels())-1))
 	hint := ruleTypeHints()[typeIndex]
 	placeholder := ruleValuePlaceholders[typeIndex]
+	hasGroups := len(d.view.Groups) > 0
+	targetOptions := ruleTargetLabels()
+	targetSegWidth := float32(64)
+	if hasGroups {
+		targetOptions = append(targetOptions, locales.RuleTargetGroup())
+		targetSegWidth = 84
+	} else if e.targetIndex >= len(service.CustomRuleTargets) {
+		e.targetIndex = slices.Index(service.CustomRuleTargets, model.CustomRuleProxy)
+		e.customTarget = ""
+	}
 	ui.Column(c).Gap(gapSection).Children(func() {
 		ui.Column(c).Gap(gapSmall).Children(func() {
 			ui.Row(c).Gap(gapMedium).AlignItems(ui.Center).Children(func() {
@@ -248,8 +327,19 @@ func (d *Dashboard) customRuleForm(c *ui.Context, t *ui.Theme) {
 				Background(dialogField(t)).Disabled(r.busy).OnSubmit(d.submitRuleEditor)
 			fieldLabel(c, t, locales.RuleFieldTarget(), "")
 			ui.Box(c).Disabled(r.busy).Children(func() {
-				slidingSwitch(c, "rule-target", &e.targetIndex, ruleTargetLabels(), dialogSwitchStyle(t, 64), func(int) { e.err = "" })
+				slidingSwitch(c, "rule-target", &e.targetIndex, targetOptions, dialogSwitchStyle(t, targetSegWidth), func(i int) {
+					e.err = ""
+					if i == len(service.CustomRuleTargets) && e.customTarget == "" && len(d.view.Groups) > 0 {
+						e.customTarget = d.view.Groups[0].Name
+					}
+				})
 			})
+			if hasGroups && e.targetIndex == len(service.CustomRuleTargets) {
+				if e.customTarget == "" {
+					e.customTarget = d.view.Groups[0].Name
+				}
+				d.ruleGroupPicker(c, t)
+			}
 			if e.err != "" {
 				ui.Text(c, e.err).FontSize(fontSecondary).TextColor(t.Danger)
 			}
@@ -259,6 +349,70 @@ func (d *Dashboard) customRuleForm(c *ui.Context, t *ui.Theme) {
 			button(c, buttonSpec{label: locales.Add(), style: primaryButton(t), busy: r.busy,
 				disabled: r.busy || strings.TrimSpace(e.value) == ""}, d.submitRuleEditor)
 		})
+	})
+}
+
+// ruleGroupPicker renders an inline scrollable 2-column grid of the active
+// profile's policy groups directly inside the add-rule dialog, matching Hop's
+// native group list instead of overflowing with a system popup menu.
+func (d *Dashboard) ruleGroupPicker(c *ui.Context, t *ui.Theme) {
+	groups := d.view.Groups
+	ui.Box(c.Key("rule-group-tray")).Radius(radiusControl).Background(dialogField(t)).
+		Border(hairlineWidth, t.Border).Padding(ruleGroupTrayPad).Children(func() {
+		ui.Scroll(c.Key("rule-group-scroll")).MaxHeight(ruleGroupPickerHeight).Children(func() {
+			ui.Column(c).Gap(gapTight).Disabled(d.rules.busy).Children(func() {
+				for i := 0; i < len(groups); i += 2 {
+					ui.Row(c.Key(i)).Gap(gapTight).Children(func() {
+						d.ruleGroupTile(c, t, groups[i])
+						if i+1 < len(groups) {
+							d.ruleGroupTile(c, t, groups[i+1])
+						} else {
+							ui.Box(c).Grow(1).Basis(0)
+						}
+					})
+				}
+			})
+		})
+	})
+}
+
+// ruleGroupTile is one selectable policy group card inside ruleGroupPicker.
+func (d *Dashboard) ruleGroupTile(c *ui.Context, t *ui.Theme, group model.GroupView) {
+	e := &d.rules.editor
+	name := group.Name
+	selected := name == e.customTarget
+	row := ui.Row(c.Key("rg:"+name)).Grow(1).Basis(0).MinWidth(0).
+		Padding(ruleGroupTilePadY, ruleGroupTilePadX).Gap(gapSmall).
+		Radius(radiusControl).AlignItems(ui.Center).Cursor(ui.CursorPointer)
+	fill := ui.Transparent
+	border := ui.Transparent
+	switch {
+	case selected:
+		fill = t.Accent.Alpha(0.13)
+		border = t.Accent.Alpha(0.28)
+	case row.Hovered():
+		fill = t.Text.Alpha(0.05)
+	}
+	row.Background(row.AnimateColor("fill", fill, ui.Smooth)).Border(hairlineWidth, border)
+	row.OnClick(func() {
+		e.customTarget = name
+		e.err = ""
+	})
+	row.Children(func() {
+		groupIcon(c, t, group, ruleGroupIconSize)
+		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(gapLine).Children(func() {
+			ink, weight := t.Text, weightMedium
+			if selected {
+				ink, weight = accentInk(t), weightSemibold
+			}
+			ui.Text(c, groupTitle(group)).FontSize(fontSecondary).FontWeight(weight).TextColor(ink).MaxLines(1)
+			if dest := strings.TrimPrefix(groupDestination(group), "→ "); dest != "" {
+				captionText(c, t, dest).MaxLines(1)
+			}
+		})
+		if selected {
+			ui.Icon(c.Key("check"), iconCheck).Width(iconInline).Height(iconInline).TextColor(accentInk(t))
+		}
 	})
 }
 
@@ -300,15 +454,15 @@ func ruleTargetLabel(target string) string {
 	return target
 }
 
-// ruleTargetColor tints a target chip: direct quiet, proxy in the accent,
-// reject in the danger colour.
+// ruleTargetColor tints a target chip: direct quiet, reject in the danger
+// colour, and proxy or any named policy group in the accent colour.
 func ruleTargetColor(t *ui.Theme, target string) ui.Color {
 	switch target {
-	case model.CustomRuleProxy:
-		return accentInk(t)
+	case model.CustomRuleDirect:
+		return t.TextMuted
 	case model.CustomRuleReject:
 		return t.Danger
 	default:
-		return t.TextMuted
+		return accentInk(t)
 	}
 }

@@ -246,7 +246,7 @@ func run() (err error) {
 	)
 
 	appUpdateService := service.NewAppUpdateService(appUpdateSource(portState))
-	customRulesService := service.NewCustomRulesService(store, profiles)
+	customRulesService := service.NewCustomRulesService(store, profiles, client)
 	fakeIPService := service.NewFakeIPExceptionsService(fakeIPState, store, profiles, tunFlag)
 	geodataService := service.NewGeodataService(
 		geodata.NewSource(geodataDownloadClient(portState), geodata.DefaultBaseURL),
@@ -261,7 +261,10 @@ func run() (err error) {
 		cfg.HomeDir,
 		validateDir,
 	)
-	systemProxy := service.NewSystemProxyService(sysproxy.New(), bindAddress, portState)
+	systemProxy := service.NewSystemProxyService(sysproxy.New(), store, bindAddress, portState)
+	if err := systemProxy.LoadBypass(); err != nil {
+		return err
+	}
 	helperTool, toolErr := helper.BundledToolPath(resourcesDir)
 	if toolErr != nil {
 		// The app runs without TUN; turning it on then fails, naming what
@@ -330,6 +333,7 @@ func run() (err error) {
 		Settings:      settingsService,
 		Geodata:       geodataService,
 		Rules:         customRulesService,
+		RuleInspect:   service.NewRuleInspectService(client),
 		FakeIP:        fakeIPService,
 		AppUpdate:     appUpdateService,
 		SystemProxy:   systemProxy,

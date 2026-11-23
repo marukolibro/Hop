@@ -2,7 +2,9 @@ package service
 
 import (
 	"fmt"
+	"net/url"
 	"slices"
+	"strings"
 	"time"
 
 	"hop/internal/model"
@@ -25,6 +27,17 @@ var ColorThemes = []model.ColorTheme{model.ThemeOcean, model.ThemeDusk, model.Th
 
 // DelayTimeouts are the delay test timeouts the settings offer, in seconds.
 var DelayTimeouts = []int{2, 3, 5}
+
+// DefaultDelayTestURL is the lightweight 204 endpoint used for delay probes
+// when the user has not picked another endpoint.
+const DefaultDelayTestURL = "https://www.gstatic.com/generate_204"
+
+// DelayTestURLs are the probe endpoints offered in settings, in display order.
+var DelayTestURLs = []string{
+	DefaultDelayTestURL,
+	"https://cp.cloudflare.com/generate_204",
+	"http://captive.apple.com/hotspot-detect.html",
+}
 
 // SubscriptionUpdateIntervals are the automatic refresh intervals the
 // settings offer, in hours; 0 turns the automatic refresh off.
@@ -97,10 +110,24 @@ func validateSettings(settings model.Settings) error {
 	if settings.WindowClarity < model.WindowClarityMin || settings.WindowClarity > model.WindowClarityMax {
 		return fmt.Errorf("unsupported window clarity %d%% (want %d-%d)", settings.WindowClarity, model.WindowClarityMin, model.WindowClarityMax)
 	}
+	if raw := strings.TrimSpace(settings.DelayTestURL); raw != "" {
+		parsed, err := url.Parse(raw)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			return fmt.Errorf("invalid delay test URL %q", settings.DelayTestURL)
+		}
+	}
 	return nil
 }
 
 // DelayTimeout is how long a delay test waits for one node under settings.
 func DelayTimeout(settings model.Settings) time.Duration {
 	return time.Duration(settings.DelayTimeoutSeconds) * time.Second
+}
+
+// DelayTestURL returns the configured probe URL or DefaultDelayTestURL.
+func DelayTestURL(settings model.Settings) string {
+	if raw := strings.TrimSpace(settings.DelayTestURL); raw != "" {
+		return raw
+	}
+	return DefaultDelayTestURL
 }

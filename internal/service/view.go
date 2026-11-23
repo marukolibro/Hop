@@ -104,7 +104,8 @@ func BuildView(snapshot model.Snapshot, mode string, catchAll string) model.Prox
 }
 
 func buildGroup(g model.ProxyGroup, groups map[string]model.ProxyGroup, snapshot model.Snapshot) model.GroupView {
-	view := model.GroupView{Name: g.Name, Label: g.Name, Type: g.Type, Selected: g.Selected, Selectable: g.Type == model.GroupSelector, Service: ServiceOf(g.Name)}
+	selectable := g.Type == model.GroupSelector || g.Type == model.GroupURLTest || g.Type == model.GroupFallback
+	view := model.GroupView{Name: g.Name, Label: g.Name, Type: g.Type, Selected: g.Selected, Fixed: g.Fixed, Selectable: selectable, Service: ServiceOf(g.Name)}
 	regionIndex := map[string]int{}
 	// A profile may list an option twice; it is still one choice.
 	seen := map[string]bool{}

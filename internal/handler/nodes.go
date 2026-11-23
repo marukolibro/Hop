@@ -69,10 +69,8 @@ func (d *Dashboard) activeGroupView() (model.GroupView, bool) {
 	return model.GroupView{}, false
 }
 
-// nodesPage is the groups in a sidebar that runs the window's height, topped
-// by the subscription in use, beside the content: the route's hero card, the
-// row of home cards, then the options of the group chosen. The subscription management page is a
-// subpage of it, reached from the sidebar's subscription.
+// nodesPage renders the spatial horizon home, or the subscription management
+// subpage when managing profiles, or the terminal console on the Hack theme.
 func (d *Dashboard) nodesPage(c *ui.Context, t *ui.Theme) {
 	if d.subscription.managing {
 		d.managePage(c, t)
@@ -82,28 +80,7 @@ func (d *Dashboard) nodesPage(c *ui.Context, t *ui.Theme) {
 		d.hackHome(c, t)
 		return
 	}
-	// The body is one surface: a fixed sidebar, a hairline, and the content.
-	// The content may shrink below its height, so it scrolls inside the
-	// window rather than pushing past it.
-	ui.Row(c).Grow(1).Basis(0).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		d.groupSidebar(c, t)
-		verticalHairline(c, t)
-		pane := ui.Column(c).Grow(1).Basis(0).MinHeight(0).Background(nodeAreaFill(t))
-		pane.Children(func() {
-			// The whole column scrolls as one: the hero, the cards, then the
-			// options, so a group with many nodes runs past the window's foot.
-			ui.Scroll(c).Grow(1).Basis(0).MinHeight(0).Children(func() {
-				ui.Column(c).Gap(gapLarge).Padding(paneTopPadding, pagePadding, 30, pagePadding).Children(func() {
-					d.routeBar(c, t)
-					d.homeCards(c, t)
-					ui.Column(c.Key("options")).Gap(gapMedium).Disabled(d.controlsLocked()).Children(func() {
-						d.nodesToolbar(c, t)
-						d.nodeGrid(c, t)
-					})
-				})
-			})
-		})
-	})
+	d.horizonHome(c, t)
 }
 
 // nodesToolbar is the one row over the grid: the region filters on the left,

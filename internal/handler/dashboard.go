@@ -54,9 +54,21 @@ func modeLabels() []string {
 type ProxyService interface {
 	View(ctx context.Context, epoch int) (model.ProxyView, error)
 	Select(ctx context.Context, group string, proxy string) error
-	TestDelay(ctx context.Context, group string, timeout time.Duration) error
-	TestAutoGroups(ctx context.Context, timeout time.Duration) error
+	Reset(ctx context.Context, group string) error
+	FlushDNSCache(ctx context.Context) error
+	TestDelay(ctx context.Context, group string, testURL string, timeout time.Duration) error
+	TestNode(ctx context.Context, node string, testURL string, timeout time.Duration) (int, error)
+	TestAutoGroups(ctx context.Context, testURL string, timeout time.Duration) error
 	WatchTraffic(ctx context.Context, handle func(model.Traffic)) error
+}
+
+// RuleInspectService reads the core's active routing rules and external
+// proxy/rule providers, and triggers on-demand provider refreshes.
+type RuleInspectService interface {
+	ListRules(ctx context.Context) ([]model.ActiveRule, error)
+	ListProviders(ctx context.Context) ([]model.ProviderSummary, error)
+	UpdateProvider(ctx context.Context, kind string, name string) error
+	UpdateAllProviders(ctx context.Context, providers []model.ProviderSummary) error
 }
 
 // PlaceService says where the user is, for the home's map.
@@ -180,6 +192,8 @@ type SystemProxyService interface {
 	Status(ctx context.Context) (model.SystemProxyStatus, error)
 	Enable(ctx context.Context) error
 	Disable(ctx context.Context) error
+	BypassList() []string
+	SaveBypass(ctx context.Context, entries []string) error
 }
 
 // TunService turns TUN mode on and off in the core the privileged helper
@@ -217,6 +231,7 @@ type Services struct {
 	Settings      SettingsService
 	Geodata       GeodataService
 	Rules         CustomRulesService
+	RuleInspect   RuleInspectService
 	FakeIP        FakeIPService
 	AppUpdate     AppUpdateService
 	SystemProxy   SystemProxyService
@@ -323,6 +338,8 @@ type connectionsState struct {
 	data   model.Connections
 	list   ui.ListState
 	filter string
+	// routeFilter narrows connections: 0 = all, 1 = proxy, 2 = direct.
+	routeFilter int
 }
 
 // logsState is what the log page shows and edits.
@@ -330,7 +347,8 @@ type logsState struct {
 	entries []model.LogEntry
 	list    ui.ListState
 	// level is the index of the level filter: all, warnings and up, errors.
-	level int
+	level  int
+	filter string
 }
 
 // Dashboard is the main window's state. Everything but the fields set in
@@ -354,12 +372,15 @@ type Dashboard struct {
 	settings     settingsState
 	geodata      geodataState
 	rules        customRulesState
+	ruleInspect  rulesInspectState
 	fakeIP       fakeIPState
+	proxyBypass  proxyBypassState
 	appUpdate    appUpdateState
 	sysProxy     sysProxyState
 	tun          tunState
 	lan          lanUIState
 	port         portUIState
+	recovery     recoveryState
 	// autoBusy is set while the background check refreshes what is due; it
 	// locks the controls like any other mutation.
 	autoBusy bool
@@ -401,6 +422,24 @@ type Dashboard struct {
 	delayCancel context.CancelFunc
 	// activeGroup is the group whose nodes the grid shows.
 	activeGroup string
+	// nodePickerOpen, nodePickerQuery and nodeHideTimeout drive the centered
+	// Node Picker palette on the Horizon home.
+	nodePickerOpen  bool
+	nodePickerQuery string
+	nodeHideTimeout bool
+	// testingNode names one node currently being probed individually.
+	testingNode string
+	// subPickerOpen drives the centered Subscription Switcher palette.
+	subPickerOpen bool
+	// homeRightTab selects the right shelf view on the Horizon home:
+	// 0 for services, 1 for live connections.
+	homeRightTab int
+	// statsRange selects the daily chart window (0 = 30d, 1 = 7d),
+	// statsMetric selects the stacked dimension (0 = proxy/direct, 1 = down/up),
+	// and statsSessionTab selects the right ranking tab (0 = apps, 1 = nodes).
+	statsRange      int
+	statsMetric     int
+	statsSessionTab int
 	// hackPickerOpen is whether the Hack theme's node list of activeGroup shows.
 	hackPickerOpen bool
 	// hackShown is whether the last frame was the Hack theme, hackShownKnown
@@ -419,9 +458,11 @@ type Dashboard struct {
 	nodeOrder int
 	// nodeRegion is the filter over the node grid, one of the nodeFilter
 	// values; it is not kept between starts.
-	nodeRegion  string
-	last        model.Traffic
-	connections connectionsState
+	nodeRegion     string
+	last           model.Traffic
+	trafficHistory []int64
+	peakDown       int64
+	connections    connectionsState
 	// memory is the last memory sample of Hop and its core; memoryKnown says
 	// one came since the core started.
 	memory      model.Memory
@@ -447,6 +488,9 @@ type Dashboard struct {
 	opWin Updater
 
 	selectProxy             func(group string, proxy string)
+	resetProxy              func(group string)
+	testNode                func(node string)
+	toggleWindow            func()
 	setMode                 func(mode string)
 	testDelay               func(group string)
 	useSubscription         func(id string)
@@ -475,6 +519,9 @@ func NewDashboard(services Services, proxyHost string, settings model.Settings, 
 	d.subscription.busyIDs = map[string]struct{}{}
 	d.port.input = strconv.Itoa(services.Port.Current())
 	d.fakeIP.names = services.FakeIP.List()
+	if services.SystemProxy != nil {
+		d.proxyBypass.entries = services.SystemProxy.BypassList()
+	}
 	if services.AppUpdate != nil {
 		d.appUpdate.enabled = services.AppUpdate.Enabled()
 		d.appUpdate.disabledReason = services.AppUpdate.DisabledReason()
@@ -524,6 +571,12 @@ func (d *Dashboard) Start(ctx context.Context, win Updater) {
 		}
 		go d.choose(ctx, win, group, proxy, d.nextViewGen())
 	}
+	d.resetProxy = func(group string) {
+		if d.controlsLocked() {
+			return
+		}
+		go d.unpinGroup(ctx, win, group, d.nextViewGen())
+	}
 	d.setMode = func(mode string) {
 		// A mode change and a subscription apply cannot run together, or the
 		// reload could carry the mode the user just left back in.
@@ -542,13 +595,36 @@ func (d *Dashboard) Start(ctx context.Context, win Updater) {
 		d.delayCancel = cancel
 		d.startTesting(group)
 		timeout := service.DelayTimeout(d.settings.settings)
+		testURL := service.DelayTestURL(d.settings.settings)
 		// The probe belongs to the runtime epoch and window context.
 		go func() {
 			defer cancel()
 			stop := d.refreshWhileTesting(testCtx, win, gen)
-			err := d.services.Proxies.TestDelay(testCtx, group, timeout)
+			err := d.services.Proxies.TestDelay(testCtx, group, testURL, timeout)
 			stop()
 			d.finishDelayTest(testCtx, win, gen, err)
+		}()
+	}
+	d.testNode = func(node string) {
+		if d.controlsLocked() || d.testing != "" || d.testingNode != "" {
+			return
+		}
+		d.testingNode = node
+		gen := d.viewGen
+		timeout := service.DelayTimeout(d.settings.settings)
+		testURL := service.DelayTestURL(d.settings.settings)
+		go func() {
+			_, err := d.services.Proxies.TestNode(ctx, node, testURL, timeout)
+			win.Update(func() {
+				if d.testingNode == node {
+					d.testingNode = ""
+				}
+				if err != nil {
+					d.fail(actionTestLatency, err)
+					return
+				}
+			})
+			d.loadView(ctx, win, gen)
 		}()
 	}
 	d.useSubscription = func(id string) {
@@ -698,6 +774,7 @@ func (d *Dashboard) startupTest(ctx context.Context, win Updater, gen int) {
 			return
 		}
 		d.coreEpoch++
+		d.invalidateRuleInspect()
 		d.considerExitIP()
 	})
 	d.loadView(ctx, win, gen)
@@ -709,11 +786,12 @@ func (d *Dashboard) startupTest(ctx context.Context, win Updater, gen int) {
 		d.delayCancel = cancel
 		d.startTesting(testingAll)
 		timeout := service.DelayTimeout(d.settings.settings)
+		testURL := service.DelayTestURL(d.settings.settings)
 		// The probes belong to the runtime epoch and window context.
 		go func() {
 			defer cancel()
 			stop := d.refreshWhileTesting(testCtx, win, gen)
-			err := d.services.Proxies.TestAutoGroups(testCtx, timeout)
+			err := d.services.Proxies.TestAutoGroups(testCtx, testURL, timeout)
 			stop()
 			d.finishDelayTest(testCtx, win, gen, err)
 		}()
@@ -794,6 +872,7 @@ func (d *Dashboard) watchTraffic(ctx context.Context, win Updater) {
 	err := d.services.Proxies.WatchTraffic(ctx, func(sample model.Traffic) {
 		win.Update(func() {
 			d.last = sample
+			d.recordTrafficSample(sample)
 			if d.onTraffic != nil {
 				d.onTraffic(sample)
 			}
@@ -803,6 +882,18 @@ func (d *Dashboard) watchTraffic(ctx context.Context, win Updater) {
 		return
 	}
 	win.Update(func() { d.failConnection(actionWatchTraffic, err) })
+}
+
+// recordTrafficSample appends sample.Down to the rolling horizon history and
+// updates peakDown for the current session.
+func (d *Dashboard) recordTrafficSample(sample model.Traffic) {
+	d.trafficHistory = append(d.trafficHistory, sample.Down)
+	if len(d.trafficHistory) > homeTrafficHistoryMax {
+		d.trafficHistory = d.trafficHistory[len(d.trafficHistory)-homeTrafficHistoryMax:]
+	}
+	if sample.Down > d.peakDown {
+		d.peakDown = sample.Down
+	}
 }
 
 func (d *Dashboard) watchMemory(ctx context.Context, win Updater) {
@@ -845,6 +936,13 @@ func (d *Dashboard) choose(ctx context.Context, win Updater, group string, proxy
 		win.Update(func() { d.fail(actionSwitchNode, err) })
 	}
 	// Reload either way, so the view shows what the core really uses.
+	d.loadView(ctx, win, gen)
+}
+
+func (d *Dashboard) unpinGroup(ctx context.Context, win Updater, group string, gen int) {
+	if err := d.services.Proxies.Reset(ctx, group); err != nil {
+		win.Update(func() { d.fail(actionSwitchNode, err) })
+	}
 	d.loadView(ctx, win, gen)
 }
 
@@ -911,7 +1009,11 @@ var (
 	actionSaveSettings        = action{"save-settings", locales.ActionSaveSettings}
 	actionReadRules           = action{"read-rules", locales.ActionReadRules}
 	actionSaveRules           = action{"save-rules", locales.ActionSaveRules}
+	actionLoadRulesInspect    = action{"load-rules-inspect", locales.ActionLoadRulesInspect}
+	actionUpdateProvider      = action{"update-provider", locales.ActionUpdateProvider}
+	actionGlobalShortcuts     = action{"global-shortcuts", locales.ActionGlobalShortcuts}
 	actionSaveFakeIP          = action{"save-fake-ip", locales.ActionSaveFakeIP}
+	actionSaveProxyBypass     = action{"save-proxy-bypass", locales.ActionSaveProxyBypass}
 	actionReadGeodata         = action{"read-geodata", locales.ActionReadGeodata}
 	actionUpdateGeodata       = action{"update-geodata", locales.ActionUpdateGeodata}
 	actionCheckAppUpdate      = action{"check-app-update", locales.ActionCheckAppUpdate}
@@ -984,12 +1086,15 @@ func (d *Dashboard) View(c *ui.Context) {
 	d.tunDialog(c, t)
 	d.customRuleDialog(c, t)
 	d.fakeIPDialog(c, t)
+	d.proxyBypassDialog(c, t)
 	d.servicesDialog(c, t)
+	d.nodePickerDialog(c, t)
+	d.subPickerDialog(c, t)
 	d.hackPickerDialog(c, t)
 }
 
-// header holds what applies to every page: the page switch, and how traffic
-// reaches Hop with whether it does now.
+// header holds what applies to every page: the page switch, the active
+// subscription capsule, and whether Hop carries traffic now.
 func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 	// The window has no title bar of its own: the header is it. It keeps
 	// clear of the native window controls on either side and drags the window.
@@ -1001,7 +1106,16 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 	if width >= 1050 {
 		headerGap = 30
 	}
-	ui.Column(c).Background(headerFill(t)).Children(func() {
+	isHorizon := d.page == pageNodes && !d.subscription.managing && !hackTheme(t)
+	barFill := headerFill(t)
+	if isHorizon {
+		if onGlass(t) {
+			barFill = ui.Transparent
+		} else {
+			barFill = t.Background.Mix(t.Accent, glassHorizonSkyTint)
+		}
+	}
+	ui.Column(c).Background(barFill).Children(func() {
 		if controls.Right > 0 && width-controls.Right < headerMinContentWidth {
 			ui.Box(c).Height(controls.Height).DragWindow()
 			right = pagePadding
@@ -1016,18 +1130,25 @@ func (d *Dashboard) header(c *ui.Context, t *ui.Theme) {
 			} else {
 				brandMark(c, t, 28, d.markRun)
 			}
-			pageTabs(c, t, locales.PageSwitchLabel(), &d.page, pageLabels(), func(int) {})
+			pageTabs(c, t, locales.PageSwitchLabel(), &d.page, pageLabels(), func(int) {
+				d.subscription.managing = false
+			})
 			ui.Box(c).Grow(1)
-			// Every page shows whether Hop carries the traffic; the switches
-			// themselves are on the home page's capture card.
-			ui.Row(c.Key("headerStatus")).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
-				statusDot(c, d.statusColor(t), d.proxying())
-				mutedText(c, t, d.statusText()).MaxLines(1)
-				d.headerPort(c, t)
+			ui.Row(c.Key("headerRight")).Gap(gapSmall).AlignItems(ui.Center).Children(func() {
+				d.headerSubscriptionPill(c, t)
+				// Every page shows whether Hop carries the traffic; the switches
+				// themselves live on the home page's floating dock.
+				ui.Row(c.Key("headerStatus")).Height(homeHeaderPillHeight).Padding(0, 11).Gap(gapSmall).
+					Radius(homeHeaderPillHeight / 2).AlignItems(ui.Center).Background(horizonPillIdle(t)).Children(func() {
+					statusDot(c, d.statusColor(t), d.proxying())
+					mutedText(c, t, d.statusText()).MaxLines(1)
+					d.headerPort(c, t)
+				})
 			})
 		})
-		// The Hack theme's boxes are framed, so the header has no rule of its own.
-		if !hackTheme(t) {
+		// The Hack theme and the Horizon home flow directly from the title bar
+		// without a harsh horizontal divider.
+		if !hackTheme(t) && !isHorizon {
 			horizontalHairline(c, t)
 		}
 	})

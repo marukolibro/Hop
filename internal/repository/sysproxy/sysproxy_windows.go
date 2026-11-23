@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 
@@ -81,8 +82,9 @@ func endpoint(addr string) model.ProxyEndpoint {
 	return model.ProxyEndpoint{Enabled: true, Host: host, Port: port}
 }
 
-// Set points the user's proxy at host:port for every protocol.
-func (c *Controller) Set(_ context.Context, host string, port int) error {
+// Set points the user's proxy at host:port for every protocol and sets
+// ProxyOverride so local and LAN addresses bypass the proxy.
+func (c *Controller) Set(_ context.Context, host string, port int, bypass []string) error {
 	key, err := registry.OpenKey(registry.CURRENT_USER, internetSettingsKey, registry.SET_VALUE)
 	if err != nil {
 		return fmt.Errorf("open the internet settings key: %w", err)
@@ -91,10 +93,75 @@ func (c *Controller) Set(_ context.Context, host string, port int) error {
 	if err := key.SetStringValue("ProxyServer", net.JoinHostPort(host, strconv.Itoa(port))); err != nil {
 		return fmt.Errorf("write ProxyServer: %w", err)
 	}
+	if override := formatWindowsBypass(bypass); override != "" {
+		if err := key.SetStringValue("ProxyOverride", override); err != nil {
+			return fmt.Errorf("write ProxyOverride: %w", err)
+		}
+	}
 	if err := key.SetDWordValue("ProxyEnable", 1); err != nil {
 		return fmt.Errorf("write ProxyEnable: %w", err)
 	}
 	return announce()
+}
+
+// formatWindowsBypass turns bypass entries into WinINet's semicolon-separated
+// ProxyOverride list, translating common private CIDRs into wildcard patterns
+// WinINet understands and appending <local>.
+func formatWindowsBypass(entries []string) string {
+	var out []string
+	add := func(v string) {
+		for _, existing := range out {
+			if existing == v {
+				return
+			}
+		}
+		out = append(out, v)
+	}
+	for _, entry := range entries {
+		switch entry {
+		case "127.0.0.1", "127.0.0.0/8":
+			add("127.*")
+		case "10.0.0.0/8":
+			add("10.*")
+		case "172.16.0.0/12":
+			for i := 16; i <= 31; i++ {
+				add(fmt.Sprintf("172.%d.*", i))
+			}
+		case "192.168.0.0/16":
+			add("192.168.*")
+		case "169.254.0.0/16", "169.254/16":
+			add("169.254.*")
+		case "100.64.0.0/10":
+			for i := 64; i <= 127; i++ {
+				add(fmt.Sprintf("100.%d.*", i))
+			}
+		case "::1":
+			// WinINet handles loopback IPv6 via <local>.
+		default:
+			if prefix, err := netip.ParsePrefix(entry); err == nil && prefix.Addr().Is4() {
+				ip := prefix.Masked().Addr().As4()
+				switch prefix.Bits() {
+				case 8:
+					add(fmt.Sprintf("%d.*", ip[0]))
+				case 16:
+					add(fmt.Sprintf("%d.%d.*", ip[0], ip[1]))
+				case 24:
+					add(fmt.Sprintf("%d.%d.%d.*", ip[0], ip[1], ip[2]))
+				case 32:
+					add(prefix.Addr().String())
+				default:
+					add(entry)
+				}
+				continue
+			}
+			add(entry)
+		}
+	}
+	if len(out) == 0 {
+		return ""
+	}
+	add("<local>")
+	return strings.Join(out, ";")
 }
 
 // Clear turns the user's proxy off.

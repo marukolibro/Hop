@@ -20,9 +20,10 @@ type customRulesFile struct {
 
 // customRuleFile is one rule as kept on disk.
 type customRuleFile struct {
-	Type   string `json:"type"`
-	Value  string `json:"value"`
-	Target string `json:"target"`
+	Type     string `json:"type"`
+	Value    string `json:"value"`
+	Target   string `json:"target"`
+	Disabled bool   `json:"disabled,omitempty"`
 }
 
 // LoadCustomRules returns the rules the user put ahead of every profile's
@@ -42,7 +43,12 @@ func (s *Store) LoadCustomRules() ([]model.CustomRule, error) {
 	}
 	rules := make([]model.CustomRule, 0, len(file.Rules))
 	for _, rule := range file.Rules {
-		rules = append(rules, model.CustomRule{Type: rule.Type, Value: rule.Value, Target: rule.Target})
+		rules = append(rules, model.CustomRule{
+			Type:     rule.Type,
+			Value:    rule.Value,
+			Target:   rule.Target,
+			Disabled: rule.Disabled,
+		})
 	}
 	return rules, nil
 }
@@ -51,7 +57,12 @@ func (s *Store) LoadCustomRules() ([]model.CustomRule, error) {
 func (s *Store) SaveCustomRules(rules []model.CustomRule) error {
 	file := customRulesFile{Rules: make([]customRuleFile, 0, len(rules))}
 	for _, rule := range rules {
-		file.Rules = append(file.Rules, customRuleFile{Type: rule.Type, Value: rule.Value, Target: rule.Target})
+		file.Rules = append(file.Rules, customRuleFile{
+			Type:     rule.Type,
+			Value:    rule.Value,
+			Target:   rule.Target,
+			Disabled: rule.Disabled,
+		})
 	}
 	raw, err := json.Marshal(file)
 	if err != nil {

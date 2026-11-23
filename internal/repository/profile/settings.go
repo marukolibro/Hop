@@ -22,11 +22,13 @@ type settingsFile struct {
 	Appearance              string            `json:"appearance"`
 	Theme                   *model.ColorTheme `json:"theme,omitempty"`
 	DelayTimeoutSeconds     int               `json:"delayTimeoutSeconds"`
+	DelayTestURL            string            `json:"delayTestUrl,omitempty"`
 	SubscriptionUpdateHours *int              `json:"subscriptionUpdateHours,omitempty"`
 	SystemProxy             bool              `json:"systemProxy"`
 	Tun                     bool              `json:"tun"`
 	MenuBarSpeed            *bool             `json:"menuBarSpeed,omitempty"`
 	WindowClarity           *int              `json:"windowClarity,omitempty"`
+	GlobalShortcuts         bool              `json:"globalShortcuts,omitempty"`
 }
 
 // LoadSettings returns the saved settings, and false when none were saved.
@@ -63,11 +65,13 @@ func (s *Store) LoadSettings() (model.Settings, bool, error) {
 		Appearance:              model.Appearance(file.Appearance),
 		Theme:                   theme,
 		DelayTimeoutSeconds:     file.DelayTimeoutSeconds,
+		DelayTestURL:            file.DelayTestURL,
 		SubscriptionUpdateHours: updateHours,
 		SystemProxy:             file.SystemProxy,
 		Tun:                     file.Tun,
 		MenuBarSpeed:            menuBarSpeed,
 		WindowClarity:           windowClarity,
+		GlobalShortcuts:         file.GlobalShortcuts,
 	}, true, nil
 }
 
@@ -79,11 +83,13 @@ func (s *Store) SaveSettings(settings model.Settings) error {
 		Appearance:              string(settings.Appearance),
 		Theme:                   &theme,
 		DelayTimeoutSeconds:     settings.DelayTimeoutSeconds,
+		DelayTestURL:            settings.DelayTestURL,
 		SubscriptionUpdateHours: &updateHours,
 		SystemProxy:             settings.SystemProxy,
 		Tun:                     settings.Tun,
 		MenuBarSpeed:            &menuBarSpeed,
 		WindowClarity:           &windowClarity,
+		GlobalShortcuts:         settings.GlobalShortcuts,
 	})
 	if err != nil {
 		return fmt.Errorf("encode settings: %w", err)

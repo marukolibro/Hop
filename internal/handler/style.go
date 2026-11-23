@@ -82,13 +82,18 @@ const (
 	// a wide window and the row wraps as it narrows; a service's tile on
 	// the services card holds its mark at serviceTileMark with a serviceDot
 	// for its state; the memory bar is statMemoryBar tall.
-	homeCardMinWidth   float32 = 250
-	serviceTileMark    float32 = 24
-	serviceDot         float32 = 9
-	localEditorHeight  float32 = 168
-	sourceSegmentWidth float32 = 88
-	pickerPadX         float32 = 10
-	pickerItemHeight   float32 = 32
+	homeCardMinWidth      float32 = 250
+	serviceTileMark       float32 = 24
+	serviceDot            float32 = 9
+	localEditorHeight     float32 = 168
+	ruleGroupPickerHeight float32 = 186
+	ruleGroupTrayPad      float32 = 6
+	ruleGroupTilePadY     float32 = 7
+	ruleGroupTilePadX     float32 = 9
+	ruleGroupIconSize     float32 = 24
+	sourceSegmentWidth    float32 = 88
+	pickerPadX            float32 = 10
+	pickerItemHeight      float32 = 32
 	// pickerPopupInset evenly insets the menu options.
 	pickerPopupInset float32 = 4
 
@@ -108,16 +113,65 @@ const (
 	// Statistics page: the daily chart's height and top inset, the bars'
 	// corner, the tooltip's padding and line height, and the dot before a
 	// split or legend label.
-	statChartHeight  float32 = 160
-	statChartInset   float32 = 8
-	statBarRadius    float32 = 2
-	statTooltipPadX  float32 = 8
-	statTooltipPadY  float32 = 6
-	statTooltipLine  float32 = 15
-	statDot          float32 = 6
-	statMemoryBar    float32 = 8
-	statMemoryGap    float32 = 3
-	statBarWidthPart float32 = 0.62
+	statChartHeight    float32 = 172
+	statChartInset     float32 = 12
+	statChartYAxisW    float32 = 54
+	statBarMaxWidth    float32 = 34
+	statBarRadius      float32 = 3
+	statTooltipPadX    float32 = 10
+	statTooltipPadY    float32 = 7
+	statTooltipLine    float32 = 16
+	statDot            float32 = 6
+	statMemoryBar      float32 = 8
+	statMemoryGap      float32 = 3
+	statBarWidthPart   float32 = 0.62
+	statRatioBarH      float32 = 5
+	statRankBarH       float32 = 4
+	statSessionPreview         = 6
+
+	// Home spatial horizon layout: centered optical column, compact sky stage,
+	// floating capsule dock straddling the horizon seam, frosted shelf, and
+	// unified floating glass palettes for nodes and subscriptions.
+	homeContentMaxWidth   float32 = 840
+	homeTwoColMinWidth    float32 = 760
+	homeHeaderMetaMinW    float32 = 820
+	homeHorizonGaugeSize  float32 = 80
+	homeHorizonHeight     float32 = 190
+	homeHorizonPadTop     float32 = 10
+	homeHorizonPadBottom  float32 = 36
+	homeDockHeight        float32 = 52
+	homeDockPad           float32 = 6
+	homeDockInnerHeight   float32 = 40
+	homeDockModeHeight    float32 = 34
+	homeDockModeMinWidth  float32 = 66
+	homeDockSepHeight     float32 = 20
+	homeDockSvcMinWidth   float32 = 720
+	homeShelfPadTop       float32 = 22
+	homeShelfGap          float32 = 34
+	homeShelfRowPadY      float32 = 8
+	homeShelfRowPadX      float32 = 10
+	homeShelfRowRadius    float32 = 10
+	homeShelfDotSize      float32 = 6
+	homeInlinePillHeight  float32 = 24
+	homeHeroActionHeight  float32 = 29
+	homeHeaderPillHeight  float32 = 28
+	homeTrafficBarsCount          = 18
+	homeTrafficBarWidth   float32 = 3
+	homeTrafficBarGap     float32 = 3
+	homeTrafficBarHeight  float32 = 18
+	homeTrafficHistoryMax         = 24
+	homePaletteRadius     float32 = 18
+	homePaletteCompactW   float32 = 440
+	homePaletteWideW      float32 = 620
+	homePaletteScrollH    float32 = 340
+	homeSubPaletteScrollH float32 = 290
+	homePalettePad        float32 = 16
+	homePaletteRowRadius  float32 = 12
+	homePaletteSearchW    float32 = 280
+	homeServicesPreview           = 6
+	homeLiveConnsPreview          = 5
+	homeFewNodesLimit             = 4
+	homeGroupsPreview             = 6
 )
 
 // chipHeight is the height of a tile's label line.

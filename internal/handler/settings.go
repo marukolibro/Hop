@@ -36,6 +36,9 @@ func timeoutLabels() []string {
 	return []string{locales.SecondsShort(2), locales.SecondsShort(3), locales.SecondsShort(5)}
 }
 
+// delayTestURLLabels name service.DelayTestURLs, index for index.
+var delayTestURLLabels = []string{"Google", "Cloudflare", "Apple"}
+
 // updateLabels name service.SubscriptionUpdateIntervals, index for index.
 func updateLabels() []string {
 	return []string{locales.Off(), locales.HoursShort(6), locales.HoursShort(12), locales.HoursShort(24)}
@@ -49,6 +52,7 @@ type settingsState struct {
 	languageIndex   int
 	themeIndex      int
 	timeoutIndex    int
+	delayURLIndex   int
 	updateIndex     int
 	// clarity is the slider's value; settings.WindowClarity is the saved int.
 	clarity float64
@@ -64,12 +68,17 @@ func newSettingsState(settings model.Settings) settingsState {
 	if settings.WindowClarity < model.WindowClarityMin || settings.WindowClarity > model.WindowClarityMax {
 		settings.WindowClarity = model.DefaultWindowClarity
 	}
+	delayURLIdx := slices.Index(service.DelayTestURLs, service.DelayTestURL(settings))
+	if delayURLIdx < 0 {
+		delayURLIdx = 0
+	}
 	return settingsState{
 		settings:        settings,
 		appearanceIndex: slices.Index(service.Appearances, settings.Appearance),
 		languageIndex:   slices.Index(service.Languages, settings.Language),
 		themeIndex:      slices.Index(service.ColorThemes, settings.Theme),
 		timeoutIndex:    slices.Index(service.DelayTimeouts, settings.DelayTimeoutSeconds),
+		delayURLIndex:   delayURLIdx,
 		updateIndex:     slices.Index(service.SubscriptionUpdateIntervals, settings.SubscriptionUpdateHours),
 		clarity:         float64(settings.WindowClarity),
 	}
@@ -163,6 +172,15 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 						})
 					})
 				}
+				globalShortcutsRow := func() {
+					show, proxy, mode := shortcutDisplayLabels()
+					settingRow(c, t, locales.SettingsGlobalShortcuts(), locales.SettingsGlobalShortcutsNote(show, proxy, mode), func() {
+						on := s.settings.GlobalShortcuts
+						ui.Switch(c.Key("global-shortcuts"), &on).Label(locales.SettingsGlobalShortcuts()).OnChange(func() {
+							d.setGlobalShortcuts(!s.settings.GlobalShortcuts)
+						})
+					})
+				}
 				terminalProxyRow := func() {
 					settingRow(c, t, locales.SettingsTerminalProxy(), locales.SettingsTerminalProxyNote(), func() {
 						button(c, buttonSpec{label: locales.SettingsCopyCommand(), icon: iconTerminal, style: mainSoftButton(t)}, func() {
@@ -176,6 +194,15 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 						slidingSwitch(c, "timeout", &s.timeoutIndex, timeoutLabels(), pageSwitchStyle(t, 52), func(i int) {
 							next := s.settings
 							next.DelayTimeoutSeconds = service.DelayTimeouts[i]
+							d.saveSettings(next)
+						})
+					})
+				}
+				delayURLRow := func() {
+					settingRow(c, t, locales.SettingsDelayUrl(), locales.SettingsDelayUrlNote(), func() {
+						slidingSwitch(c, "delay-url", &s.delayURLIndex, delayTestURLLabels, pageSwitchStyle(t, 74), func(i int) {
+							next := s.settings
+							next.DelayTestURL = service.DelayTestURLs[i]
 							d.saveSettings(next)
 						})
 					})
@@ -246,8 +273,8 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 				}
 				interfaceRows = append(interfaceRows, languageRow)
 				settingsGroup(c, t, locales.SettingsInterface(), interfaceRows...)
-				settingsGroup(c, t, locales.SettingsStartup(), launchRow, menuBarSpeedRow)
-				settingsGroup(c, t, locales.SettingsNetwork(), d.portRow(c, t), terminalProxyRow, timeoutRow)
+				settingsGroup(c, t, locales.SettingsStartup(), launchRow, menuBarSpeedRow, globalShortcutsRow)
+				settingsGroup(c, t, locales.SettingsNetwork(), d.portRow(c, t), d.proxyBypassRow(c, t), terminalProxyRow, timeoutRow, delayURLRow)
 				settingsGroup(c, t, locales.SettingsLan(), d.lanRows(c, t)...)
 				settingsGroup(c, t, locales.SettingsSubscriptionsRules(), subscriptionUpdateRow, d.geodataRow(c, t))
 				settingsGroup(c, t, locales.SettingsCustomRules(), d.customRulesRows(c, t)...)

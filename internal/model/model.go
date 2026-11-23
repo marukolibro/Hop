@@ -20,7 +20,10 @@ type ProxyGroup struct {
 	Name     string
 	Type     string
 	Selected string
-	Options  []string
+	// Fixed is the manually pinned option on a URLTest or Fallback group, ""
+	// while the group picks automatically.
+	Fixed   string
+	Options []string
 }
 
 // Snapshot is the core's groups, in the order the profile declares them,
@@ -125,13 +128,23 @@ type TrafficSourceView struct {
 	Split TrafficSplit
 }
 
+// TrafficEntryView is one app's or exit node's traffic during the current run.
+// Session entries live in memory only and are never persisted to disk.
+type TrafficEntryView struct {
+	Name   string
+	Direct bool
+	Split  TrafficSplit
+}
+
 // TrafficView is what the statistics page shows: today, this month, the last
-// thirty days and this month per source.
+// thirty days, this month per source, and in-memory session rankings.
 type TrafficView struct {
-	Today   TrafficSplit
-	Month   TrafficSplit
-	Days    []TrafficDayView
-	Sources []TrafficSourceView
+	Today        TrafficSplit
+	Month        TrafficSplit
+	Days         []TrafficDayView
+	Sources      []TrafficSourceView
+	SessionApps  []TrafficEntryView
+	SessionNodes []TrafficEntryView
 }
 
 // Download is what a provider returned for a subscription link: the Clash
@@ -349,6 +362,7 @@ type GroupView struct {
 	Label      string
 	Type       string
 	Selected   string
+	Fixed      string
 	Selectable bool
 	// Kind is what the group is for, one of the GroupKind constants.
 	Kind string
@@ -603,6 +617,9 @@ type Settings struct {
 	Theme ColorTheme
 	// DelayTimeoutSeconds is how long a delay test waits for one node.
 	DelayTimeoutSeconds int
+	// DelayTestURL is the HTTP endpoint used for delay probes; empty means
+	// the default lightweight 204 endpoint.
+	DelayTestURL string
 	// SubscriptionUpdateHours is how often stored subscriptions refresh on
 	// their own; 0 leaves them to the manual refresh.
 	SubscriptionUpdateHours int
@@ -615,6 +632,9 @@ type Settings struct {
 	Tun bool
 	// MenuBarSpeed shows the live speed beside the menu bar mark.
 	MenuBarSpeed bool
+	// GlobalShortcuts registers system-wide hotkeys for toggling the window,
+	// system proxy, and outbound mode. Off by default.
+	GlobalShortcuts bool
 	// AllowLAN lets other devices on the network use Hop's proxy port.
 	AllowLAN bool
 	// LANNoPassword lets them in without an account; the zero value asks for
@@ -661,10 +681,51 @@ const (
 )
 
 // CustomRule is one rule the user puts ahead of a profile's own rules.
+// Disabled rules stay stored but are omitted from the generated core config.
 type CustomRule struct {
-	Type   string
-	Value  string
-	Target string
+	Type     string
+	Value    string
+	Target   string
+	Disabled bool
+}
+
+// Provider kinds reported by the core.
+const (
+	ProviderKindProxy = "proxy"
+	ProviderKindRule  = "rule"
+)
+
+// ActiveRule is one live routing rule evaluated by the core, in order.
+type ActiveRule struct {
+	Index    int
+	Type     string
+	Payload  string
+	Proxy    string
+	Size     int
+	Disabled bool
+	HitCount uint64
+}
+
+// ProviderSummary describes one external proxy-provider or rule-provider
+// loaded by the core.
+type ProviderSummary struct {
+	Kind        string
+	Name        string
+	VehicleType string
+	Behavior    string
+	Count       int
+	UpdatedAt   time.Time
+}
+
+// RuleDiagnostic is the offline match result for a domain or IP query against
+// the core's active rule list.
+type RuleDiagnostic struct {
+	Query          string
+	Matched        bool
+	Rule           ActiveRule
+	Chain          []string
+	Exit           string
+	SkippedDynamic int
 }
 
 // GeodataStatus is what the settings page shows of the geo databases the

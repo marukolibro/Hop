@@ -64,6 +64,11 @@ func shotDashboard(n shotNames, page int) *Dashboard {
 	d.sysProxy = sysProxyState{loaded: true, on: true, status: model.SystemProxyStatus{Owner: model.ProxyOwnerHop}}
 	d.home = homeState{point: model.GeoPoint{Lon: 121.47, Lat: 31.23}, known: true}
 	d.last = model.Traffic{Down: 2457000, Up: 88000}
+	d.trafficHistory = []int64{
+		320000, 480000, 740000, 620000, 1120000, 1580000, 1340000, 920000,
+		1460000, 1980000, 2650000, 2120000, 1780000, 2240000, 2890000, 2457000,
+	}
+	d.peakDown = 2890000
 	d.memory, d.memoryKnown = model.Memory{App: 92 << 20, Core: 64 << 20}, true
 	d.rules.loaded = true
 	d.proxyHost = "127.0.0.1"
@@ -110,10 +115,15 @@ func shotDashboard(n shotNames, page int) *Dashboard {
 	d.view = service.BuildView(snap, model.ModeRule, n.main)
 	d.activeGroup = n.main
 	d.exitIP = exitIPState{status: exitIPReady, ip: model.ExitIP{Address: netip.MustParseAddr("203.0.113.42"), Country: "SG"}}
-	d.subscription = subscriptionsState{loaded: true, activeChoice: "a", view: model.SubscriptionsView{ActiveID: "a", Items: []model.SubscriptionSummary{{
-		ID: "a", Name: n.provider, Source: model.SourceRemote, Host: "example.com", Rules: model.RulesHop,
-		HasUsage: true, Usage: model.Usage{Download: 160 << 30, Total: 500 << 30, Expire: time.Now().AddDate(0, 0, 124)},
-	}}}}
+	d.subscription = subscriptionsState{loaded: true, activeChoice: "a", view: model.SubscriptionsView{ActiveID: "a", Items: []model.SubscriptionSummary{
+		{
+			ID: "a", Name: n.provider, Source: model.SourceRemote, Host: "example.com", Rules: model.RulesHop,
+			HasUsage: true, Usage: model.Usage{Download: 160 << 30, Total: 500 << 30, Expire: time.Now().AddDate(0, 0, 124)},
+		},
+		{
+			ID: "b", Name: "vps", Source: model.SourceLocal, Rules: model.RulesProvider,
+		},
+	}}}
 	d.unlock.services.results = map[model.UnlockService]model.UnlockResult{}
 	for i, s := range model.UnlockServices {
 		d.unlock.services.results[s] = model.UnlockResult{Service: s, State: model.UnlockAvailable, Region: "SG", Latency: time.Duration(120+i*20) * time.Millisecond}
@@ -122,6 +132,41 @@ func shotDashboard(n shotNames, page int) *Dashboard {
 	d.connections.data = shotConnections(n)
 	d.logs.entries = shotLogs()
 	d.stats = shotStats(n)
+	return d
+}
+
+// shotVPS builds a compact 1-node or 2-node local VPS dashboard with Apple
+// and Microsoft routing groups to verify the adaptive shelf tiers.
+func shotVPS(n shotNames, twoNodes bool) *Dashboard {
+	d := shotDashboard(n, pageNodes)
+	n1, n2 := "🇺🇸 "+n.us+" vps-1", "🇺🇸 "+n.us+" vps-2"
+	options := []string{n1}
+	selected := n1
+	delays := map[string]int{n1: 132}
+	facts := map[string]model.ProxyFacts{n1: {Protocol: "Vless", UDP: true}}
+	if twoNodes {
+		options = []string{n2, n1}
+		selected = n2
+		delays[n2] = 132
+		delays[n1] = 169
+		facts[n2] = model.ProxyFacts{Protocol: "Vless", UDP: true}
+	}
+	snap := model.Snapshot{
+		Groups: []model.ProxyGroup{
+			{Name: n.main, Type: model.GroupSelector, Selected: selected, Options: options},
+			{Name: "Apple", Type: model.GroupSelector, Selected: "DIRECT", Options: []string{"DIRECT", n.main}},
+			{Name: "Microsoft", Type: model.GroupSelector, Selected: "DIRECT", Options: []string{"DIRECT", n.main}},
+		},
+		Delays: delays,
+		Facts:  facts,
+	}
+	d.view = service.BuildView(snap, model.ModeRule, n.main)
+	d.activeGroup = n.main
+	d.subscription.view.ActiveID = "b"
+	d.subscription.activeChoice = "b"
+	d.tun.on = true
+	d.sysProxy.on = false
+	d.exitIP = exitIPState{status: exitIPReady, ip: model.ExitIP{Address: netip.MustParseAddr("198.51.100.24"), Country: "JP"}}
 	return d
 }
 
@@ -160,9 +205,23 @@ func shotStats(n shotNames) model.TrafficView {
 		Today: model.TrafficSplit{ProxyDown: 700 << 20, ProxyUp: 45 << 20, DirectDown: 2 << 30, DirectUp: 80 << 20},
 		Month: model.TrafficSplit{ProxyDown: 46 << 30, ProxyUp: 3 << 30, DirectDown: 27 << 30, DirectUp: 1700 << 20},
 		Days:  days,
-		Sources: []model.TrafficSourceView{{ID: "a", Name: n.provider, Split: model.TrafficSplit{
-			ProxyDown: 46 << 30, ProxyUp: 3 << 30,
-		}}},
+		Sources: []model.TrafficSourceView{
+			{ID: "a", Name: n.provider, Split: model.TrafficSplit{ProxyDown: 46 << 30, ProxyUp: 3 << 30, DirectDown: 18 << 30, DirectUp: 1 << 30}},
+			{ID: "b", Name: "vps", Split: model.TrafficSplit{ProxyDown: 1840 << 20, ProxyUp: 110 << 20}},
+		},
+		SessionApps: []model.TrafficEntryView{
+			{Name: "Google Chrome", Split: model.TrafficSplit{ProxyDown: 420 << 20, ProxyUp: 28 << 20, DirectDown: 180 << 20, DirectUp: 12 << 20}},
+			{Name: "Cursor", Split: model.TrafficSplit{ProxyDown: 215 << 20, ProxyUp: 34 << 20}},
+			{Name: "git", Split: model.TrafficSplit{ProxyDown: 148 << 20, ProxyUp: 18 << 20}},
+			{Name: "Telegram", Split: model.TrafficSplit{ProxyDown: 96 << 20, ProxyUp: 14 << 20}},
+			{Name: "Slack", Split: model.TrafficSplit{ProxyDown: 62 << 20, ProxyUp: 9 << 20}},
+		},
+		SessionNodes: []model.TrafficEntryView{
+			{Name: "🇸🇬 " + n.sg + " 01|IEPL", Split: model.TrafficSplit{ProxyDown: 640 << 20, ProxyUp: 68 << 20}},
+			{Name: "🇯🇵 " + n.jp + " 01|IEPL", Split: model.TrafficSplit{ProxyDown: 210 << 20, ProxyUp: 22 << 20}},
+			{Name: "DIRECT", Direct: true, Split: model.TrafficSplit{DirectDown: 180 << 20, DirectUp: 12 << 20}},
+			{Name: "🇭🇰 " + n.hk + " 01|IEPL", Split: model.TrafficSplit{ProxyDown: 91 << 20, ProxyUp: 13 << 20}},
+		},
 	}
 }
 
@@ -253,6 +312,14 @@ func TestShots(t *testing.T) {
 			shotRender(t, filepath.Join(dir, name+"-"+scheme+".png"), func(c *ui.Context) { d.View(c) }, dark, width, height, true)
 		}
 		window("nodes", pageNodes, nil)
+		vps2 := shotVPS(names, true)
+		shotRender(t, filepath.Join(dir, "nodes-vps2-"+scheme+".png"), func(c *ui.Context) { vps2.View(c) }, dark, width, height, true)
+		vps1 := shotVPS(names, false)
+		shotRender(t, filepath.Join(dir, "nodes-vps1-"+scheme+".png"), func(c *ui.Context) { vps1.View(c) }, dark, width, height, true)
+		window("node-picker", pageNodes, func(d *Dashboard) { d.nodePickerOpen = true })
+		window("sub-picker", pageNodes, func(d *Dashboard) { d.subPickerOpen = true })
+		narrow := shotVPS(names, true)
+		shotRender(t, filepath.Join(dir, "nodes-narrow-"+scheme+".png"), func(c *ui.Context) { narrow.View(c) }, dark, 700, height, true)
 		manual := shotManualRoute(names)
 		shotRender(t, filepath.Join(dir, "nodes-manual-"+scheme+".png"), func(c *ui.Context) { manual.View(c) }, dark, width, height, true)
 		// Only the Hack theme has a node list of its own.
@@ -261,9 +328,27 @@ func TestShots(t *testing.T) {
 		}
 		window("connections", pageActivity, nil)
 		window("activity-log", pageActivity, func(d *Dashboard) { d.activity = activityLog })
+		window("activity-rules", pageActivity, func(d *Dashboard) {
+			d.activity = activityRules
+			d.ruleInspect.loaded = true
+			d.ruleInspect.diagnose = "api.openai.com"
+			d.ruleInspect.rules = []model.ActiveRule{
+				{Index: 0, Type: "GeoSite", Payload: "private", Proxy: "DIRECT"},
+				{Index: 1, Type: "DomainSuffix", Payload: "openai.com", Proxy: names.ai, HitCount: 42},
+				{Index: 2, Type: "GeoSite", Payload: "youtube", Proxy: names.streaming, HitCount: 18},
+				{Index: 3, Type: "GeoSite", Payload: "cn", Proxy: "DIRECT", HitCount: 120},
+				{Index: 4, Type: "Match", Payload: "", Proxy: names.main, HitCount: 9},
+			}
+		})
 		window("stats", pageStats, nil)
 		window("settings", pageSettings, nil)
 		window("add-rule", pageActivity, func(d *Dashboard) { d.openRuleEditorFor(d.connections.data.Active[2]) })
+		window("add-rule-group", pageSettings, func(d *Dashboard) {
+			d.openRuleEditor()
+			d.rules.editor.value = "claude.ai"
+			d.rules.editor.targetIndex = len(service.CustomRuleTargets)
+			d.rules.editor.customTarget = names.ai
+		})
 		window("tun-install", pageNodes, func(d *Dashboard) { d.tun.installOpen = true })
 
 		// The panel is as tall as its content, which it reports once drawn.

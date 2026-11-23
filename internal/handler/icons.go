@@ -43,6 +43,8 @@ var (
 	iconTarget       = parseIcon(`<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>`)
 	iconChevron      = parseIcon(`<path d="m6 9 6 6 6-6"/>`)
 	iconChevronRight = parseIcon(`<path d="m9 6 6 6-6 6"/>`)
+	iconArrowUp      = parseIcon(`<path d="m18 15-6-6-6 6"/>`)
+	iconArrowDown    = parseIcon(`<path d="m6 9 6 6 6-6"/>`)
 	iconCopy         = parseIcon(`<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15"/>`)
 	iconLaptop       = parseIcon(`<rect x="5" y="5" width="14" height="10" rx="2"/><path d="M3 19h18"/>`)
 	iconMemory       = parseIcon(`<rect x="7" y="7" width="10" height="10" rx="2"/><path d="M9.5 4v3M14.5 4v3M9.5 17v3M14.5 17v3M4 9.5h3M4 14.5h3M17 9.5h3M17 14.5h3"/>`)

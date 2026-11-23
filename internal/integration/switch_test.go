@@ -65,6 +65,7 @@ proxies:
   - {name: "node-b", type: http, server: 127.0.0.1, port: %d}
 proxy-groups:
   - {name: "Proxy", type: select, proxies: ["node-a", "node-b"]}
+  - {name: "Auto", type: url-test, proxies: ["node-a", "node-b"], url: "http://127.0.0.1:1", interval: 300, lazy: true}
 rules:
   - MATCH,Proxy
 `, holdingNode(t), holdingNode(t))
@@ -150,5 +151,43 @@ rules:
 	}
 	if open() {
 		t.Fatal("switching to node-b left the connection open on node-a")
+	}
+
+	// Pinning a URLTest group switches its active node and sets Fixed; Reset
+	// clears Fixed back to automatic selection.
+	if err := proxies.Select(ctx, "Auto", "node-b"); err != nil {
+		t.Fatalf("pin Auto to node-b: %v", err)
+	}
+	view, err := proxies.View(ctx, 1)
+	if err != nil {
+		t.Fatalf("read view after pinning Auto: %v", err)
+	}
+	var autoGroup model.GroupView
+	for _, g := range view.Groups {
+		if g.Name == "Auto" {
+			autoGroup = g
+			break
+		}
+	}
+	if !autoGroup.Selectable || autoGroup.Selected != "node-b" || autoGroup.Fixed != "node-b" {
+		t.Fatalf("pinned Auto group = {Selectable:%v Selected:%q Fixed:%q}, want {true, node-b, node-b}", autoGroup.Selectable, autoGroup.Selected, autoGroup.Fixed)
+	}
+	if err := proxies.Reset(ctx, "Auto"); err != nil {
+		t.Fatalf("reset Auto: %v", err)
+	}
+	if err := proxies.FlushDNSCache(ctx); err != nil {
+		t.Fatalf("flush core DNS cache: %v", err)
+	}
+	view, err = proxies.View(ctx, 1)
+	if err != nil {
+		t.Fatalf("read view after resetting Auto: %v", err)
+	}
+	for _, g := range view.Groups {
+		if g.Name == "Auto" {
+			if g.Fixed != "" {
+				t.Fatalf("reset Auto Fixed = %q, want empty", g.Fixed)
+			}
+			break
+		}
 	}
 }
