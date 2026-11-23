@@ -12,9 +12,11 @@ import (
 // The theme provides a stable colored backdrop above native vibrancy; the
 // veil is painted above it, keeping all text and controls sharp.
 const (
-	// flyoutLineDark is the flyout's hairline over its panel material in the
-	// dark appearance.
-	flyoutLineDark float32 = 0.16
+	// flyoutLineDark/Light are the flyout's hairlines over native vibrancy:
+	// translucent white in dark appearance and translucent black in light
+	// appearance so separators blend cleanly over any wallpaper.
+	flyoutLineDark  float32 = 0.16
+	flyoutLineLight float32 = 0.10
 	// heroFaceAngle runs the hero's tint from the top left corner; heroTintNear
 	// and heroTintFar are how much accent the gradient carries at its ends.
 	heroFaceAngle          float32 = 115
@@ -197,14 +199,14 @@ func heroFace(t *ui.Theme, panel ui.Color) ui.LinearGradient {
 	return ui.LinearGradient{Angle: heroFaceAngle, From: panel.Mix(t.Accent, heroTintNear), To: panel.Mix(t.Accent, heroTintFar)}
 }
 
-// flyoutLine is the flyout's hairline over its panel material: in the dark
-// appearance the palette's opaque navy border would be a black frame on the
-// grey material, so a translucent light line takes its place.
+// flyoutLine is the flyout's hairline over its panel material: translucent
+// white in dark appearance and translucent black in light appearance so
+// separators and borders do not glare over macOS vibrancy.
 func flyoutLine(t *ui.Theme) ui.Color {
 	if t.Dark {
 		return ui.RGBA(255, 255, 255, flyoutLineDark)
 	}
-	return t.Border
+	return ui.RGBA(0, 0, 0, flyoutLineLight)
 }
 
 func sidebarFill(t *ui.Theme) ui.Color {
