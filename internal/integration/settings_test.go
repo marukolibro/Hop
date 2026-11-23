@@ -37,9 +37,22 @@ func TestColorThemeSettings(t *testing.T) {
 	if settings.Theme != model.ThemeOcean || settings.WindowClarity != 23 || settings.SubscriptionUpdateHours != 6 {
 		t.Fatalf("legacy settings were not preserved: %+v", settings)
 	}
-	settings.Theme = model.ThemeDusk
-	if err := settingsService.Save(settings); err != nil {
-		t.Fatal(err)
+	for _, theme := range service.ColorThemes {
+		settings.Theme = theme
+		if err := settingsService.Save(settings); err != nil {
+			t.Fatalf("save theme %q: %v", theme, err)
+		}
+		reopened, err := profile.NewStore(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		saved, err := service.NewSettingsService(reopened).Load()
+		if err != nil {
+			t.Fatalf("load theme %q: %v", theme, err)
+		}
+		if saved != settings {
+			t.Fatalf("settings after reopen for %q: %+v, want %+v", theme, saved, settings)
+		}
 	}
 	reopened, err := profile.NewStore(dir)
 	if err != nil {
@@ -48,9 +61,6 @@ func TestColorThemeSettings(t *testing.T) {
 	saved, err := service.NewSettingsService(reopened).Load()
 	if err != nil {
 		t.Fatal(err)
-	}
-	if saved != settings {
-		t.Fatalf("settings after reopen: %+v, want %+v", saved, settings)
 	}
 	invalid := saved
 	invalid.Theme = model.ColorTheme("unsupported")

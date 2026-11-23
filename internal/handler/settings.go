@@ -26,9 +26,26 @@ func languageLabels() []string {
 	return []string{locales.FollowSystem(), i18n.Autonym(string(model.LanguageChinese)), i18n.Autonym(string(model.LanguageEnglish))}
 }
 
-// colorThemeLabels name service.ColorThemes, index for index.
-func colorThemeLabels() []string {
-	return []string{locales.ThemeOcean(), locales.ThemeDusk(), locales.ThemePaper(), locales.ThemeHack()}
+// colorThemeLabel returns the localized name of one color theme.
+func colorThemeLabel(theme model.ColorTheme) string {
+	switch theme {
+	case model.ThemeDusk:
+		return locales.ThemeDusk()
+	case model.ThemeForest:
+		return locales.ThemeForest()
+	case model.ThemeAmber:
+		return locales.ThemeAmber()
+	case model.ThemeRose:
+		return locales.ThemeRose()
+	case model.ThemeSlate:
+		return locales.ThemeSlate()
+	case model.ThemePaper:
+		return locales.ThemePaper()
+	case model.ThemeHack:
+		return locales.ThemeHack()
+	default:
+		return locales.ThemeOcean()
+	}
 }
 
 // timeoutLabels name service.DelayTimeouts, index for index.
@@ -50,7 +67,6 @@ type settingsState struct {
 	settings        model.Settings
 	appearanceIndex int
 	languageIndex   int
-	themeIndex      int
 	timeoutIndex    int
 	delayURLIndex   int
 	updateIndex     int
@@ -76,7 +92,6 @@ func newSettingsState(settings model.Settings) settingsState {
 		settings:        settings,
 		appearanceIndex: slices.Index(service.Appearances, settings.Appearance),
 		languageIndex:   slices.Index(service.Languages, settings.Language),
-		themeIndex:      slices.Index(service.ColorThemes, settings.Theme),
 		timeoutIndex:    slices.Index(service.DelayTimeouts, settings.DelayTimeoutSeconds),
 		delayURLIndex:   delayURLIdx,
 		updateIndex:     slices.Index(service.SubscriptionUpdateIntervals, settings.SubscriptionUpdateHours),
@@ -208,12 +223,12 @@ func (d *Dashboard) settingsPage(c *ui.Context, t *ui.Theme) {
 					})
 				}
 				themeRow := func() {
-					settingRow(c, t, locales.SettingsTheme(), locales.SettingsThemeNote(), func() {
-						slidingSwitch(c, "color-theme", &s.themeIndex, colorThemeLabels(), pageSwitchStyle(t, themeSegmentWidth), func(i int) {
-							next := s.settings
-							next.Theme = service.ColorThemes[i]
-							d.saveSettings(next)
+					ui.Column(c.Key("color-theme")).Gap(gapMedium).Children(func() {
+						ui.Column(c).Gap(gapLine).Children(func() {
+							ui.Text(c, locales.SettingsTheme()).FontSize(fontBody).FontWeight(weightMedium)
+							mutedText(c, t, locales.SettingsThemeNote())
 						})
+						d.themePicker(c, t)
 					})
 				}
 				appearanceRow := func() {
@@ -316,6 +331,97 @@ func settingRow(c *ui.Context, t *ui.Theme, label string, note string, control f
 			}
 		})
 		control()
+	})
+}
+
+// themePicker lays out all offered themes in balanced rows of swatch cards so
+// each option previews its palette colors without wrapping into awkward orphans.
+func (d *Dashboard) themePicker(c *ui.Context, t *ui.Theme) {
+	themes := service.ColorThemes
+	ui.Column(c.Key("theme-picker")).Gap(gapSmall).Children(func() {
+		for start := 0; start < len(themes); start += themePickerCols {
+			end := min(start+themePickerCols, len(themes))
+			ui.Row(c.Key(start)).Gap(gapSmall).Children(func() {
+				for _, theme := range themes[start:end] {
+					d.themeSwatchButton(c, t, theme)
+				}
+			})
+		}
+	})
+}
+
+// themeSwatchButton is one interactive theme tile showing a two-stop gradient
+// preview orb, the theme name, and an active check mark when selected.
+func (d *Dashboard) themeSwatchButton(c *ui.Context, t *ui.Theme, theme model.ColorTheme) {
+	selected := d.settings.settings.Theme == theme
+	label := colorThemeLabel(theme)
+	b := ui.ButtonBase(c.Key(string(theme))).Label(label).
+		Grow(1).Basis(0).Height(themeChipHeight).Padding(0, themeChipPadX).Gap(gapSmall).
+		Justify(ui.Start).Radius(themeChipRadius).Cursor(ui.CursorPointer)
+
+	var fill, border ui.Color
+	switch {
+	case selected && onGlass(t):
+		fill = glassButton(t).Mix(t.Accent, 0.16)
+		border = glassSelectedBorder(t)
+	case selected:
+		fill = t.Accent.Alpha(0.12)
+		border = t.Accent
+	case b.Hovered() && onGlass(t):
+		fill = glassButton(t)
+		border = glassStrongLine(t)
+	case b.Hovered():
+		fill = t.Text.Alpha(softHoverAlpha)
+		border = t.Border
+	case onGlass(t):
+		fill = glassFill(t, glassTrackAlpha)
+		border = t.Border
+	default:
+		fill = t.Text.Alpha(softFillAlpha)
+		border = t.Border
+	}
+
+	ink := t.Text.Alpha(0.82)
+	weight := weightMedium
+	if selected {
+		ink = t.Text
+		weight = weightSemibold
+	} else if b.Hovered() {
+		ink = t.Text
+	}
+
+	b.Background(b.AnimateColor("fill", fill, ui.Smooth)).
+		Border(hairlineWidth, b.AnimateColor("border", border, ui.Smooth))
+
+	scale := float32(1)
+	if b.Pressed() {
+		scale = pressedScale
+	}
+	b.AnimatePose(ui.Pose{Scale: scale}, ui.Snappy)
+
+	b.OnClick(func() {
+		if d.settings.settings.Theme != theme {
+			next := d.settings.settings
+			next.Theme = theme
+			d.saveSettings(next)
+		}
+	})
+
+	from, to := themeSwatchColors(theme)
+	orbRing := ui.RGBA(0, 0, 0, 0.14)
+	if t.Dark {
+		orbRing = ui.RGBA(255, 255, 255, 0.24)
+	}
+	b.Children(func() {
+		ui.Box(c).Width(themeOrbSize).Height(themeOrbSize).Shrink(0).Radius(themeOrbSize/2).
+			LinearGradient(ui.LinearGradient{Angle: themeSwatchAngle, From: from, To: to}).
+			Border(hairlineWidth, orbRing)
+		ui.Text(c, label).FontSize(fontSecondary).FontWeight(weight).
+			TextColor(b.AnimateColor("ink", ink, ui.Smooth)).
+			Grow(1).NoWrap().Translate(0, -opticalLift)
+		if selected {
+			ui.Icon(c, iconCheck).Width(iconInline).Height(iconInline).Shrink(0).TextColor(accentInk(t))
+		}
 	})
 }
 

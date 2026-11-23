@@ -28,14 +28,14 @@ type windowMaterialPalette struct {
 
 // materialPalette resolves one validated theme and appearance into colors.
 func materialPalette(dark bool, theme model.ColorTheme) windowMaterialPalette {
-	if theme == model.ThemeHack {
+	switch theme {
+	case model.ThemeHack:
 		return windowMaterialPalette{
 			base: hackBase, ink: hackInk, muted: hackMuted, accent: hackAccent,
 			sky: hackSurface, fold: hackSurface, glow: hackSurface,
 			hack: true, dark: true,
 		}
-	}
-	if theme == model.ThemePaper {
+	case model.ThemePaper:
 		// Neutral grey sheet, near-black ink and one blue accent. The greys carry
 		// no hue, so every region of the window reads as the same paper. sky is
 		// the slightly deeper tone of the sidebar and the node area.
@@ -51,30 +51,102 @@ func materialPalette(dark bool, theme model.ColorTheme) windowMaterialPalette {
 			sky: ui.Hex("#DDDDDD"), fold: ui.Hex("#EDEDED"), glow: ui.Hex("#EDEDED"),
 			paper: true,
 		}
-	}
-	if theme == model.ThemeDusk {
+	case model.ThemeDusk:
 		if dark {
 			return windowMaterialPalette{
 				base: ui.Hex("#151D2F"), ink: ui.Hex("#F0F4FC"), muted: ui.Hex("#B7C5DC"), accent: accentDark,
 				sky: ui.Hex("#625380"), fold: ui.Hex("#886482"), glow: ui.Hex("#454164"),
+				dark: true,
 			}
 		}
 		return windowMaterialPalette{
 			base: ui.Hex("#FFFFFF"), ink: ui.Hex("#1D2B43"), muted: ui.Hex("#4C5A6F"), accent: accentLight,
 			sky: ui.Hex("#B9B0DF"), fold: ui.Hex("#ECC8D4"), glow: ui.Hex("#E7D7EB"),
 		}
-	}
-	if dark {
+	case model.ThemeForest:
+		if dark {
+			return windowMaterialPalette{
+				base: ui.Hex("#111F1B"), ink: ui.Hex("#EDF7F3"), muted: ui.Hex("#A7C2B8"), accent: ui.Hex("#5DD9AC"),
+				sky: ui.Hex("#2A5B4B"), fold: ui.Hex("#445B3F"), glow: ui.Hex("#1B3E35"),
+				dark: true,
+			}
+		}
 		return windowMaterialPalette{
-			base: ui.Hex("#151D2F"), ink: ui.Hex("#F0F4FC"), muted: ui.Hex("#B7C5DC"), accent: accentDark,
-			sky: ui.Hex("#3C5C8D"), fold: ui.Hex("#686091"), glow: ui.Hex("#243D64"),
-			sea: true, dark: true,
+			base: ui.Hex("#FFFFFF"), ink: ui.Hex("#172B24"), muted: ui.Hex("#496359"), accent: ui.Hex("#18795B"),
+			sky: ui.Hex("#A6D9C4"), fold: ui.Hex("#CFE5C2"), glow: ui.Hex("#D4EEE6"),
+		}
+	case model.ThemeAmber:
+		if dark {
+			return windowMaterialPalette{
+				base: ui.Hex("#221814"), ink: ui.Hex("#FAF2EC"), muted: ui.Hex("#CEB8AB"), accent: ui.Hex("#F6A868"),
+				sky: ui.Hex("#7C4B30"), fold: ui.Hex("#7E454D"), glow: ui.Hex("#4B2E22"),
+				dark: true,
+			}
+		}
+		return windowMaterialPalette{
+			base: ui.Hex("#FFFFFF"), ink: ui.Hex("#2E1F16"), muted: ui.Hex("#6C5649"), accent: ui.Hex("#C05A24"),
+			sky: ui.Hex("#F2C9A0"), fold: ui.Hex("#F0B8B0"), glow: ui.Hex("#F9E3C6"),
+		}
+	case model.ThemeRose:
+		if dark {
+			return windowMaterialPalette{
+				base: ui.Hex("#21151D"), ink: ui.Hex("#FAF0F5"), muted: ui.Hex("#CBB2C0"), accent: ui.Hex("#F48FB6"),
+				sky: ui.Hex("#6F3E58"), fold: ui.Hex("#5A3E6B"), glow: ui.Hex("#412336"),
+				dark: true,
+			}
+		}
+		return windowMaterialPalette{
+			base: ui.Hex("#FFFFFF"), ink: ui.Hex("#2E1A24"), muted: ui.Hex("#6E505E"), accent: ui.Hex("#B8426E"),
+			sky: ui.Hex("#ECC0D3"), fold: ui.Hex("#DEC4E8"), glow: ui.Hex("#F8DFEA"),
+		}
+	case model.ThemeSlate:
+		if dark {
+			return windowMaterialPalette{
+				base: ui.Hex("#14161A"), ink: ui.Hex("#F1F3F6"), muted: ui.Hex("#9BA3B0"), accent: ui.Hex("#B8C4D6"),
+				sky: ui.Hex("#3D434F"), fold: ui.Hex("#4A4F5A"), glow: ui.Hex("#272B33"),
+				dark: true,
+			}
+		}
+		return windowMaterialPalette{
+			base: ui.Hex("#FFFFFF"), ink: ui.Hex("#181B20"), muted: ui.Hex("#58606E"), accent: ui.Hex("#3F4B5C"),
+			sky: ui.Hex("#C8CFD9"), fold: ui.Hex("#D9DDE3"), glow: ui.Hex("#E6E9EE"),
+		}
+	default:
+		if dark {
+			return windowMaterialPalette{
+				base: ui.Hex("#151D2F"), ink: ui.Hex("#F0F4FC"), muted: ui.Hex("#B7C5DC"), accent: accentDark,
+				sky: ui.Hex("#3C5C8D"), fold: ui.Hex("#686091"), glow: ui.Hex("#243D64"),
+				sea: true, dark: true,
+			}
+		}
+		return windowMaterialPalette{
+			base: ui.Hex("#FFFFFF"), ink: ui.Hex("#1D2B43"), muted: ui.Hex("#4C5A6F"), accent: accentLight,
+			sky: ui.Hex("#9FBCEF"), fold: ui.Hex("#C3C8EF"), glow: ui.Hex("#CBDCFA"),
+			sea: true,
 		}
 	}
-	return windowMaterialPalette{
-		base: ui.Hex("#FFFFFF"), ink: ui.Hex("#1D2B43"), muted: ui.Hex("#4C5A6F"), accent: accentLight,
-		sky: ui.Hex("#9FBCEF"), fold: ui.Hex("#C3C8EF"), glow: ui.Hex("#CBDCFA"),
-		sea: true,
+}
+
+// themeSwatchColors returns the two-stop gradient colors for a theme's preview
+// orb in the settings picker.
+func themeSwatchColors(theme model.ColorTheme) (ui.Color, ui.Color) {
+	switch theme {
+	case model.ThemeDusk:
+		return ui.Hex("#B9B0DF"), ui.Hex("#886482")
+	case model.ThemeForest:
+		return ui.Hex("#5DD9AC"), ui.Hex("#2A5B4B")
+	case model.ThemeAmber:
+		return ui.Hex("#F6A868"), ui.Hex("#7E454D")
+	case model.ThemeRose:
+		return ui.Hex("#F48FB6"), ui.Hex("#6F3E58")
+	case model.ThemeSlate:
+		return ui.Hex("#C8CFD9"), ui.Hex("#3D434F")
+	case model.ThemePaper:
+		return ui.Hex("#F4F4F4"), ui.Hex("#9CA3AF")
+	case model.ThemeHack:
+		return hackAccent, ui.Hex("#0A1A0C")
+	default:
+		return ui.Hex("#6CB8FF"), ui.Hex("#3C5C8D")
 	}
 }
 

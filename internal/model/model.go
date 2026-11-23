@@ -589,9 +589,13 @@ const (
 type ColorTheme string
 
 const (
-	ThemeOcean ColorTheme = "ocean"
-	ThemeDusk  ColorTheme = "dusk"
-	ThemePaper ColorTheme = "paper"
+	ThemeOcean  ColorTheme = "ocean"
+	ThemeDusk   ColorTheme = "dusk"
+	ThemeForest ColorTheme = "forest"
+	ThemeAmber  ColorTheme = "amber"
+	ThemeRose   ColorTheme = "rose"
+	ThemeSlate  ColorTheme = "slate"
+	ThemePaper  ColorTheme = "paper"
 	// ThemeHack is one fixed dark look, drawn the same on every platform:
 	// appearance and window clarity do not apply to it.
 	ThemeHack ColorTheme = "hack"

@@ -42,7 +42,14 @@ const (
 	// wide window.
 	pageContentWidth float32 = 640
 
-	themeSegmentWidth float32 = 72
+	// Theme swatch picker tiles in Settings: four columns across two balanced
+	// rows, each showing a circular two-stop color orb and the theme name.
+	themeChipHeight  float32 = 38
+	themeChipRadius  float32 = 10
+	themeChipPadX    float32 = 11
+	themeOrbSize     float32 = 18
+	themePickerCols          = 4
+	themeSwatchAngle float32 = 135
 	// languageSegmentWidth fits the longest language name, in its own script.
 	languageSegmentWidth float32 = 88
 

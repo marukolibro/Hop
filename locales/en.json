@@ -755,10 +755,14 @@
       }
     }
   },
+  "themeAmber": "Amber",
   "themeDusk": "Dusk",
+  "themeForest": "Forest",
   "themeHack": "Hack",
   "themeOcean": "Ocean",
   "themePaper": "Paper",
+  "themeRose": "Rose",
+  "themeSlate": "Slate",
   "tun": "TUN",
   "tunDialogTitle": "Turn on TUN",
   "tunHint": "Takes over all traffic, including terminals and games",

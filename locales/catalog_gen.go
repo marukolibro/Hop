@@ -3884,6 +3884,16 @@ func (msgs Messages) SystemProxyTaken(owner string) string {
 	return Catalog.Format(msgs.locale, "systemProxyTaken", map[string]any{"owner": owner})
 }
 
+// ThemeAmber says "Amber"
+// in the language the app shows.
+func ThemeAmber() string { return In(i18n.Locale()).ThemeAmber() }
+
+// ThemeAmber says "Amber"
+// in the language of msgs.
+func (msgs Messages) ThemeAmber() string {
+	return Catalog.Format(msgs.locale, "themeAmber", nil)
+}
+
 // ThemeDusk says "Dusk"
 // in the language the app shows.
 func ThemeDusk() string { return In(i18n.Locale()).ThemeDusk() }
@@ -3892,6 +3902,16 @@ func ThemeDusk() string { return In(i18n.Locale()).ThemeDusk() }
 // in the language of msgs.
 func (msgs Messages) ThemeDusk() string {
 	return Catalog.Format(msgs.locale, "themeDusk", nil)
+}
+
+// ThemeForest says "Forest"
+// in the language the app shows.
+func ThemeForest() string { return In(i18n.Locale()).ThemeForest() }
+
+// ThemeForest says "Forest"
+// in the language of msgs.
+func (msgs Messages) ThemeForest() string {
+	return Catalog.Format(msgs.locale, "themeForest", nil)
 }
 
 // ThemeHack says "Hack"
@@ -3922,6 +3942,26 @@ func ThemePaper() string { return In(i18n.Locale()).ThemePaper() }
 // in the language of msgs.
 func (msgs Messages) ThemePaper() string {
 	return Catalog.Format(msgs.locale, "themePaper", nil)
+}
+
+// ThemeRose says "Rose"
+// in the language the app shows.
+func ThemeRose() string { return In(i18n.Locale()).ThemeRose() }
+
+// ThemeRose says "Rose"
+// in the language of msgs.
+func (msgs Messages) ThemeRose() string {
+	return Catalog.Format(msgs.locale, "themeRose", nil)
+}
+
+// ThemeSlate says "Slate"
+// in the language the app shows.
+func ThemeSlate() string { return In(i18n.Locale()).ThemeSlate() }
+
+// ThemeSlate says "Slate"
+// in the language of msgs.
+func (msgs Messages) ThemeSlate() string {
+	return Catalog.Format(msgs.locale, "themeSlate", nil)
 }
 
 // Tun says "TUN"
