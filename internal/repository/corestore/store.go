@@ -168,18 +168,39 @@ func (s *Store) pointerPath() string {
 	return filepath.Join(s.dir, pointerName)
 }
 
-// writeAtomic writes through a temporary file, so a crash never leaves a
-// half-written pointer.
+// writeAtomic writes through a temporary file that reaches the disk before it
+// replaces path, so neither a crash nor a power loss leaves a half-written or
+// zero-filled pointer.
 func writeAtomic(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
 		return fmt.Errorf("create dir (path=%q): %w", filepath.Dir(path), err)
 	}
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, filePerm); err != nil {
-		return fmt.Errorf("write file (path=%q): %w", tmp, err)
+	if err := writeSynced(tmp, data); err != nil {
+		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		return fmt.Errorf("move file into place (from=%q to=%q): %w", tmp, path, err)
+	}
+	return nil
+}
+
+// writeSynced writes data to path and flushes it to the disk before closing.
+func writeSynced(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, filePerm)
+	if err != nil {
+		return fmt.Errorf("open file (path=%q): %w", path, err)
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return fmt.Errorf("write file (path=%q): %w", path, err)
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return fmt.Errorf("sync file (path=%q): %w", path, err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close file (path=%q): %w", path, err)
 	}
 	return nil
 }
