@@ -21,6 +21,10 @@ func (m *memoryTrafficStore) SaveTraffic(days []model.TrafficDay) error {
 	return nil
 }
 
+func (m *memoryTrafficStore) SetAsideTraffic() (string, error) {
+	return "", nil
+}
+
 func newTrafficForTest(t *testing.T, store *memoryTrafficStore) *TrafficService {
 	t.Helper()
 	s, err := NewTrafficService(store)

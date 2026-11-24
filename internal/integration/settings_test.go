@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"hop/internal/model"
 	"hop/internal/repository/profile"
@@ -73,5 +74,31 @@ func TestColorThemeSettings(t *testing.T) {
 	}
 	if unchanged != saved {
 		t.Fatal("rejected theme changed the saved settings")
+	}
+}
+
+// TestCorruptTrafficHistory checks that a zero-filled traffic.json, as a power
+// loss can leave it, is set aside and Hop starts with an empty history.
+func TestCorruptTrafficHistory(t *testing.T) {
+	dir := t.TempDir()
+	store, err := profile.NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "traffic.json"), make([]byte, 512), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	traffic, err := service.NewTrafficService(store)
+	if err != nil {
+		t.Fatalf("a corrupt traffic history kept the service from starting: %v", err)
+	}
+	if sources := traffic.Summary(time.Now()).Sources; len(sources) != 0 {
+		t.Fatal("the history set aside still counts")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "traffic.json.corrupt")); err != nil {
+		t.Fatalf("the corrupt history was not kept: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "traffic.json")); !os.IsNotExist(err) {
+		t.Fatalf("traffic.json is still in place: %v", err)
 	}
 }

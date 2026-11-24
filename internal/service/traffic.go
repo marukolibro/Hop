@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -35,6 +36,9 @@ const (
 type TrafficStore interface {
 	LoadTraffic() ([]model.TrafficDay, error)
 	SaveTraffic(days []model.TrafficDay) error
+	// SetAsideTraffic moves a corrupt history out of the way, keeping it for
+	// a look, and returns where it went.
+	SetAsideTraffic() (string, error)
 }
 
 // trafficConn is the bytes of one connection at the previous sample.
@@ -73,11 +77,12 @@ type TrafficService struct {
 }
 
 // NewTrafficService returns a service on the stored history, dropping
-// buckets older than the days Hop keeps.
+// buckets older than the days Hop keeps. A corrupt history is set aside and
+// the service starts empty: the statistics must never keep Hop from starting.
 func NewTrafficService(store TrafficStore) (*TrafficService, error) {
-	loaded, err := store.LoadTraffic()
+	loaded, err := loadOrSetAsideTraffic(store)
 	if err != nil {
-		return nil, fmt.Errorf("load traffic history: %w", err)
+		return nil, err
 	}
 	kept := pruneTraffic(loaded, time.Now())
 	s := &TrafficService{
@@ -95,6 +100,24 @@ func NewTrafficService(store TrafficStore) (*TrafficService, error) {
 		s.gen++
 	}
 	return s, nil
+}
+
+// loadOrSetAsideTraffic returns the stored history, or none after setting a
+// corrupt one aside.
+func loadOrSetAsideTraffic(store TrafficStore) ([]model.TrafficDay, error) {
+	loaded, err := store.LoadTraffic()
+	if err == nil {
+		return loaded, nil
+	}
+	if !errors.Is(err, model.ErrTrafficCorrupt) {
+		return nil, fmt.Errorf("load traffic history: %w", err)
+	}
+	movedTo, setAsideErr := store.SetAsideTraffic()
+	if setAsideErr != nil {
+		return nil, fmt.Errorf("load traffic history: %w; %w", err, setAsideErr)
+	}
+	slog.Error("traffic history is corrupt, set it aside and starting empty", "error", err, "moved_to", movedTo)
+	return nil, nil
 }
 
 // Start flushes dirty history every trafficFlushEvery until ctx is done, and

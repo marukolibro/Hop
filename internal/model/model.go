@@ -2,9 +2,14 @@
 package model
 
 import (
+	"errors"
 	"net/netip"
 	"time"
 )
+
+// ErrTrafficCorrupt marks a stored traffic history that cannot be read as
+// one Hop wrote, such as a file a power loss left zero-filled.
+var ErrTrafficCorrupt = errors.New("traffic history is corrupt")
 
 // Group types as the core reports them.
 const (

@@ -15,7 +15,9 @@ import (
 
 const (
 	trafficFileName = "traffic.json"
-	trafficVersion  = 1
+	// trafficCorruptFileName is where a corrupt history is set aside.
+	trafficCorruptFileName = "traffic.json.corrupt"
+	trafficVersion         = 1
 	// trafficDateLayout is the local calendar day a bucket is keyed by.
 	trafficDateLayout = "2006-01-02"
 )
@@ -39,9 +41,10 @@ type trafficDayFile struct {
 }
 
 // LoadTraffic returns the stored daily traffic, oldest bucket first. A file
-// written by a newer Hop, a malformed entry or a duplicate day and source is
-// an error: the file is only ever replaced as a whole, so anything else means
-// it was not Hop that wrote it.
+// written by a newer Hop is an error; one that does not decode, or has a
+// malformed entry or a duplicate day and source, is model.ErrTrafficCorrupt:
+// the file is only ever replaced as a whole, so anything else means it was
+// not Hop that wrote it, or the disk lost it.
 func (s *Store) LoadTraffic() ([]model.TrafficDay, error) {
 	path := filepath.Join(s.dir, trafficFileName)
 	raw, err := os.ReadFile(path)
@@ -53,7 +56,7 @@ func (s *Store) LoadTraffic() ([]model.TrafficDay, error) {
 	}
 	var file trafficFile
 	if err := json.Unmarshal(raw, &file); err != nil {
-		return nil, fmt.Errorf("decode traffic history (path=%q): %w", path, err)
+		return nil, fmt.Errorf("%w: decode (path=%q): %w", model.ErrTrafficCorrupt, path, err)
 	}
 	if file.Version != trafficVersion {
 		return nil, fmt.Errorf("traffic history version is %d, hop writes %d (path=%q)", file.Version, trafficVersion, path)
@@ -62,17 +65,17 @@ func (s *Store) LoadTraffic() ([]model.TrafficDay, error) {
 	seen := make(map[string]bool, len(file.Days))
 	for _, day := range file.Days {
 		if _, err := time.Parse(trafficDateLayout, day.Date); err != nil {
-			return nil, fmt.Errorf("traffic history (path=%q) has an invalid date %q: %w", path, day.Date, err)
+			return nil, fmt.Errorf("%w: invalid date %q (path=%q): %w", model.ErrTrafficCorrupt, day.Date, path, err)
 		}
 		if day.SourceID == "" {
-			return nil, fmt.Errorf("traffic history (path=%q) has a bucket for %s without a source", path, day.Date)
+			return nil, fmt.Errorf("%w: a bucket for %s without a source (path=%q)", model.ErrTrafficCorrupt, day.Date, path)
 		}
 		if day.ProxyUp < 0 || day.ProxyDown < 0 || day.DirectUp < 0 || day.DirectDown < 0 {
-			return nil, fmt.Errorf("traffic history (path=%q) has negative bytes for %s on %s", path, day.SourceID, day.Date)
+			return nil, fmt.Errorf("%w: negative bytes for %s on %s (path=%q)", model.ErrTrafficCorrupt, day.SourceID, day.Date, path)
 		}
 		key := day.Date + "\x00" + day.SourceID
 		if seen[key] {
-			return nil, fmt.Errorf("traffic history (path=%q) lists source %q on %s twice", path, day.SourceID, day.Date)
+			return nil, fmt.Errorf("%w: source %q listed on %s twice (path=%q)", model.ErrTrafficCorrupt, day.SourceID, day.Date, path)
 		}
 		seen[key] = true
 		days = append(days, model.TrafficDay{
@@ -124,4 +127,15 @@ func (s *Store) SaveTraffic(days []model.TrafficDay) error {
 		return fmt.Errorf("encode traffic history: %w", err)
 	}
 	return writeAtomic(filepath.Join(s.dir, trafficFileName), raw)
+}
+
+// SetAsideTraffic moves the stored history to traffic.json.corrupt, replacing
+// one set aside before, and returns where it went.
+func (s *Store) SetAsideTraffic() (string, error) {
+	from := filepath.Join(s.dir, trafficFileName)
+	to := filepath.Join(s.dir, trafficCorruptFileName)
+	if err := os.Rename(from, to); err != nil {
+		return "", fmt.Errorf("set aside traffic history (from=%q to=%q): %w", from, to, err)
+	}
+	return to, nil
 }
