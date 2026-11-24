@@ -486,6 +486,9 @@ type Dashboard struct {
 
 	// onTraffic, when set, hears every traffic sample on the UI thread.
 	onTraffic func(model.Traffic)
+	// onTrayChange, when set, notifies the menu bar after synchronous UI edits
+	// that affect the tray icon (such as toggling menu bar speed or language).
+	onTrayChange func()
 
 	// opCtx/opWin are the context and updater Start got, for late starters such
 	// as dialog submits.
@@ -567,6 +570,12 @@ func (d *Dashboard) noticeExit() {
 // before Start.
 func (d *Dashboard) OnTraffic(fn func(model.Traffic)) {
 	d.onTraffic = fn
+}
+
+// OnTrayChange makes fn hear synchronous UI changes that affect the menu bar
+// icon or tooltip. Call it before Start.
+func (d *Dashboard) OnTrayChange(fn func()) {
+	d.onTrayChange = fn
 }
 
 // Start begins loading the profile and streaming traffic, connections and
@@ -1194,6 +1203,21 @@ func (d *Dashboard) headerPort(c *ui.Context, t *ui.Theme) {
 // core merely running, is what the status dot shows as live.
 func (d *Dashboard) proxying() bool {
 	return d.status == statusConnected && (d.sysProxy.on || d.tun.on)
+}
+
+// trayState resolves the dashboard's current traffic state into the menu bar
+// icon state.
+func (d *Dashboard) trayState() trayState {
+	switch {
+	case d.status == statusFailed:
+		return trayStateError
+	case d.status == statusConnected && d.tun.on:
+		return trayStateTun
+	case d.status == statusConnected && d.sysProxy.on:
+		return trayStateProxy
+	default:
+		return trayStateIdle
+	}
 }
 
 func (d *Dashboard) statusText() string {

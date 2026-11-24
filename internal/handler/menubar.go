@@ -31,9 +31,14 @@ const flyoutCornerRadius = 14
 // hopFrameTime is how long each frame of the ball's hop shows.
 const hopFrameTime = 30 * time.Millisecond
 
-// shownHopping stands for the icon while the ball hops, so the first rate
-// drawn after it is never taken for what is already there.
-const shownHopping = "hopping"
+// trayShownKey identifies the rendered menu bar image so identical frames
+// skip PNG encoding and SetIcon calls.
+type trayShownKey struct {
+	state   trayState
+	dark    bool
+	speed   string
+	hopping bool
+}
 
 // MenuBar is Hop's menu bar item: its mark with the live speed beside it,
 // and a panel to see the route and switch the mode and the node without
@@ -51,13 +56,14 @@ type MenuBar struct {
 	panelHeight int
 	closedAt    time.Time
 	quitting    bool
-	// mark is the plain icon; shown is the speed the icon shows now, ""
-	// for the plain mark.
-	mark  []byte
-	shown string
-	// arcs are the mark's arcs alone, drawn once; each frame of a hop and
-	// each rate is the mark built over them.
-	arcs *image.NRGBA
+	// shown tracks what the menu bar icon currently displays; shownSet is
+	// false before the first draw.
+	shown    trayShownKey
+	shownSet bool
+	tooltip  string
+	// arcsMask is the tray mark's two arcs precomputed as an alpha mask once;
+	// each state and hop frame colors over it in microseconds.
+	arcsMask *image.Alpha
 	// speed is the rate column beside the mark, nil while the speed is off;
 	// speedPainter draws it.
 	speed        *image.RGBA
@@ -72,20 +78,39 @@ type MenuBar struct {
 // closed. Call it before d.Start, so the menu bar hears the traffic, and
 // start d with the menu bar's Updater, so the panel follows every change.
 func NewMenuBar(win *mygo.Window, d *Dashboard) (*MenuBar, error) {
-	arcs := arcsImage()
-	icon, err := encodeTrayIcon(markImage(arcs, 0))
+	arcsMask := trayArcsMask()
+	initialState := d.trayState()
+	initialVis := trayVisualFor(initialState, false)
+	icon, err := encodeTrayIcon(trayMarkImage(arcsMask, initialState, false, 0))
 	if err != nil {
 		return nil, err
 	}
-	tray, err := mygo.NewTray(mygo.TrayOptions{Icon: icon, IconIsTemplate: true, ToolTip: "Hop"})
+	tray, err := mygo.NewTray(mygo.TrayOptions{Icon: icon, IconIsTemplate: initialVis.template, ToolTip: "Hop"})
 	if err != nil {
 		return nil, fmt.Errorf("create menu bar item: %w", err)
 	}
-	m := &MenuBar{tray: tray, win: win, d: d, mark: icon, arcs: arcs, speedPainter: newTraySpeedPainter()}
+	m := &MenuBar{
+		tray:         tray,
+		win:          win,
+		d:            d,
+		arcsMask:     arcsMask,
+		speedPainter: newTraySpeedPainter(),
+	}
+	// Sync once immediately using tray.Dark() so dark menu bars start with the
+	// right palette and tooltip.
+	m.drawRest()
 	tray.OnClick(m.togglePanel)
 	tray.OnRightClick(m.popUpMenu)
+	offAppearance := tray.OnAppearanceChange(func() {
+		mygo.RunOnMain(func() {
+			if !m.quitting {
+				m.syncTray()
+			}
+		})
+	})
 	d.OnTraffic(m.showSpeed)
 	d.OnHop(m.hop)
+	d.OnTrayChange(m.syncTray)
 	d.SetToggleWindow(m.toggleWindow)
 	if d.settings.settings.GlobalShortcuts {
 		if err := d.applyGlobalShortcuts(true); err != nil {
@@ -112,6 +137,7 @@ func NewMenuBar(win *mygo.Window, d *Dashboard) (*MenuBar, error) {
 	offResume := mygo.Power.OnResume(func() { m.Update(d.HandlePowerResume) })
 	offNet := mygo.Network.OnChanged(func(s mygo.NetworkStatus) { m.Update(func() { d.HandleNetworkChange(s) }) })
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
+		offAppearance()
 		offResume()
 		offNet()
 		d.stopNetworkRecovery()
@@ -151,14 +177,25 @@ func (m *MenuBar) HandleOpenURL(raw string) {
 }
 
 // Update runs fn on the main thread and redraws the window and, when it is
-// open, the panel: both show the dashboard.
+// open, the panel: both show the dashboard. It also keeps the menu bar icon in
+// step with proxy, TUN, core, and appearance changes.
 func (m *MenuBar) Update(fn func()) {
 	m.win.Update(func() {
 		fn()
+		m.syncTray()
 		if m.panel != nil {
 			m.panel.Invalidate()
 		}
 	})
+}
+
+// syncTray refreshes the menu bar icon and tooltip whenever the running state,
+// menu bar appearance, or speed preference changed.
+func (m *MenuBar) syncTray() {
+	if m.quitting || m.hopping {
+		return
+	}
+	m.drawRest()
 }
 
 // showWindow brings the window back, and Hop's Dock icon with it.
@@ -266,29 +303,60 @@ func (m *MenuBar) showSpeed(sample model.Traffic) {
 	m.drawRest()
 }
 
-// drawRest draws the mark at rest with the current speed beside it, upload
-// over download in a column of fixed width, so the item does not shift as the
-// numbers change; idle, it reads 0K rather than dropping the speed, so the
-// item keeps one width. With the speed turned off in the settings it shows
-// the plain mark. It redraws only when the numbers do.
+// drawRest draws the mark at rest in the current running state with optional
+// speed beside it, upload over download in a column of fixed width, so the
+// item does not shift as the numbers change; idle, it reads 0K rather than
+// dropping the speed, so the item keeps one width. With the speed turned off
+// in the settings it shows only the mark. It redraws only when state,
+// appearance, or displayed speed changes.
 func (m *MenuBar) drawRest() {
+	state := m.d.trayState()
+	dark := m.tray.Dark()
+	vis := trayVisualFor(state, dark)
+	m.updateTooltip(state)
+
 	if !m.d.settings.settings.MenuBarSpeed {
+		key := trayShownKey{state: state, dark: dark}
+		if m.shownSet && m.shown == key {
+			return
+		}
+		icon, err := encodeTrayIcon(trayMarkImage(m.arcsMask, state, dark, 0))
+		if err != nil {
+			slog.Warn("draw menu bar icon", "error", err)
+			return
+		}
 		m.speed = nil
-		m.setIcon("", m.mark)
+		m.setIcon(key, icon, vis.template)
 		return
 	}
+
 	up, down := compactRate(m.sample.Up), compactRate(m.sample.Down)
-	if up+"/"+down == m.shown {
+	key := trayShownKey{state: state, dark: dark, speed: up + "/" + down}
+	if m.shownSet && m.shown == key {
 		return
 	}
-	speed := m.speedPainter.draw(up, down)
-	icon, err := traySpeedIcon(markImage(m.arcs, 0), speed)
+	speed := m.speedPainter.draw(up, down, vis.speedInk)
+	icon, err := traySpeedIcon(trayMarkImage(m.arcsMask, state, dark, 0), speed)
 	if err != nil {
 		slog.Warn("draw menu bar speed", "error", err)
 		return
 	}
 	m.speed = speed
-	m.setIcon(up+"/"+down, icon)
+	m.setIcon(key, icon, vis.template)
+}
+
+// updateTooltip names the running state in the menu bar item's tooltip,
+// setting it only when the words change.
+func (m *MenuBar) updateTooltip(state trayState) {
+	tip := locales.TrayTooltip(m.d.statusText())
+	if state == trayStateTun {
+		tip = locales.TrayTooltipTun()
+	}
+	if tip == m.tooltip {
+		return
+	}
+	m.tray.SetToolTip(tip)
+	m.tooltip = tip
 }
 
 // hop plays the ball's hop, one frame after another on the main thread, and
@@ -298,7 +366,8 @@ func (m *MenuBar) hop() {
 		return
 	}
 	m.hopping = true
-	m.shown = shownHopping
+	m.shown = trayShownKey{hopping: true}
+	m.shownSet = true
 	m.hopFrame(1)
 }
 
@@ -313,9 +382,12 @@ func (m *MenuBar) hopFrame(step int) {
 		m.drawRest()
 		return
 	}
-	icon, err := m.hopIcon(hopLift(float64(step) / trayHopFrames))
+	state := m.d.trayState()
+	dark := m.tray.Dark()
+	vis := trayVisualFor(state, dark)
+	icon, err := m.hopIcon(state, dark, hopLift(float64(step)/trayHopFrames))
 	if err == nil {
-		err = m.tray.SetIcon(icon, true)
+		err = m.tray.SetIcon(icon, vis.template)
 	}
 	if err != nil {
 		slog.Warn("draw menu bar hop", "error", err)
@@ -328,24 +400,25 @@ func (m *MenuBar) hopFrame(step int) {
 
 // hopIcon is the icon with the ball raised by lift mark units, and the speed
 // beside it when the item shows one.
-func (m *MenuBar) hopIcon(lift float64) ([]byte, error) {
-	mark := markImage(m.arcs, lift)
+func (m *MenuBar) hopIcon(state trayState, dark bool, lift float64) ([]byte, error) {
+	mark := trayMarkImage(m.arcsMask, state, dark, lift)
 	if m.speed == nil {
 		return encodeTrayIcon(mark)
 	}
 	return traySpeedIcon(mark, m.speed)
 }
 
-// setIcon shows icon in the menu bar as what shown names.
-func (m *MenuBar) setIcon(shown string, icon []byte) {
-	if shown == m.shown {
+// setIcon shows icon in the menu bar and records its rendered key.
+func (m *MenuBar) setIcon(key trayShownKey, icon []byte, template bool) {
+	if m.shownSet && key == m.shown {
 		return
 	}
-	if err := m.tray.SetIcon(icon, true); err != nil {
+	if err := m.tray.SetIcon(icon, template); err != nil {
 		slog.Warn("set menu bar icon", "error", err)
 		return
 	}
-	m.shown = shown
+	m.shown = key
+	m.shownSet = true
 }
 
 // compactRate is a speed short enough for the menu bar, four characters at

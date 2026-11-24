@@ -551,6 +551,8 @@
   "statusNotConnected": "Not connected",
   "statusProxying": "Proxying",
   "statusProxyOff": "Proxy off",
+  "trayTooltip": "Hop: {status}",
+  "trayTooltipTun": "Hop: proxying with TUN",
   "subAdd": "Add subscription",
   "subAddAndUse": "Add and use",
   "subAddFirstHint": "Add your first config and start using it.",

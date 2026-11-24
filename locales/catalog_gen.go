@@ -3034,6 +3034,26 @@ func (msgs Messages) StatusProxyOff() string {
 	return Catalog.Format(msgs.locale, "statusProxyOff", nil)
 }
 
+// TrayTooltip says "Hop: {status}"
+// in the language the app shows.
+func TrayTooltip(status string) string { return In(i18n.Locale()).TrayTooltip(status) }
+
+// TrayTooltip says "Hop: {status}"
+// in the language of msgs.
+func (msgs Messages) TrayTooltip(status string) string {
+	return Catalog.Format(msgs.locale, "trayTooltip", map[string]any{"status": status})
+}
+
+// TrayTooltipTun says "Hop: proxying with TUN"
+// in the language the app shows.
+func TrayTooltipTun() string { return In(i18n.Locale()).TrayTooltipTun() }
+
+// TrayTooltipTun says "Hop: proxying with TUN"
+// in the language of msgs.
+func (msgs Messages) TrayTooltipTun() string {
+	return Catalog.Format(msgs.locale, "trayTooltipTun", nil)
+}
+
 // SubAdd says "Add subscription"
 // in the language the app shows.
 func SubAdd() string { return In(i18n.Locale()).SubAdd() }

@@ -155,6 +155,9 @@ func (d *Dashboard) saveSettings(next model.Settings) {
 			d.reloadViewAfterCore(d.opCtx, d.opWin)
 		}
 	}
+	if d.onTrayChange != nil && (next.MenuBarSpeed != previous.MenuBarSpeed || next.Language != previous.Language) {
+		d.onTrayChange()
+	}
 }
 
 // settingsWidth is the column the settings page centres in the window.

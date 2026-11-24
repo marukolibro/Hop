@@ -305,6 +305,8 @@
   "statusNotConnected": "未连接",
   "statusProxying": "代理中",
   "statusProxyOff": "未开代理",
+  "trayTooltip": "Hop：{status}",
+  "trayTooltipTun": "Hop：TUN 代理中",
   "subAdd": "添加订阅",
   "subAddAndUse": "添加并使用",
   "subAddFirstHint": "添加第一个配置，并将它设为当前使用。",

@@ -410,8 +410,15 @@ for font sizes, weights, gaps or radii in views.
   Languages). No ALL-CAPS labels, no `·` joined meta strings, no decorative
   eyebrows. The TUN switch is called "TUN" in both languages; its helper is
   "增强组件" / "Helper".
-- The mark's geometry lives once in `trayicon.go`; the menu bar icon and
-  `hopMark` both draw from it.
+- The mark's geometry lives in `trayicon.go`: `markArcs`/`markBall` for
+  `hopMark` in the window, and `trayArcs`/`trayBall`, redrawn for the 18 points
+  of the menu bar (a smaller ball clear of the second arc). The menu bar icon
+  shows the state (`Dashboard.trayState`): a faint template mark with a hollow
+  ball while Hop carries no traffic, and its own fixed full-colour gradients
+  while the system proxy (sky to cyan) or TUN (blue to violet) is on, or red
+  when the core failed (`trayVisualFor`, one per menu bar appearance). These
+  are the one place outside the theme tokens: the menu bar is not the window
+  and follows no palette.
 
 ## Languages
 
