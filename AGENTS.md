@@ -227,7 +227,9 @@ handler → service → repository, interfaces defined where they are used.
   keeps running; started at login (`mygo.App.WasOpenedAtLogin`) it starts
   that way. The route bar asks for the exit IP when the resolved exit, the
   mode or the core epoch changes; one lookup runs at a time and a reply for
-  an older exit is dropped. The login item itself lives in the system (`mygo.App`
+  an older exit is dropped. While the core cannot be reached, each beat of
+  `watchNetState` asks it again (`reconnect.go`, in the current epoch, quietly);
+  when it answers, the view shows it and the streams start again on it. The login item itself lives in the system (`mygo.App`
   `OpenAtLogin`), not in Hop's settings; never turn it on for a dev build.
 - `config` — startup settings; `main.go` wires everything. User settings
   (`service/settings.go`: appearance, delay test timeout, subscription

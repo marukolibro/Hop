@@ -14,7 +14,7 @@ import (
 const netStateEvery = 3 * time.Second
 
 // watchNetState keeps the system proxy and TUN pills on what the system holds
-// now. A read that fails is logged, not shown: the next one tries again, and
+// now, and on the same beat asks again for a core Hop could not reach. A read that fails is logged, not shown: the next one tries again, and
 // the actions themselves report their own failures. A pill whose change is
 // running keeps its state until the change reports. Goroutine ownership:
 // started by Start, it ends when ctx is cancelled.
@@ -45,6 +45,7 @@ func (d *Dashboard) watchNetState(ctx context.Context, win Updater) {
 			if d.services.LAN != nil && !d.lan.busy {
 				d.applyLANStatus(lanStatus, lanErr)
 			}
+			d.considerReconnect(ctx, win)
 		})
 	}
 }

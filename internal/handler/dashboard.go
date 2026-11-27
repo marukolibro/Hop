@@ -390,7 +390,10 @@ type Dashboard struct {
 	openAtLogin bool
 	// watchCancel ends the streams from the core, which restart with it.
 	watchCancel context.CancelFunc
-	view        model.ProxyView
+	// reconnecting is true while a check runs whether a core Hop could not
+	// reach answers again (reconnect.go).
+	reconnecting bool
+	view         model.ProxyView
 	// modeIndex is the index in service.Modes the mode switch shows.
 	modeIndex int
 	// modeBusy is set while the outbound mode is being applied, so subscription
@@ -767,14 +770,19 @@ func (d *Dashboard) loadView(ctx context.Context, win Updater, gen int) {
 			d.failConnection(actionLoadGroups, err)
 			return
 		}
-		d.status = statusConnected
-		d.view = view
-		d.modeIndex = modeIndexOf(view.Mode)
-		d.activeGroup = keepActiveGroup(view, d.activeGroup)
-		d.noticeExit()
-		d.considerExitIP()
-		d.refreshServices(false)
+		d.applyView(view)
 	})
+}
+
+// applyView shows a view the core answered with: the core is reachable.
+func (d *Dashboard) applyView(view model.ProxyView) {
+	d.status = statusConnected
+	d.view = view
+	d.modeIndex = modeIndexOf(view.Mode)
+	d.activeGroup = keepActiveGroup(view, d.activeGroup)
+	d.noticeExit()
+	d.considerExitIP()
+	d.refreshServices(false)
 }
 
 // startupTest loads the profile and starts background probes without holding
