@@ -890,19 +890,20 @@ func keepActiveGroup(view model.ProxyView, current string) string {
 }
 
 func (d *Dashboard) watchTraffic(ctx context.Context, win Updater) {
-	err := d.services.Proxies.WatchTraffic(ctx, func(sample model.Traffic) {
-		win.Update(func() {
-			d.last = sample
-			d.recordTrafficSample(sample)
-			if d.onTraffic != nil {
-				d.onTraffic(sample)
-			}
+	keepStreaming(ctx, actionWatchTraffic, func(ctx context.Context, delivered func()) error {
+		return d.services.Proxies.WatchTraffic(ctx, func(sample model.Traffic) {
+			delivered()
+			win.Update(func() {
+				d.last = sample
+				d.recordTrafficSample(sample)
+				if d.onTraffic != nil {
+					d.onTraffic(sample)
+				}
+			})
 		})
+	}, streamRetryDelay, func(err error) {
+		win.Update(func() { d.failConnection(actionWatchTraffic, err) })
 	})
-	if ctx.Err() != nil {
-		return
-	}
-	win.Update(func() { d.failConnection(actionWatchTraffic, err) })
 }
 
 // recordTrafficSample appends sample.Down to the rolling horizon history and
@@ -918,38 +919,41 @@ func (d *Dashboard) recordTrafficSample(sample model.Traffic) {
 }
 
 func (d *Dashboard) watchMemory(ctx context.Context, win Updater) {
-	err := d.services.Monitor.WatchMemory(ctx, func(m model.Memory) {
-		win.Update(func() {
-			d.memory, d.memoryKnown = m, true
+	keepStreaming(ctx, actionWatchMemory, func(ctx context.Context, delivered func()) error {
+		return d.services.Monitor.WatchMemory(ctx, func(m model.Memory) {
+			delivered()
+			win.Update(func() {
+				d.memory, d.memoryKnown = m, true
+			})
 		})
+	}, streamRetryDelay, func(err error) {
+		win.Update(func() { d.fail(actionWatchMemory, err) })
 	})
-	if ctx.Err() != nil {
-		return
-	}
-	win.Update(func() { d.fail(actionWatchMemory, err) })
 }
 
 func (d *Dashboard) watchConnections(ctx context.Context, win Updater) {
-	err := d.services.Monitor.WatchConnections(ctx, func(conns model.Connections) {
-		win.Update(func() {
-			d.connections.data = conns
-			d.recordTraffic(conns, time.Now())
+	keepStreaming(ctx, actionWatchConnections, func(ctx context.Context, delivered func()) error {
+		return d.services.Monitor.WatchConnections(ctx, func(conns model.Connections) {
+			delivered()
+			win.Update(func() {
+				d.connections.data = conns
+				d.recordTraffic(conns, time.Now())
+			})
 		})
+	}, streamRetryDelay, func(err error) {
+		win.Update(func() { d.fail(actionWatchConnections, err) })
 	})
-	if ctx.Err() != nil {
-		return
-	}
-	win.Update(func() { d.fail(actionWatchConnections, err) })
 }
 
 func (d *Dashboard) watchLogs(ctx context.Context, win Updater) {
-	err := d.services.Monitor.WatchLogs(ctx, model.LogInfo, func(entry model.LogEntry) {
-		win.Update(func() { d.logs.entries = service.AppendLog(d.logs.entries, entry, logLimit) })
+	keepStreaming(ctx, actionWatchLogs, func(ctx context.Context, delivered func()) error {
+		return d.services.Monitor.WatchLogs(ctx, model.LogInfo, func(entry model.LogEntry) {
+			delivered()
+			win.Update(func() { d.logs.entries = service.AppendLog(d.logs.entries, entry, logLimit) })
+		})
+	}, streamRetryDelay, func(err error) {
+		win.Update(func() { d.fail(actionWatchLogs, err) })
 	})
-	if ctx.Err() != nil {
-		return
-	}
-	win.Update(func() { d.fail(actionWatchLogs, err) })
 }
 
 func (d *Dashboard) choose(ctx context.Context, win Updater, group string, proxy string, gen int) {

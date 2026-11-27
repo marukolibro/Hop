@@ -229,7 +229,10 @@ handler → service → repository, interfaces defined where they are used.
   mode or the core epoch changes; one lookup runs at a time and a reply for
   an older exit is dropped. While the core cannot be reached, each beat of
   `watchNetState` asks it again (`reconnect.go`, in the current epoch, quietly);
-  when it answers, the view shows it and the streams start again on it. The login item itself lives in the system (`mygo.App`
+  when it answers, the view shows it and the streams start again on it. A
+  stream that ends while the core runs on (a read that fails, a connection
+  table past the read limit) opens again by itself (`streams.go`, the
+  runner's 1s-30s backoff), reporting only the first end of a run. The login item itself lives in the system (`mygo.App`
   `OpenAtLogin`), not in Hop's settings; never turn it on for a dev build.
 - `config` — startup settings; `main.go` wires everything. User settings
   (`service/settings.go`: appearance, delay test timeout, subscription
