@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"errors"
 	"net"
 	"strconv"
 	"strings"
@@ -36,7 +35,7 @@ func (d *Dashboard) beginPort() {
 	}
 	port, err := strconv.Atoi(strings.TrimSpace(p.input))
 	if err != nil {
-		d.fail(actionPort, errors.New(locales.PortInvalid(service.MixedPortMin, service.MixedPortMax)))
+		d.fail(actionPort, &service.ExplainedError{Reason: locales.PortInvalid(service.MixedPortMin, service.MixedPortMax)})
 		return
 	}
 	if port == d.services.Port.Current() {

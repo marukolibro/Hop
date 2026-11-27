@@ -898,16 +898,14 @@ func (msgs Messages) CorePreparing() string {
 	return Catalog.Format(msgs.locale, "corePreparing", nil)
 }
 
-// CoreQuitRepeatedly says "Quit {count} times in a row: {reason}"
+// CoreQuitRepeatedly says "It has quit {count, plural, one {once} other {# times}} in a row."
 // in the language the app shows.
-func CoreQuitRepeatedly(count int, reason string) string {
-	return In(i18n.Locale()).CoreQuitRepeatedly(count, reason)
-}
+func CoreQuitRepeatedly(count int) string { return In(i18n.Locale()).CoreQuitRepeatedly(count) }
 
-// CoreQuitRepeatedly says "Quit {count} times in a row: {reason}"
+// CoreQuitRepeatedly says "It has quit {count, plural, one {once} other {# times}} in a row."
 // in the language of msgs.
-func (msgs Messages) CoreQuitRepeatedly(count int, reason string) string {
-	return Catalog.Format(msgs.locale, "coreQuitRepeatedly", map[string]any{"count": count, "reason": reason})
+func (msgs Messages) CoreQuitRepeatedly(count int) string {
+	return Catalog.Format(msgs.locale, "coreQuitRepeatedly", map[string]any{"count": count})
 }
 
 // CoreRestarting says "Restarting the core"
@@ -1058,6 +1056,102 @@ func ExitIpTip() string { return In(i18n.Locale()).ExitIpTip() }
 // in the language of msgs.
 func (msgs Messages) ExitIpTip() string {
 	return Catalog.Format(msgs.locale, "exitIpTip", nil)
+}
+
+// FailureCopyDetails says "Copy details"
+// in the language the app shows.
+func FailureCopyDetails() string { return In(i18n.Locale()).FailureCopyDetails() }
+
+// FailureCopyDetails says "Copy details"
+// in the language of msgs.
+func (msgs Messages) FailureCopyDetails() string {
+	return Catalog.Format(msgs.locale, "failureCopyDetails", nil)
+}
+
+// FailureDetails says "Details"
+// in the language the app shows.
+func FailureDetails() string { return In(i18n.Locale()).FailureDetails() }
+
+// FailureDetails says "Details"
+// in the language of msgs.
+func (msgs Messages) FailureDetails() string {
+	return Catalog.Format(msgs.locale, "failureDetails", nil)
+}
+
+// FailureHideDetails says "Hide details"
+// in the language the app shows.
+func FailureHideDetails() string { return In(i18n.Locale()).FailureHideDetails() }
+
+// FailureHideDetails says "Hide details"
+// in the language of msgs.
+func (msgs Messages) FailureHideDetails() string {
+	return Catalog.Format(msgs.locale, "failureHideDetails", nil)
+}
+
+// FailureReasonCoreDown says "Hop's core didn't answer. It may be restarting; try again in a moment."
+// in the language the app shows.
+func FailureReasonCoreDown() string { return In(i18n.Locale()).FailureReasonCoreDown() }
+
+// FailureReasonCoreDown says "Hop's core didn't answer. It may be restarting; try again in a moment."
+// in the language of msgs.
+func (msgs Messages) FailureReasonCoreDown() string {
+	return Catalog.Format(msgs.locale, "failureReasonCoreDown", nil)
+}
+
+// FailureReasonHostNotFound says "Couldn't find the server {host}. Check the link and your network."
+// in the language the app shows.
+func FailureReasonHostNotFound(host string) string {
+	return In(i18n.Locale()).FailureReasonHostNotFound(host)
+}
+
+// FailureReasonHostNotFound says "Couldn't find the server {host}. Check the link and your network."
+// in the language of msgs.
+func (msgs Messages) FailureReasonHostNotFound(host string) string {
+	return Catalog.Format(msgs.locale, "failureReasonHostNotFound", map[string]any{"host": host})
+}
+
+// FailureReasonNetwork says "Couldn't reach the server. Check your network and try again."
+// in the language the app shows.
+func FailureReasonNetwork() string { return In(i18n.Locale()).FailureReasonNetwork() }
+
+// FailureReasonNetwork says "Couldn't reach the server. Check your network and try again."
+// in the language of msgs.
+func (msgs Messages) FailureReasonNetwork() string {
+	return Catalog.Format(msgs.locale, "failureReasonNetwork", nil)
+}
+
+// FailureReasonProviderDown says "The subscription server had a problem ({status}). Try again later."
+// in the language the app shows.
+func FailureReasonProviderDown(status int) string {
+	return In(i18n.Locale()).FailureReasonProviderDown(status)
+}
+
+// FailureReasonProviderDown says "The subscription server had a problem ({status}). Try again later."
+// in the language of msgs.
+func (msgs Messages) FailureReasonProviderDown(status int) string {
+	return Catalog.Format(msgs.locale, "failureReasonProviderDown", map[string]any{"status": status})
+}
+
+// FailureReasonProviderRefused says "The subscription server refused the request ({status}). The link may have expired."
+// in the language the app shows.
+func FailureReasonProviderRefused(status int) string {
+	return In(i18n.Locale()).FailureReasonProviderRefused(status)
+}
+
+// FailureReasonProviderRefused says "The subscription server refused the request ({status}). The link may have expired."
+// in the language of msgs.
+func (msgs Messages) FailureReasonProviderRefused(status int) string {
+	return Catalog.Format(msgs.locale, "failureReasonProviderRefused", map[string]any{"status": status})
+}
+
+// FailureReasonTimeout says "No answer in time. Try again in a moment."
+// in the language the app shows.
+func FailureReasonTimeout() string { return In(i18n.Locale()).FailureReasonTimeout() }
+
+// FailureReasonTimeout says "No answer in time. Try again in a moment."
+// in the language of msgs.
+func (msgs Messages) FailureReasonTimeout() string {
+	return Catalog.Format(msgs.locale, "failureReasonTimeout", nil)
 }
 
 // FakeIPCount says "{count, plural, one {# name} other {# names}}"

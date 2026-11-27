@@ -151,14 +151,11 @@
     }
   },
   "corePreparing": "Preparing",
-  "coreQuitRepeatedly": "Quit {count} times in a row: {reason}",
+  "coreQuitRepeatedly": "It has quit {count, plural, one {once} other {# times}} in a row.",
   "@coreQuitRepeatedly": {
     "placeholders": {
       "count": {
         "type": "int"
-      },
-      "reason": {
-        "type": "String"
       }
     }
   },
@@ -184,6 +181,36 @@
   "exitIpNone": "Exit IP not found",
   "exitIpRetry": "Click to retry",
   "exitIpTip": "The exit IP of the default route. Sites on dedicated routes, such as AI, may differ. Click to copy.",
+  "failureCopyDetails": "Copy details",
+  "failureDetails": "Details",
+  "failureHideDetails": "Hide details",
+  "failureReasonCoreDown": "Hop's core didn't answer. It may be restarting; try again in a moment.",
+  "failureReasonHostNotFound": "Couldn't find the server {host}. Check the link and your network.",
+  "@failureReasonHostNotFound": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "failureReasonNetwork": "Couldn't reach the server. Check your network and try again.",
+  "failureReasonProviderDown": "The subscription server had a problem ({status}). Try again later.",
+  "@failureReasonProviderDown": {
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "failureReasonProviderRefused": "The subscription server refused the request ({status}). The link may have expired.",
+  "@failureReasonProviderRefused": {
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "failureReasonTimeout": "No answer in time. Try again in a moment.",
   "fakeIPCount": "{count, plural, one {# name} other {# names}}",
   "@fakeIPCount": {
     "placeholders": {

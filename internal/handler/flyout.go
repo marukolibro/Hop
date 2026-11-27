@@ -47,6 +47,8 @@ const (
 func (d *Dashboard) flyoutView(c *ui.Context, openWindow func(), quit func(), fit func(height int)) {
 	c.SetTheme(d.theme(c))
 	t := c.Theme()
+	d.failures.flyoutSeen = d.showFailures(c, d.failures.flyoutSeen)
+	d.toasts(c, t, flyoutPadding)
 	if c.Vibrancy() {
 		// Over the panel's material the palette's border is a frame; every
 		// outline in the panel takes the translucent line instead.

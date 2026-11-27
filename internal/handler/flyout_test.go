@@ -58,13 +58,25 @@ func TestFlyoutShowsAndDismissesFailure(t *testing.T) {
 		d.flyoutView(c, func() {}, func() {}, func(int) {})
 	}, flyoutWidth, flyoutHeight)
 	flyout.Advance(time.Second)
+	title := actionUseSubscription.title()
+	if !flyout.HasText(title) {
+		t.Fatal("the subscription switch failure is missing from the flyout")
+	}
+	if flyout.HasText(cause.Error()) {
+		t.Fatal("the error's own text shows before Details is opened")
+	}
+	if err := flyout.Click(locales.FailureDetails()); err != nil {
+		t.Fatal(err)
+	}
+	flyout.Advance(time.Second)
 	if !flyout.HasText(cause.Error()) {
-		t.Fatal("the subscription switch error is missing from the flyout")
+		t.Fatal("Details does not show the error's own text")
 	}
 	if err := flyout.Click(locales.DismissNotice()); err != nil {
 		t.Fatal(err)
 	}
-	if flyout.HasText(cause.Error()) {
-		t.Fatal("the dismissed error remains in the flyout")
+	flyout.Advance(time.Second)
+	if flyout.HasText(title) {
+		t.Fatal("the dismissed failure remains in the flyout")
 	}
 }

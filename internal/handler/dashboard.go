@@ -4,7 +4,6 @@ package handler
 
 import (
 	"context"
-	"log/slog"
 	"slices"
 	"strconv"
 	"time"
@@ -252,12 +251,6 @@ type Updater interface {
 	Update(fn func())
 }
 
-// failure is the last thing that went wrong, as the user reads it.
-type failure struct {
-	title  string
-	detail string
-}
-
 // subscriptionEditor is the state of the add/edit dialog.
 type subscriptionEditor struct {
 	// seq orders opens, so a Source reply from an older open is dropped.
@@ -372,7 +365,7 @@ type Dashboard struct {
 	// activity is the view the activity page shows, one of the activity constants.
 	activity     int
 	status       string
-	failure      *failure
+	failures     failuresState
 	subscription subscriptionsState
 	core         coreState
 	settings     settingsState
@@ -1064,18 +1057,6 @@ var (
 	actionCopyLANPassword     = action{"copy-lan-password", locales.ActionCopyLanPassword}
 )
 
-// fail shows what went wrong without touching the connection status.
-func (d *Dashboard) fail(a action, err error) {
-	slog.Error("dashboard action failed", "action", a.id, "error", err)
-	d.failure = &failure{title: a.title(), detail: err.Error()}
-}
-
-// failConnection is fail for errors that mean the core cannot be reached.
-func (d *Dashboard) failConnection(a action, err error) {
-	d.fail(a, err)
-	d.status = statusFailed
-}
-
 // View builds one frame of the main window.
 func (d *Dashboard) View(c *ui.Context) {
 	if d.pendingToast != "" {
@@ -1084,6 +1065,8 @@ func (d *Dashboard) View(c *ui.Context) {
 	}
 	c.SetTheme(d.windowTheme(c))
 	t := c.Theme()
+	d.failures.windowSeen = d.showFailures(c, d.failures.windowSeen)
+	d.toasts(c, t, pagePadding)
 	// The material paints the themed backdrop and veil before any controls.
 	c.Root().Background(ui.Transparent)
 	root := ui.Column(c).Fill()
@@ -1246,16 +1229,11 @@ func (d *Dashboard) statusColor(t *ui.Theme) ui.Color {
 	}
 }
 
-// notice shows what needs the user's eye: the last failure, then anything
-// another app took from Hop. Both say it in plain words first and the detail
-// after. It draws nothing while all is well.
+// notice shows what another app took from Hop, in plain words first and the
+// detail after, for as long as it holds it: a condition has no dismiss button,
+// it ends when the system does. A failure is a toast instead (failure.go). It
+// draws nothing while all is well.
 func (d *Dashboard) notice(c *ui.Context, t *ui.Theme) {
-	if d.failure != nil {
-		noticeBar(c, t, "failure", d.failure.title, d.failure.detail, t.Danger, t.Danger, func() {
-			iconButton(c, locales.DismissNotice(), iconClose, dangerButton(t), func() { d.failure = nil })
-		})
-	}
-	// A condition has no dismiss button: it ends when the system does.
 	for _, condition := range service.Conditions(d.conditionInput()) {
 		title, detail := conditionText(condition)
 		noticeBar(c, t, "condition-"+string(condition.Kind), title, detail, t.Warning, textOn(t, t.Warning), nil)

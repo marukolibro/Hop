@@ -282,12 +282,20 @@ for font sizes, weights, gaps or radii in views.
   traffic leaves) and one grid
   of node tiles. What is rarely used stays out of the home: the LAN proxy and
   the memory Hop and its core hold are rows in the settings. Under the header
-  one strip (`notice`) shows what needs the user's eye and nothing while all is
-  well: the last failure, then each condition from `service.Conditions` (the
-  user wants the system proxy or TUN on and another app holds it). A condition
-  says what happened and what to do, has no button that takes the thing back
-  (Hop never takes the system proxy or the routes from another app) and ends
-  when the system does; the flyout's hint for that pill gives way to it. The
+  one strip (`notice`) shows each condition from `service.Conditions` (the
+  user wants the system proxy or TUN on and another app holds it) and nothing
+  while all is well. A condition says what happened and what to do, has no
+  button that takes the thing back (Hop never takes the system proxy or the
+  routes from another app) and ends when the system does; the flyout's hint
+  for that pill gives way to it. A failed action is a toast instead
+  (`failure.go`), in the window and in the flyout, each showing it once: an
+  opaque card at the bottom with what failed, why in the user's words
+  (`service.FailureReasonOf`, which reads only what an error really says and
+  else says nothing) and the error itself under Details, to copy for a
+  report. It goes after eight seconds, stays while the pointer rests on it
+  and, with Details open, until closed. There is one such card at a time: a
+  new failure takes its place, so one cause that fails several steps (a core
+  that stopped answering) shows once, not as a stack. The
   header holds no switch: on the right it says, read only, whether Hop carries
   the traffic (the same dot and words as the flyout) and, while the core
   answers, the port it listens on (tooltip: the address), so every page shows the
@@ -439,8 +447,9 @@ once and at every start). The messages are `locales/en.json` (the source) and
   "自动选择"), the words that match node and group names (`serviceof.go`,
   `hop_rules.go`, `view.go`'s tables), and what a provider wrote. Element keys
   (`.Key("…")`) are never shown.
-- Logs and errors for the log stay English. An error the user reads is a message
-  (`errors.New(locales.Xxx())`, or `fmt.Errorf("%s%w", locales.Xxx(), cause)`).
+- Logs and errors for the log stay English. An error the user reads is a message,
+  as a `service.ExplainedError` (`Reason: locales.Xxx()`, and the `Cause` when
+  there is one), so a failure's toast says it as its reason.
 - English is longer. Switches and page tabs widen to their labels
   (`fitSegment`); rows that can run out of room wrap or truncate. Look at both
   languages (`MYGO_LOCALE=en` in a preview test, `go tool mygo dev -lang en`) at

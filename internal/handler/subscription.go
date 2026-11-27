@@ -1014,19 +1014,19 @@ func readLocalConfig(path string) (content []byte, err error) {
 	name := filepath.Base(path)
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("%s%w", locales.FileOpenFailed(name), fileCause(err))
+		return nil, &service.ExplainedError{Reason: locales.FileOpenFailed(name), Cause: fileCause(err)}
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("%s%w", locales.FileCloseFailed(name), fileCause(closeErr)))
+			err = errors.Join(err, &service.ExplainedError{Reason: locales.FileCloseFailed(name), Cause: fileCause(closeErr)})
 		}
 	}()
 	content, err = io.ReadAll(io.LimitReader(file, service.MaxProfileSize+1))
 	if err != nil {
-		return nil, fmt.Errorf("%s%w", locales.FileReadFailed(name), fileCause(err))
+		return nil, &service.ExplainedError{Reason: locales.FileReadFailed(name), Cause: fileCause(err)}
 	}
 	if len(content) > service.MaxProfileSize {
-		return nil, errors.New(locales.FileTooLarge(name, service.MaxProfileSize>>20))
+		return nil, &service.ExplainedError{Reason: locales.FileTooLarge(name, service.MaxProfileSize>>20)}
 	}
 	return content, nil
 }

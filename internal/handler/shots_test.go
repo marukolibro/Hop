@@ -261,6 +261,12 @@ func shotLogs() []model.LogEntry {
 	}
 }
 
+// shotTimeout is a node switch the core did not answer in time, as the
+// controller client words it.
+func shotTimeout(n shotNames) error {
+	return fmt.Errorf("send mihomo request (method=PUT path=%q): %w", "/proxies/"+n.main, context.DeadlineExceeded)
+}
+
 // shotRender draws view in one appearance at the given size, twice the scale.
 func shotRender(t *testing.T, path string, view func(c *ui.Context), dark bool, width, height int, titleBar bool) {
 	t.Helper()
@@ -350,6 +356,11 @@ func TestShots(t *testing.T) {
 			d.rules.editor.customTarget = names.ai
 		})
 		window("tun-install", pageNodes, func(d *Dashboard) { d.tun.installOpen = true })
+		window("failure", pageNodes, func(d *Dashboard) { d.fail(actionSwitchNode, shotTimeout(names)) })
+		window("failure-details", pageNodes, func(d *Dashboard) {
+			d.fail(actionSwitchNode, shotTimeout(names))
+			d.failures.last.expanded = true
+		})
 
 		// The panel is as tall as its content, which it reports once drawn.
 		panel := shotDashboard(names, pageNodes)

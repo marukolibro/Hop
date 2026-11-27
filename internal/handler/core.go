@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hop/internal/model"
+	"hop/internal/service"
 	"hop/locales"
 )
 
@@ -277,7 +278,7 @@ func (d *Dashboard) applyCoreRestart(r model.CoreRestart) {
 		d.releaseSystemProxy()
 		return
 	}
-	d.fail(actionCoreRestarted, errors.New(locales.CoreQuitRepeatedly(r.InARow, r.Exit)))
+	d.fail(actionCoreRestarted, &service.ExplainedError{Reason: locales.CoreQuitRepeatedly(r.InARow), Cause: errors.New(r.Exit)})
 	d.stopWatchers()
 	gen := d.nextViewGen()
 	d.startWatchers(d.opCtx, d.opWin)
