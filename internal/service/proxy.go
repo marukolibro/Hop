@@ -236,28 +236,19 @@ func (s *ProxyService) Select(ctx context.Context, group string, proxy string) e
 	if err := s.controller.SelectProxy(ctx, group, proxy); err != nil {
 		return err
 	}
-	conns, err := s.controller.Connections(ctx)
-	if err != nil {
-		return fmt.Errorf("list the connections to move after switching (group=%q proxy=%q): %w", group, proxy, err)
-	}
-	var errs []error
-	for _, id := range LeftBehind(conns, group, proxy) {
-		if err := s.controller.CloseConnection(ctx, id); err != nil {
-			errs = append(errs, fmt.Errorf("close a connection left on the old proxy (group=%q id=%q): %w", group, id, err))
-		}
-	}
-	return errors.Join(errs...)
+	return s.closeLeftBehind(ctx, group, proxy)
 }
 
 // Reset clears a manual pin on a URLTest or Fallback group so it resumes
-// automatic selection, then closes connections left on the old node.
+// automatic selection, then closes connections left on the old node. A group
+// the core no longer lists has no connections to move.
 func (s *ProxyService) Reset(ctx context.Context, group string) error {
 	if err := s.controller.ResetProxy(ctx, group); err != nil {
 		return err
 	}
 	snapshot, err := s.controller.Snapshot(ctx)
 	if err != nil {
-		return nil
+		return fmt.Errorf("read the node the group uses after resetting (group=%q): %w", group, err)
 	}
 	var now string
 	for _, g := range snapshot.Groups {
@@ -269,12 +260,18 @@ func (s *ProxyService) Reset(ctx context.Context, group string) error {
 	if now == "" {
 		return nil
 	}
+	return s.closeLeftBehind(ctx, group, now)
+}
+
+// closeLeftBehind closes the connections group still sends elsewhere than
+// proxy, the node it uses now.
+func (s *ProxyService) closeLeftBehind(ctx context.Context, group string, proxy string) error {
 	conns, err := s.controller.Connections(ctx)
 	if err != nil {
-		return fmt.Errorf("list the connections to move after resetting (group=%q): %w", group, err)
+		return fmt.Errorf("list the connections to move to the group's node (group=%q proxy=%q): %w", group, proxy, err)
 	}
 	var errs []error
-	for _, id := range LeftBehind(conns, group, now) {
+	for _, id := range LeftBehind(conns, group, proxy) {
 		if err := s.controller.CloseConnection(ctx, id); err != nil {
 			errs = append(errs, fmt.Errorf("close a connection left on the old proxy (group=%q id=%q): %w", group, id, err))
 		}
